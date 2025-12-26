@@ -1,0 +1,166 @@
+use serde::{Deserialize, Serialize};
+
+/// MiHomo 配置文件结构
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MihomoConfig {
+    #[serde(default = "default_port")]
+    pub port: u16,
+    
+    #[serde(rename = "socks-port", default = "default_socks_port")]
+    pub socks_port: u16,
+    
+    #[serde(rename = "mixed-port")]
+    pub mixed_port: Option<u16>,
+    
+    #[serde(rename = "allow-lan", default)]
+    pub allow_lan: bool,
+    
+    #[serde(default = "default_mode")]
+    pub mode: String,
+    
+    #[serde(rename = "log-level", default = "default_log_level")]
+    pub log_level: String,
+    
+    #[serde(rename = "external-controller", default = "default_external_controller")]
+    pub external_controller: String,
+    
+    #[serde(default)]
+    pub secret: String,
+    
+    #[serde(default)]
+    pub proxies: Vec<ProxyConfig>,
+    
+    #[serde(rename = "proxy-groups", default)]
+    pub proxy_groups: Vec<ProxyGroupConfig>,
+    
+    #[serde(default)]
+    pub rules: Vec<String>,
+}
+
+fn default_port() -> u16 { 7890 }
+fn default_socks_port() -> u16 { 7891 }
+fn default_mode() -> String { "rule".to_string() }
+fn default_log_level() -> String { "info".to_string() }
+fn default_external_controller() -> String { "127.0.0.1:9090".to_string() }
+
+impl Default for MihomoConfig {
+    fn default() -> Self {
+        Self {
+            port: default_port(),
+            socks_port: default_socks_port(),
+            mixed_port: None,
+            allow_lan: false,
+            mode: default_mode(),
+            log_level: default_log_level(),
+            external_controller: default_external_controller(),
+            secret: String::new(),
+            proxies: vec![],
+            proxy_groups: vec![
+                ProxyGroupConfig {
+                    name: "PROXY".to_string(),
+                    group_type: "select".to_string(),
+                    proxies: vec!["DIRECT".to_string()],
+                    url: None,
+                    interval: None,
+                }
+            ],
+            rules: vec![
+                "GEOIP,CN,DIRECT".to_string(),
+                "MATCH,PROXY".to_string(),
+            ],
+        }
+    }
+}
+
+/// 代理节点配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyConfig {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub proxy_type: String,
+    pub server: String,
+    pub port: u16,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cipher: Option<String>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uuid: Option<String>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "alterId")]
+    pub alter_id: Option<u32>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub network: Option<String>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tls: Option<bool>,
+    
+    #[serde(rename = "skip-cert-verify", skip_serializing_if = "Option::is_none")]
+    pub skip_cert_verify: Option<bool>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sni: Option<String>,
+    
+    #[serde(default)]
+    pub udp: bool,
+}
+
+/// 代理组配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyGroupConfig {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub group_type: String,
+    pub proxies: Vec<String>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interval: Option<u32>,
+}
+
+/// 应用设置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppSettings {
+    #[serde(default = "default_theme")]
+    pub theme: String,
+    
+    #[serde(default = "default_language")]
+    pub language: String,
+    
+    #[serde(rename = "autoStart", default)]
+    pub auto_start: bool,
+    
+    #[serde(rename = "systemProxy", default)]
+    pub system_proxy: bool,
+    
+    #[serde(rename = "startMinimized", default)]
+    pub start_minimized: bool,
+    
+    #[serde(rename = "closeToTray", default = "default_close_to_tray")]
+    pub close_to_tray: bool,
+}
+
+fn default_theme() -> String { "system".to_string() }
+fn default_language() -> String { "zh-CN".to_string() }
+fn default_close_to_tray() -> bool { true }
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            theme: default_theme(),
+            language: default_language(),
+            auto_start: false,
+            system_proxy: false,
+            start_minimized: false,
+            close_to_tray: default_close_to_tray(),
+        }
+    }
+}
+
