@@ -29,11 +29,13 @@ impl MihomoManager {
     }
 
     /// 获取 API URL
+    #[allow(dead_code)]
     pub fn api_url(&self) -> &str {
         &self.api_url
     }
 
     /// 获取 API Secret
+    #[allow(dead_code)]
     pub fn api_secret(&self) -> &str {
         &self.api_secret
     }
@@ -65,14 +67,14 @@ impl MihomoManager {
             std::fs::create_dir_all(parent)?;
         }
 
-        // 启动进程
+        // 启动进程（不捕获 stdout/stderr，让它继承父进程的）
         let child = Command::new(&mihomo_path)
             .arg("-d")
             .arg(self.config_path.parent().unwrap())
             .arg("-f")
             .arg(&self.config_path)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
             .spawn()?;
 
         log::info!("MiHomo process spawned with PID: {}", child.id());

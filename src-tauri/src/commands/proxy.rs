@@ -1,5 +1,5 @@
 use crate::commands::get_app_state;
-use crate::models::{ConnectionsResponse, ProxyGroup, ProxyStatus, TrafficData};
+use crate::models::{ConnectionsResponse, ProxyGroup, ProxyStatus, RuleItem, TrafficData};
 
 /// 启动代理
 #[tauri::command]
@@ -282,5 +282,23 @@ pub async fn set_tun_mode(enabled: bool) -> Result<(), String> {
     
     log::info!("TUN mode set to: {}", enabled);
     Ok(())
+}
+
+/// 从 API 获取运行时规则
+#[tauri::command]
+pub async fn get_rules_from_api() -> Result<Vec<RuleItem>, String> {
+    let state = get_app_state();
+    
+    if !state.mihomo_manager.is_running().await {
+        return Err("Proxy is not running".to_string());
+    }
+    
+    let response = state
+        .mihomo_api
+        .get_rules()
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    Ok(response.rules)
 }
 

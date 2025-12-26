@@ -101,6 +101,7 @@ impl SystemProxy {
 
     /// 检查系统代理状态
     #[cfg(target_os = "macos")]
+    #[allow(dead_code)]
     pub fn get_proxy_status() -> Result<bool> {
         let services = Self::get_network_services()?;
         
@@ -172,6 +173,7 @@ impl SystemProxy {
     }
 
     #[cfg(target_os = "windows")]
+    #[allow(dead_code)]
     pub fn get_proxy_status() -> Result<bool> {
         let output = Command::new("reg")
             .args([
@@ -240,6 +242,7 @@ impl SystemProxy {
     }
 
     #[cfg(target_os = "linux")]
+    #[allow(dead_code)]
     pub fn get_proxy_status() -> Result<bool> {
         let output = Command::new("gsettings")
             .args(["get", "org.gnome.system.proxy", "mode"])

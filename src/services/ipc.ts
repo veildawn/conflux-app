@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ProxyStatus, ProxyGroup, TrafficData, ConnectionsResponse } from '@/types/proxy';
+import type { ProxyStatus, ProxyGroup, TrafficData, ConnectionsResponse, RuleItem } from '@/types/proxy';
 import type { MihomoConfig, AppSettings } from '@/types/config';
 
 /**
@@ -127,6 +127,39 @@ export const ipc = {
    */
   async saveAppSettings(settings: AppSettings): Promise<void> {
     return invoke('save_app_settings', { settings });
+  },
+
+  /**
+   * 应用订阅配置
+   */
+  async applySubscription(path: string, subType: string): Promise<{
+    proxies_count: number;
+    proxy_groups_count: number;
+    rules_count: number;
+  }> {
+    return invoke('apply_subscription', { path, sub_type: subType });
+  },
+
+  /**
+   * 获取配置文件中的规则
+   */
+  async getRules(): Promise<string[]> {
+    return invoke('get_rules');
+  },
+
+  /**
+   * 保存规则到配置文件
+   */
+  async saveRules(rules: string[]): Promise<void> {
+    return invoke('save_rules', { rules });
+  },
+
+  /**
+   * 从 mihomo API 获取运行时规则
+   */
+  async getRulesFromApi(): Promise<RuleItem[]> {
+    // 后端使用 serde(rename = "type")，所以返回的字段就是 type
+    return invoke<RuleItem[]>('get_rules_from_api');
   },
 
   // ============= 系统命令 =============
