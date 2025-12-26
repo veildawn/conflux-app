@@ -33,6 +33,9 @@ pub struct MihomoConfig {
     #[serde(rename = "proxy-groups", default)]
     pub proxy_groups: Vec<ProxyGroupConfig>,
     
+    #[serde(rename = "rule-providers", default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub rule_providers: std::collections::HashMap<String, RuleProvider>,
+    
     #[serde(default)]
     pub rules: Vec<String>,
 }
@@ -64,6 +67,7 @@ impl Default for MihomoConfig {
                     interval: None,
                 }
             ],
+            rule_providers: std::collections::HashMap::new(),
             rules: vec![
                 "GEOIP,CN,DIRECT".to_string(),
                 "MATCH,PROXY".to_string(),
@@ -125,6 +129,47 @@ pub struct ProxyGroupConfig {
     pub interval: Option<u32>,
 }
 
+/// 规则提供者配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuleProvider {
+    #[serde(rename = "type")]
+    pub provider_type: String,
+    
+    /// behavior 是必需字段，默认为 "classical"
+    #[serde(default = "default_behavior")]
+    pub behavior: String,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interval: Option<u32>,
+}
+
+fn default_behavior() -> String { "classical".to_string() }
+
+/// 订阅配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Subscription {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub sub_type: String, // "remote" | "local"
+    pub url: String, // URL or File Path
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub count: Option<u32>,
+    #[serde(default)]
+    pub selected: bool,
+}
+
 /// 应用设置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
@@ -145,6 +190,9 @@ pub struct AppSettings {
     
     #[serde(rename = "closeToTray", default = "default_close_to_tray")]
     pub close_to_tray: bool,
+
+    #[serde(default)]
+    pub subscriptions: Vec<Subscription>,
 }
 
 fn default_theme() -> String { "system".to_string() }
@@ -160,7 +208,7 @@ impl Default for AppSettings {
             system_proxy: false,
             start_minimized: false,
             close_to_tray: default_close_to_tray(),
+            subscriptions: vec![],
         }
     }
 }
-

@@ -4,7 +4,7 @@ use serde_json::json;
 use std::time::Duration;
 
 use crate::models::{
-    ConnectionsResponse, DelayResponse, ProxiesResponse, TrafficData, VersionInfo,
+    ConnectionsResponse, DelayResponse, ProxiesResponse, RulesResponse, TrafficData, VersionInfo,
 };
 
 /// MiHomo REST API 客户端
@@ -39,6 +39,7 @@ impl MihomoApi {
     }
 
     /// 获取版本信息
+    #[allow(dead_code)]
     pub async fn get_version(&self) -> Result<VersionInfo> {
         let url = format!("{}/version", self.base_url);
         let request = self.client.get(&url);
@@ -57,6 +58,7 @@ impl MihomoApi {
     }
 
     /// 获取单个代理信息
+    #[allow(dead_code)]
     pub async fn get_proxy(&self, name: &str) -> Result<crate::models::ProxyInfo> {
         let url = format!("{}/proxies/{}", self.base_url, urlencoding::encode(name));
         let request = self.client.get(&url);
@@ -217,12 +219,22 @@ impl MihomoApi {
     }
 
     /// 获取配置
+    #[allow(dead_code)]
     pub async fn get_configs(&self) -> Result<serde_json::Value> {
         let url = format!("{}/configs", self.base_url);
         let request = self.client.get(&url);
         let response = self.auth_header(request).send().await?;
         let configs = response.json().await?;
         Ok(configs)
+    }
+
+    /// 获取规则列表
+    pub async fn get_rules(&self) -> Result<RulesResponse> {
+        let url = format!("{}/rules", self.base_url);
+        let request = self.client.get(&url);
+        let response = self.auth_header(request).send().await?;
+        let rules = response.json().await?;
+        Ok(rules)
     }
 }
 

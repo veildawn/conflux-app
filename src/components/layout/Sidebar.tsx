@@ -2,9 +2,10 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   Activity, 
   LayoutDashboard, 
-  Monitor, 
   Globe, 
   Shield, 
+  BookOpen, 
+  Database,
   Settings, 
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
@@ -28,16 +29,12 @@ const navGroups: NavGroup[] = [
     ]
   },
   {
-    title: '客户端',
-    items: [
-      { path: '/connections', icon: Monitor, label: '进程' },
-    ]
-  },
-  {
     title: '代理',
     items: [
-      { path: '/nodes', icon: Globe, label: '策略' },
+      { path: '/proxy', icon: Globe, label: '代理' },
+      { path: '/subscription', icon: BookOpen, label: '订阅' },
       { path: '/rules', icon: Shield, label: '规则' },
+      { path: '/external-resources', icon: Database, label: '外部规则' },
     ]
   },
   {

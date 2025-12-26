@@ -109,6 +109,7 @@ impl ConfigManager {
     }
 
     /// 更新 MiHomo 配置中的 API secret
+    #[allow(dead_code)]
     pub fn update_secret(&self, secret: &str) -> Result<()> {
         let mut config = self.load_mihomo_config()?;
         config.secret = secret.to_string();
@@ -125,18 +126,21 @@ impl ConfigManager {
     }
 
     /// 获取当前代理模式
+    #[allow(dead_code)]
     pub fn get_mode(&self) -> Result<String> {
         let config = self.load_mihomo_config()?;
         Ok(config.mode)
     }
 
     /// 获取 HTTP 代理端口
+    #[allow(dead_code)]
     pub fn get_http_port(&self) -> Result<u16> {
         let config = self.load_mihomo_config()?;
         Ok(config.port)
     }
 
     /// 获取 SOCKS 代理端口
+    #[allow(dead_code)]
     pub fn get_socks_port(&self) -> Result<u16> {
         let config = self.load_mihomo_config()?;
         Ok(config.socks_port)

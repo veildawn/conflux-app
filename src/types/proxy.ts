@@ -93,3 +93,19 @@ export const PROXY_MODES: { value: ProxyMode; label: string; description: string
   { value: 'direct', label: '直连模式', description: '所有流量直连' },
 ];
 
+/**
+ * 规则项（来自 mihomo API）
+ */
+export interface RuleItem {
+  type: string;
+  payload: string;
+  proxy: string;
+}
+
+/**
+ * 规则列表响应
+ */
+export interface RulesResponse {
+  rules: RuleItem[];
+}
+

@@ -36,11 +36,11 @@ const StatusCard = ({
 
   return (
     <div className={cn(
-      "group relative bg-white dark:bg-zinc-800 rounded-xl p-5 md:p-6 border border-gray-100 dark:border-zinc-700 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between h-full min-h-[160px]",
+      "group relative bg-white dark:bg-zinc-800 rounded-[24px] p-5 md:p-6 border border-gray-100 dark:border-zinc-700 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between h-full min-h-[160px]",
       className
     )}>
       {/* Background decoration */}
-      <div className="absolute inset-0 bg-linear-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-xl" />
+      <div className="absolute inset-0 bg-linear-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-[24px]" />
 
       <div className="relative z-10">
         <div className="flex justify-between items-start mb-3">
@@ -105,9 +105,9 @@ export default function Overview() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-8 px-1">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">概览</h1>
+    <div className="space-y-2 min-[960px]:space-y-4 pb-2 min-[960px]:pb-4">
+      <div>
+        <h1 className="text-2xl min-[960px]:text-3xl font-bold text-gray-900 tracking-tight">概览</h1>
       </div>
 
       {/* 网络接管 */}
@@ -152,6 +152,3 @@ export default function Overview() {
     </div>
   );
 }
-
-
-

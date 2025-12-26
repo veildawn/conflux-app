@@ -34,6 +34,7 @@ pub fn get_app_settings_path() -> Result<PathBuf> {
 }
 
 /// 获取日志目录
+#[allow(dead_code)]
 pub fn get_logs_dir() -> Result<PathBuf> {
     let data_dir = get_app_data_dir()?;
     let logs_dir = data_dir.join("logs");

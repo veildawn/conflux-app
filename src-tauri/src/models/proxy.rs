@@ -115,6 +115,7 @@ pub struct TrafficData {
 }
 
 /// 版本信息
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VersionInfo {
     pub version: String,
@@ -123,6 +124,7 @@ pub struct VersionInfo {
 }
 
 /// 前端代理节点显示
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProxyNode {
     pub name: String,
@@ -141,6 +143,21 @@ pub struct ProxyGroup {
     pub group_type: String,
     pub now: Option<String>,
     pub all: Vec<String>,
+}
+
+/// 规则项
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuleItem {
+    #[serde(rename = "type")]
+    pub rule_type: String,
+    pub payload: String,
+    pub proxy: String,
+}
+
+/// 规则列表响应
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RulesResponse {
+    pub rules: Vec<RuleItem>,
 }
 
 
