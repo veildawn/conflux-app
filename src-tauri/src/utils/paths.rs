@@ -6,7 +6,7 @@ pub fn get_app_data_dir() -> Result<PathBuf> {
     let path = dirs::data_dir()
         .ok_or_else(|| anyhow::anyhow!("Cannot find data directory"))?
         .join("Conflux");
-    
+
     std::fs::create_dir_all(&path)?;
     Ok(path)
 }
@@ -16,7 +16,7 @@ pub fn get_app_config_dir() -> Result<PathBuf> {
     let path = dirs::config_dir()
         .ok_or_else(|| anyhow::anyhow!("Cannot find config directory"))?
         .join("Conflux");
-    
+
     std::fs::create_dir_all(&path)?;
     Ok(path)
 }
@@ -66,7 +66,3 @@ pub fn get_mihomo_binary_name() -> &'static str {
 pub fn generate_api_secret() -> String {
     uuid::Uuid::new_v4().to_string().replace("-", "")[..16].to_string()
 }
-
-
-
-

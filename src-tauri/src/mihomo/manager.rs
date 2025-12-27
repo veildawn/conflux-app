@@ -21,7 +21,7 @@ impl MihomoManager {
     /// 创建新的 MiHomo 管理器
     pub fn new(secret: String) -> Result<Self> {
         let config_path = get_mihomo_config_path()?;
-        
+
         Ok(Self {
             process: Arc::new(Mutex::new(None)),
             config_path,
@@ -80,19 +80,19 @@ impl MihomoManager {
     /// 在启动新进程前调用，确保没有僵尸进程
     pub fn cleanup_stale_processes() {
         log::info!("Cleaning up stale MiHomo processes...");
-        
+
         // 1. 首先尝试通过 PID 文件清理
         if let Some(old_pid) = Self::load_pid() {
             log::info!("Found old PID file with PID: {}", old_pid);
             Self::kill_process_by_pid(old_pid);
         }
-        
+
         // 2. 然后通过进程名清理所有 mihomo 进程（更彻底）
         Self::kill_all_mihomo_processes();
-        
+
         // 3. 删除 PID 文件
         Self::remove_pid_file();
-        
+
         log::info!("Cleanup completed");
     }
 
@@ -126,7 +126,7 @@ impl MihomoManager {
             // 使用 pkill 杀死所有 mihomo 进程
             let binary_name = crate::utils::get_mihomo_binary_name();
             log::info!("Killing all processes matching: {}", binary_name);
-            
+
             let _ = Command::new("pkill")
                 .args(["-9", "-f", &binary_name])
                 .output();
@@ -143,7 +143,7 @@ impl MihomoManager {
     /// 启动 MiHomo 进程
     pub async fn start(&self) -> Result<()> {
         let mut process_guard = self.process.lock().await;
-        
+
         if process_guard.is_some() {
             log::info!("MiHomo is already running");
             return Ok(());
@@ -154,7 +154,7 @@ impl MihomoManager {
 
         // 获取 MiHomo 二进制路径
         let mihomo_path = self.get_mihomo_binary_path()?;
-        
+
         if !mihomo_path.exists() {
             return Err(anyhow::anyhow!(
                 "MiHomo binary not found at: {:?}. Please download MiHomo and place it in the resources directory.",
@@ -174,11 +174,11 @@ impl MihomoManager {
         // 启动进程
         // 注意：在开发环境中，我们尝试将 CWD 设置为配置目录的父目录，
         // 或者显式设置 working directory 为 config 所在目录，防止 GeoIP 查找失败
-        
+
         let config_dir = self.config_path.parent().unwrap();
-        
+
         log::info!("Spawning MiHomo with CWD: {:?}", config_dir);
-        
+
         // 在 GUI 应用中，不能使用 Stdio::inherit()，因为 GUI 应用没有标准的
         // stdout/stderr 可以继承，这会导致进程卡死（UE 状态）
         // 使用 Stdio::null() 让进程独立运行
@@ -207,17 +207,20 @@ impl MihomoManager {
 
         // 稍微等待一下，检查进程是否立即退出
         sleep(Duration::from_millis(500)).await;
-        
+
         match child.try_wait() {
             Ok(Some(status)) => {
                 log::error!("MiHomo process exited IMMEDIATELY with status: {}", status);
-                return Err(anyhow::anyhow!("MiHomo process exited immediately with status: {}", status));
+                return Err(anyhow::anyhow!(
+                    "MiHomo process exited immediately with status: {}",
+                    status
+                ));
             }
             Ok(None) => {
-                 log::info!("MiHomo process is running...");
+                log::info!("MiHomo process is running...");
             }
             Err(e) => {
-                 log::error!("Failed to check process status: {}", e);
+                log::error!("Failed to check process status: {}", e);
             }
         }
 
@@ -228,17 +231,20 @@ impl MihomoManager {
         // mihomo 首次启动可能需要下载 GeoIP 数据库，最多等待 30 秒
         let max_retries = 15;
         let retry_interval = Duration::from_secs(2);
-        
+
         for attempt in 1..=max_retries {
             log::debug!("Health check attempt {}/{}", attempt, max_retries);
 
             // 检查进程是否还在运行
             let mut process_guard = self.process.lock().await;
             if let Some(child) = process_guard.as_mut() {
-                 match child.try_wait() {
+                match child.try_wait() {
                     Ok(Some(status)) => {
                         log::error!("MiHomo process exited unexpectedly with status: {}", status);
-                        return Err(anyhow::anyhow!("MiHomo process exited unexpectedly with status: {}", status));
+                        return Err(anyhow::anyhow!(
+                            "MiHomo process exited unexpectedly with status: {}",
+                            status
+                        ));
                     }
                     Ok(None) => {
                         // 还在运行
@@ -246,10 +252,10 @@ impl MihomoManager {
                     Err(e) => {
                         log::error!("Error checking process status: {}", e);
                     }
-                 }
+                }
             }
             drop(process_guard);
-            
+
             match self.check_health().await {
                 Ok(_) => {
                     log::info!("MiHomo started successfully after {} attempts", attempt);
@@ -257,27 +263,37 @@ impl MihomoManager {
                 }
                 Err(e) => {
                     if attempt == max_retries {
-                        log::error!("MiHomo health check failed after {} attempts: {}", max_retries, e);
+                        log::error!(
+                            "MiHomo health check failed after {} attempts: {}",
+                            max_retries,
+                            e
+                        );
                         // 尝试清理进程
                         let _ = self.stop().await;
                         return Err(anyhow::anyhow!("MiHomo failed to start: {}", e));
                     }
-                    log::debug!("Health check failed (attempt {}): {}, retrying...", attempt, e);
+                    log::debug!(
+                        "Health check failed (attempt {}): {}, retrying...",
+                        attempt,
+                        e
+                    );
                     sleep(retry_interval).await;
                 }
             }
         }
-        
-        Err(anyhow::anyhow!("MiHomo failed to start: health check timeout"))
+
+        Err(anyhow::anyhow!(
+            "MiHomo failed to start: health check timeout"
+        ))
     }
 
     /// 停止 MiHomo 进程
     pub async fn stop(&self) -> Result<()> {
         let mut process_guard = self.process.lock().await;
-        
+
         if let Some(mut child) = process_guard.take() {
             log::info!("Stopping MiHomo process");
-            
+
             // 尝试优雅关闭
             #[cfg(unix)]
             {
@@ -286,34 +302,34 @@ impl MihomoManager {
                 }
                 sleep(Duration::from_millis(500)).await;
             }
-            
+
             // 强制终止
             match child.kill() {
                 Ok(_) => log::info!("MiHomo process killed"),
                 Err(e) => log::warn!("Failed to kill MiHomo process: {}", e),
             }
-            
+
             let _ = child.wait();
-            
+
             // 删除 PID 文件
             Self::remove_pid_file();
-            
+
             log::info!("MiHomo stopped");
         }
-        
+
         Ok(())
     }
 
     /// 同步停止进程（用于应用退出时）
     pub fn stop_sync(&self) {
         log::info!("Synchronously stopping MiHomo...");
-        
+
         // 尝试获取锁并停止进程
         if let Ok(mut guard) = self.process.try_lock() {
             if let Some(mut child) = guard.take() {
                 let pid = child.id();
                 log::info!("Stopping MiHomo process (PID: {})", pid);
-                
+
                 #[cfg(unix)]
                 {
                     unsafe {
@@ -321,7 +337,7 @@ impl MihomoManager {
                     }
                     std::thread::sleep(std::time::Duration::from_millis(300));
                 }
-                
+
                 let _ = child.kill();
                 let _ = child.wait();
                 log::info!("MiHomo process stopped");
@@ -333,7 +349,7 @@ impl MihomoManager {
                 Self::kill_process_by_pid(pid);
             }
         }
-        
+
         // 确保 PID 文件被删除
         Self::remove_pid_file();
     }
@@ -370,16 +386,16 @@ impl MihomoManager {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
             .build()?;
-            
+
         let url = format!("{}/version", self.api_url);
-        
+
         let mut request = client.get(&url);
         if !self.api_secret.is_empty() {
             request = request.header("Authorization", format!("Bearer {}", self.api_secret));
         }
-        
+
         let response = request.send().await?;
-        
+
         if response.status().is_success() {
             Ok(())
         } else {
@@ -393,9 +409,9 @@ impl MihomoManager {
     /// 获取 MiHomo 二进制路径
     fn get_mihomo_binary_path(&self) -> Result<PathBuf> {
         let binary_name = crate::utils::get_mihomo_binary_name();
-        
+
         log::debug!("Looking for MiHomo binary: {}", binary_name);
-        
+
         // 首先检查应用数据目录
         let data_dir = get_app_data_dir()?;
         let data_path = data_dir.join(binary_name);
@@ -411,7 +427,7 @@ impl MihomoManager {
             .parent()
             .ok_or_else(|| anyhow::anyhow!("Cannot get executable directory"))?
             .to_path_buf();
-        
+
         log::debug!("Current exe: {:?}", current_exe);
         log::debug!("Current dir: {:?}", current_dir);
 
@@ -499,7 +515,10 @@ impl MihomoManager {
         #[cfg(target_os = "windows")]
         {
             log::error!("  - Windows same dir: {:?}", current_dir.join(binary_name));
-            log::error!("  - Windows bin dir: {:?}", current_dir.join("bin").join(binary_name));
+            log::error!(
+                "  - Windows bin dir: {:?}",
+                current_dir.join("bin").join(binary_name)
+            );
         }
         log::error!("  - Dev path: {:?}", dev_path);
 

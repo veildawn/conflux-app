@@ -9,29 +9,29 @@ impl SystemProxy {
     #[cfg(target_os = "macos")]
     pub fn set_http_proxy(host: &str, port: u16) -> Result<()> {
         let services = Self::get_network_services()?;
-        
+
         for service in services {
             // 设置 HTTP 代理
             Command::new("networksetup")
                 .args(["-setwebproxy", &service, host, &port.to_string()])
                 .output()?;
-            
+
             // 启用 HTTP 代理
             Command::new("networksetup")
                 .args(["-setwebproxystate", &service, "on"])
                 .output()?;
-            
+
             // 设置 HTTPS 代理
             Command::new("networksetup")
                 .args(["-setsecurewebproxy", &service, host, &port.to_string()])
                 .output()?;
-            
+
             // 启用 HTTPS 代理
             Command::new("networksetup")
                 .args(["-setsecurewebproxystate", &service, "on"])
                 .output()?;
         }
-        
+
         log::info!("System HTTP proxy set to {}:{}", host, port);
         Ok(())
     }
@@ -40,17 +40,17 @@ impl SystemProxy {
     #[cfg(target_os = "macos")]
     pub fn set_socks_proxy(host: &str, port: u16) -> Result<()> {
         let services = Self::get_network_services()?;
-        
+
         for service in services {
             Command::new("networksetup")
                 .args(["-setsocksfirewallproxy", &service, host, &port.to_string()])
                 .output()?;
-            
+
             Command::new("networksetup")
                 .args(["-setsocksfirewallproxystate", &service, "on"])
                 .output()?;
         }
-        
+
         log::info!("System SOCKS proxy set to {}:{}", host, port);
         Ok(())
     }
@@ -59,24 +59,24 @@ impl SystemProxy {
     #[cfg(target_os = "macos")]
     pub fn clear_proxy() -> Result<()> {
         let services = Self::get_network_services()?;
-        
+
         for service in services {
             // 关闭 HTTP 代理
             Command::new("networksetup")
                 .args(["-setwebproxystate", &service, "off"])
                 .output()?;
-            
+
             // 关闭 HTTPS 代理
             Command::new("networksetup")
                 .args(["-setsecurewebproxystate", &service, "off"])
                 .output()?;
-            
+
             // 关闭 SOCKS 代理
             Command::new("networksetup")
                 .args(["-setsocksfirewallproxystate", &service, "off"])
                 .output()?;
         }
-        
+
         log::info!("System proxy cleared");
         Ok(())
     }
@@ -87,7 +87,7 @@ impl SystemProxy {
         let output = Command::new("networksetup")
             .args(["-listallnetworkservices"])
             .output()?;
-        
+
         let output_str = String::from_utf8_lossy(&output.stdout);
         let services: Vec<String> = output_str
             .lines()
@@ -95,7 +95,7 @@ impl SystemProxy {
             .filter(|s| !s.starts_with('*')) // 跳过禁用的服务
             .map(|s| s.to_string())
             .collect();
-        
+
         Ok(services)
     }
 
@@ -103,12 +103,12 @@ impl SystemProxy {
     #[cfg(target_os = "macos")]
     pub fn get_proxy_status() -> Result<bool> {
         let services = Self::get_network_services()?;
-        
+
         if let Some(service) = services.first() {
             let output = Command::new("networksetup")
                 .args(["-getwebproxy", service])
                 .output()?;
-            
+
             let output_str = String::from_utf8_lossy(&output.stdout);
             Ok(output_str.contains("Enabled: Yes"))
         } else {
@@ -120,29 +120,35 @@ impl SystemProxy {
     #[cfg(target_os = "windows")]
     pub fn set_http_proxy(host: &str, port: u16) -> Result<()> {
         let proxy_server = format!("{}:{}", host, port);
-        
+
         Command::new("reg")
             .args([
                 "add",
                 r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings",
-                "/v", "ProxyServer",
-                "/t", "REG_SZ",
-                "/d", &proxy_server,
-                "/f"
+                "/v",
+                "ProxyServer",
+                "/t",
+                "REG_SZ",
+                "/d",
+                &proxy_server,
+                "/f",
             ])
             .output()?;
-        
+
         Command::new("reg")
             .args([
                 "add",
                 r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings",
-                "/v", "ProxyEnable",
-                "/t", "REG_DWORD",
-                "/d", "1",
-                "/f"
+                "/v",
+                "ProxyEnable",
+                "/t",
+                "REG_DWORD",
+                "/d",
+                "1",
+                "/f",
             ])
             .output()?;
-        
+
         log::info!("System HTTP proxy set to {}:{}", host, port);
         Ok(())
     }
@@ -160,13 +166,16 @@ impl SystemProxy {
             .args([
                 "add",
                 r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings",
-                "/v", "ProxyEnable",
-                "/t", "REG_DWORD",
-                "/d", "0",
-                "/f"
+                "/v",
+                "ProxyEnable",
+                "/t",
+                "REG_DWORD",
+                "/d",
+                "0",
+                "/f",
             ])
             .output()?;
-        
+
         log::info!("System proxy cleared");
         Ok(())
     }
@@ -177,10 +186,11 @@ impl SystemProxy {
             .args([
                 "query",
                 r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings",
-                "/v", "ProxyEnable"
+                "/v",
+                "ProxyEnable",
             ])
             .output()?;
-        
+
         let output_str = String::from_utf8_lossy(&output.stdout);
         Ok(output_str.contains("0x1"))
     }
@@ -189,28 +199,38 @@ impl SystemProxy {
     #[cfg(target_os = "linux")]
     pub fn set_http_proxy(host: &str, port: u16) -> Result<()> {
         let proxy_url = format!("http://{}:{}", host, port);
-        
+
         // 使用 gsettings 设置 GNOME 代理
         Command::new("gsettings")
             .args(["set", "org.gnome.system.proxy", "mode", "manual"])
             .output()?;
-        
+
         Command::new("gsettings")
             .args(["set", "org.gnome.system.proxy.http", "host", host])
             .output()?;
-        
+
         Command::new("gsettings")
-            .args(["set", "org.gnome.system.proxy.http", "port", &port.to_string()])
+            .args([
+                "set",
+                "org.gnome.system.proxy.http",
+                "port",
+                &port.to_string(),
+            ])
             .output()?;
-        
+
         Command::new("gsettings")
             .args(["set", "org.gnome.system.proxy.https", "host", host])
             .output()?;
-        
+
         Command::new("gsettings")
-            .args(["set", "org.gnome.system.proxy.https", "port", &port.to_string()])
+            .args([
+                "set",
+                "org.gnome.system.proxy.https",
+                "port",
+                &port.to_string(),
+            ])
             .output()?;
-        
+
         log::info!("System HTTP proxy set to {}", proxy_url);
         Ok(())
     }
@@ -220,11 +240,16 @@ impl SystemProxy {
         Command::new("gsettings")
             .args(["set", "org.gnome.system.proxy.socks", "host", host])
             .output()?;
-        
+
         Command::new("gsettings")
-            .args(["set", "org.gnome.system.proxy.socks", "port", &port.to_string()])
+            .args([
+                "set",
+                "org.gnome.system.proxy.socks",
+                "port",
+                &port.to_string(),
+            ])
             .output()?;
-        
+
         log::info!("System SOCKS proxy set to {}:{}", host, port);
         Ok(())
     }
@@ -234,7 +259,7 @@ impl SystemProxy {
         Command::new("gsettings")
             .args(["set", "org.gnome.system.proxy", "mode", "none"])
             .output()?;
-        
+
         log::info!("System proxy cleared");
         Ok(())
     }
@@ -244,12 +269,8 @@ impl SystemProxy {
         let output = Command::new("gsettings")
             .args(["get", "org.gnome.system.proxy", "mode"])
             .output()?;
-        
+
         let output_str = String::from_utf8_lossy(&output.stdout);
         Ok(output_str.contains("manual"))
     }
 }
-
-
-
-
