@@ -79,7 +79,7 @@ curl -fsSL "${CURL_AUTH_ARGS[@]}" "$API_URL" > "$tmp_json"
 
 release_tag="$("$PYTHON_BIN" -c "
 import json
-with open('$(python_path "$tmp_json")') as f:
+with open(r'$(python_path "$tmp_json")') as f:
     data = json.load(f)
 print(data.get('tag_name', 'unknown'))
 ")"
@@ -98,7 +98,7 @@ download_and_extract() {
   tmp_json_path="$(python_path "$tmp_json")"
   url="$("$PYTHON_BIN" -c "
 import json
-with open('$tmp_json_path') as f:
+with open(r'$tmp_json_path') as f:
     data = json.load(f)
 for asset in data.get('assets', []):
     if asset.get('name', '') == '$asset_pattern':
