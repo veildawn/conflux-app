@@ -1,4 +1,5 @@
 pub mod config;
+pub mod logs;
 pub mod proxy;
 pub mod system;
 
@@ -9,7 +10,7 @@ use tauri::AppHandle;
 use tokio::sync::Mutex;
 
 use crate::config::ConfigManager;
-use crate::mihomo::{MihomoApi, MihomoManager};
+use crate::mihomo::{LogStreamer, MihomoApi, MihomoManager};
 use crate::utils::generate_api_secret;
 
 /// 应用状态
@@ -17,6 +18,7 @@ pub struct AppState {
     pub mihomo_manager: Arc<MihomoManager>,
     pub mihomo_api: Arc<MihomoApi>,
     pub config_manager: Arc<ConfigManager>,
+    pub log_streamer: Arc<LogStreamer>,
     pub system_proxy_enabled: Arc<Mutex<bool>>,
     pub enhanced_mode: Arc<Mutex<bool>>,
 }
@@ -44,7 +46,8 @@ pub async fn init_app_state(_app: &AppHandle) -> Result<()> {
     let api_url = format!("http://{}", config.external_controller);
 
     let mihomo_manager = Arc::new(MihomoManager::new(api_secret.clone())?);
-    let mihomo_api = Arc::new(MihomoApi::new(api_url, api_secret));
+    let mihomo_api = Arc::new(MihomoApi::new(api_url.clone(), api_secret.clone()));
+    let log_streamer = Arc::new(LogStreamer::new(api_url, api_secret));
 
     // 检测系统当前的代理状态（恢复上次的状态）
     let current_system_proxy = crate::system::SystemProxy::get_proxy_status().unwrap_or(false);
@@ -70,6 +73,7 @@ pub async fn init_app_state(_app: &AppHandle) -> Result<()> {
         mihomo_manager,
         mihomo_api,
         config_manager,
+        log_streamer,
         system_proxy_enabled: Arc::new(Mutex::new(current_system_proxy)),
         enhanced_mode: Arc::new(Mutex::new(enhanced_mode)),
     };

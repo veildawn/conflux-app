@@ -166,3 +166,70 @@ pub struct RuleItem {
 pub struct RulesResponse {
     pub rules: Vec<RuleItem>,
 }
+
+/// 代理 Provider 中的节点信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderProxy {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub proxy_type: String,
+    #[serde(default)]
+    pub udp: bool,
+    pub now: Option<String>,
+}
+
+/// 订阅信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubscriptionInfo {
+    #[serde(rename = "Upload")]
+    pub upload: Option<u64>,
+    #[serde(rename = "Download")]
+    pub download: Option<u64>,
+    #[serde(rename = "Total")]
+    pub total: Option<u64>,
+    #[serde(rename = "Expire")]
+    pub expire: Option<u64>,
+}
+
+/// 代理 Provider 信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyProviderInfo {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub provider_type: String,
+    #[serde(rename = "vehicleType")]
+    pub vehicle_type: String,
+    #[serde(default)]
+    pub proxies: Vec<ProviderProxy>,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: Option<String>,
+    #[serde(rename = "subscriptionInfo")]
+    pub subscription_info: Option<SubscriptionInfo>,
+}
+
+/// 代理 Provider 列表响应
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyProvidersResponse {
+    pub providers: std::collections::HashMap<String, ProxyProviderInfo>,
+}
+
+/// 规则 Provider 信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuleProviderInfo {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub provider_type: String,
+    pub behavior: String,
+    #[serde(rename = "ruleCount")]
+    pub rule_count: u32,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: Option<String>,
+    #[serde(rename = "vehicleType")]
+    pub vehicle_type: String,
+}
+
+/// 规则 Provider 列表响应
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuleProvidersResponse {
+    pub providers: std::collections::HashMap<String, RuleProviderInfo>,
+}
