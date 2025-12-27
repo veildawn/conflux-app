@@ -141,16 +141,21 @@ impl MihomoApi {
     pub async fn get_traffic(&self) -> Result<TrafficData> {
         let url = format!("{}/traffic", self.base_url);
         let request = self.client.get(&url);
-        let response = self.auth_header(request).send().await?;
+        let mut response = self.auth_header(request).send().await?;
         
-        // traffic 端点返回的是流式数据，我们只取第一行
-        let text = response.text().await?;
-        if let Some(line) = text.lines().next() {
-            let traffic: TrafficData = serde_json::from_str(line)?;
-            Ok(traffic)
-        } else {
-            Ok(TrafficData::default())
+        // traffic 端点返回的是流式数据
+        // 我们只取第一个 chunk，通常包含当前的数据点
+        if let Some(chunk) = response.chunk().await? {
+            let text = String::from_utf8_lossy(&chunk);
+            if let Some(line) = text.lines().next() {
+                // 尝试解析
+                if let Ok(traffic) = serde_json::from_str::<TrafficData>(line) {
+                    return Ok(traffic);
+                }
+            }
         }
+        
+        Ok(TrafficData::default())
     }
 
     /// 切换代理模式
@@ -248,20 +253,6 @@ impl MihomoApi {
         } else {
             let error_text = response.text().await.unwrap_or_default();
             Err(anyhow::anyhow!("Failed to update GEO: {}", error_text))
-        }
-    }
-
-    /// 重启内核
-    pub async fn restart(&self) -> Result<()> {
-        let url = format!("{}/restart", self.base_url);
-        let request = self.client.post(&url).json(&serde_json::json!({}));
-        let response = self.auth_header(request).send().await?;
-
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            let error_text = response.text().await.unwrap_or_default();
-            Err(anyhow::anyhow!("Failed to restart: {}", error_text))
         }
     }
 }

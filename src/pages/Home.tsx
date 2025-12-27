@@ -144,10 +144,16 @@ export default function Home() {
   }, [status.running]);
 
   // 计算进程列表
-  const processList = useMemo(() => {
+  /* const processList = useMemo(() => {
     const processMap = new Map<string, { name: string; upload: number; download: number }>();
     
+    // 如果没有连接数据，返回空列表
+    if (!connections || connections.length === 0) {
+      return [];
+    }
+    
     for (const conn of connections) {
+      // 优先使用 metadata 中的 process，如果没有则尝试从 chains 推断或标记为 Unknown
       const processName = conn.metadata.process || 'Unknown';
       const existing = processMap.get(processName);
       if (existing) {
@@ -165,7 +171,7 @@ export default function Home() {
     return Array.from(processMap.values())
       .sort((a, b) => (b.upload + b.download) - (a.upload + a.download))
       .slice(0, 10);
-  }, [connections]);
+  }, [connections]); */
 
   // 图表数据
   const chartData = useMemo(() => {
@@ -310,15 +316,6 @@ export default function Home() {
            <div className="flex flex-col h-full justify-between">
               <div className="flex items-baseline gap-1">
                 <span className="text-3xl font-bold text-gray-900 dark:text-white">{connectionStats.totalConnections}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mt-2">
-                <span>{connectionStats.totalProcesses} 个进程</span>
-                <div className="flex -space-x-1.5">
-                   {/* Mock avatars or dots for processes could go here, for now just decorative dots */}
-                   <span className="w-2 h-2 rounded-full bg-blue-400 ring-2 ring-white dark:ring-zinc-900" />
-                   <span className="w-2 h-2 rounded-full bg-green-400 ring-2 ring-white dark:ring-zinc-900" />
-                   <span className="w-2 h-2 rounded-full bg-purple-400 ring-2 ring-white dark:ring-zinc-900" />
-                </div>
               </div>
            </div>
         </BentoCard>

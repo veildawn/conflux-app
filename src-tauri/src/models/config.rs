@@ -27,6 +27,10 @@ pub struct MihomoConfig {
     #[serde(default)]
     pub secret: String,
     
+    // 启用进程查找
+    #[serde(rename = "find-process-mode", default = "default_find_process_mode")]
+    pub find_process_mode: String,
+    
     // GeoData 相关配置
     #[serde(rename = "geodata-mode", default)]
     pub geodata_mode: bool,
@@ -77,6 +81,7 @@ fn default_socks_port() -> u16 { 7891 }
 fn default_mode() -> String { "rule".to_string() }
 fn default_log_level() -> String { "info".to_string() }
 fn default_external_controller() -> String { "127.0.0.1:9090".to_string() }
+fn default_find_process_mode() -> String { "always".to_string() }
 
 impl Default for MihomoConfig {
     fn default() -> Self {
@@ -89,6 +94,7 @@ impl Default for MihomoConfig {
             log_level: default_log_level(),
             external_controller: default_external_controller(),
             secret: String::new(),
+            find_process_mode: default_find_process_mode(),
             geodata_mode: true,
             geodata_loader: Some("memconservative".to_string()),
             geo_auto_update: false,
@@ -219,6 +225,16 @@ pub struct RuleDatabaseItem {
     pub updated_at: Option<String>,
     #[serde(default)]
     pub auto_update: bool,
+    
+    #[serde(rename = "updateSourceType", skip_serializing_if = "Option::is_none")]
+    pub update_source_type: Option<String>,
+    
+    #[serde(rename = "githubRepo", skip_serializing_if = "Option::is_none")]
+    pub github_repo: Option<String>,
+    
+    #[serde(rename = "assetName", skip_serializing_if = "Option::is_none")]
+    pub asset_name: Option<String>,
+
     /// 远程文件的 ETag，用于版本检查
     #[serde(skip_serializing_if = "Option::is_none")]
     pub etag: Option<String>,
@@ -230,9 +246,6 @@ pub struct RuleDatabaseItem {
 /// 应用设置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
-    #[serde(default = "default_theme")]
-    pub theme: String,
-    
     #[serde(default = "default_language")]
     pub language: String,
     
@@ -241,9 +254,6 @@ pub struct AppSettings {
     
     #[serde(rename = "systemProxy", default)]
     pub system_proxy: bool,
-    
-    #[serde(rename = "startMinimized", default)]
-    pub start_minimized: bool,
     
     #[serde(rename = "closeToTray", default = "default_close_to_tray")]
     pub close_to_tray: bool,
@@ -255,18 +265,15 @@ pub struct AppSettings {
     pub rule_databases: Vec<RuleDatabaseItem>,
 }
 
-fn default_theme() -> String { "system".to_string() }
 fn default_language() -> String { "zh-CN".to_string() }
 fn default_close_to_tray() -> bool { true }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            theme: default_theme(),
             language: default_language(),
             auto_start: false,
             system_proxy: false,
-            start_minimized: false,
             close_to_tray: default_close_to_tray(),
             subscriptions: vec![],
             rule_databases: vec![],

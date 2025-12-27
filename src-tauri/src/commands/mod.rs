@@ -45,11 +45,15 @@ pub async fn init_app_state(_app: &AppHandle) -> Result<()> {
     let mihomo_manager = Arc::new(MihomoManager::new(api_secret.clone())?);
     let mihomo_api = Arc::new(MihomoApi::new(api_url, api_secret));
     
+    // 检测系统当前的代理状态（恢复上次的状态）
+    let current_system_proxy = crate::system::SystemProxy::get_proxy_status().unwrap_or(false);
+    log::info!("Detected system proxy status: {}", current_system_proxy);
+    
     let state = AppState {
         mihomo_manager,
         mihomo_api,
         config_manager,
-        system_proxy_enabled: Arc::new(Mutex::new(false)),
+        system_proxy_enabled: Arc::new(Mutex::new(current_system_proxy)),
     };
     
     APP_STATE.set(state).map_err(|_| anyhow::anyhow!("State already initialized"))?;

@@ -177,14 +177,20 @@ export const ipc = {
     fileName: string,
     currentEtag?: string,
     currentModified?: string,
-    force?: boolean
+    force?: boolean,
+    updateSourceType?: string,
+    githubRepo?: string,
+    assetName?: string
   ): Promise<DownloadResourceResult> {
     return invoke('download_resource', { 
       url, 
       fileName, 
       currentEtag, 
       currentModified,
-      force
+      force,
+      updateSourceType,
+      githubRepo,
+      assetName
     });
   },
 

@@ -73,22 +73,21 @@ interface FileStatus {
   modified: string | null;
 }
 
-interface UpdateStatus {
-  hasUpdate: boolean;
-  checking: boolean;
-  error?: string;
-}
-
 // -----------------------------------------------------------------------------
 // Main Component
 // -----------------------------------------------------------------------------
 
 export default function RuleDatabase() {
-  const { settings, updateRuleDatabase } = useAppStore();
+  const { 
+    settings, 
+    updateRuleDatabase, 
+    ruleDatabaseUpdateStatus, 
+    checkRuleDatabaseUpdates,
+    setRuleDatabaseUpdateStatus 
+  } = useAppStore();
   const databases = settings.ruleDatabases || [];
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
   const [fileStatus, setFileStatus] = useState<Record<string, FileStatus>>({});
-  const [updateStatus, setUpdateStatus] = useState<Record<string, UpdateStatus>>({});
   const [checkingAll, setCheckingAll] = useState(false);
 
   const checkFileStatus = useCallback(async () => {
@@ -112,37 +111,37 @@ export default function RuleDatabase() {
     }
   }, [databases]);
 
-  // 检查所有资源的更新状态
-  const checkAllUpdates = useCallback(async () => {
+  // 手动触发检查所有资源的更新状态
+  const handleCheckAllUpdates = useCallback(async () => {
     if (databases.length === 0) return;
     
     setCheckingAll(true);
     
-    const initialStatus: Record<string, UpdateStatus> = {};
+    // 设置所有数据库为检查中状态
     databases.forEach(db => {
-      initialStatus[db.id] = { hasUpdate: false, checking: true };
+      setRuleDatabaseUpdateStatus(db.id, { hasUpdate: false, checking: true });
     });
-    setUpdateStatus(initialStatus);
     
     try {
       const requests = databases.map(db => ({
         url: db.url,
         currentEtag: db.etag,
         currentModified: db.remoteModified,
+        updateSourceType: db.updateSourceType,
+        githubRepo: db.githubRepo,
+        assetName: db.assetName,
       }));
       
       const results = await ipc.checkResourceUpdates(requests);
       
-      const newStatus: Record<string, UpdateStatus> = {};
       results.forEach((result, index) => {
         const db = databases[index];
-        newStatus[db.id] = {
+        setRuleDatabaseUpdateStatus(db.id, {
           hasUpdate: result.hasUpdate,
           checking: false,
           error: result.error,
-        };
+        });
       });
-      setUpdateStatus(newStatus);
       
       const updateCount = results.filter(r => r.hasUpdate && !r.error).length;
       if (updateCount > 0) {
@@ -154,25 +153,17 @@ export default function RuleDatabase() {
       }
     } catch (error) {
       console.error('Failed to check updates:', error);
-      const errorStatus: Record<string, UpdateStatus> = {};
       databases.forEach(db => {
-        errorStatus[db.id] = { hasUpdate: false, checking: false, error: '检查失败' };
+        setRuleDatabaseUpdateStatus(db.id, { hasUpdate: false, checking: false, error: '检查失败' });
       });
-      setUpdateStatus(errorStatus);
     } finally {
       setCheckingAll(false);
     }
-  }, [databases]);
+  }, [databases, setRuleDatabaseUpdateStatus]);
 
   useEffect(() => {
     checkFileStatus();
   }, [checkFileStatus]);
-
-  useEffect(() => {
-    if (databases.length > 0) {
-      checkAllUpdates();
-    }
-  }, [databases.length]);
 
   const formatFileSize = (bytes: number | null): string => {
     if (bytes === null) return '未知';
@@ -194,7 +185,10 @@ export default function RuleDatabase() {
         fileName, 
         force ? undefined : currentEtag, 
         force ? undefined : currentModified,
-        force
+        force,
+        database?.updateSourceType,
+        database?.githubRepo,
+        database?.assetName
       );
       
       if (result.downloaded) {
@@ -204,10 +198,7 @@ export default function RuleDatabase() {
           remoteModified: result.remoteModified,
         });
         
-        setUpdateStatus(prev => ({
-          ...prev,
-          [id]: { hasUpdate: false, checking: false }
-        }));
+        setRuleDatabaseUpdateStatus(id, { hasUpdate: false, checking: false });
         
         await checkFileStatus();
         
@@ -222,10 +213,7 @@ export default function RuleDatabase() {
           remoteModified: result.remoteModified,
         });
         
-        setUpdateStatus(prev => ({
-          ...prev,
-          [id]: { hasUpdate: false, checking: false }
-        }));
+        setRuleDatabaseUpdateStatus(id, { hasUpdate: false, checking: false });
         
         toast({
           title: "已是最新",
@@ -263,7 +251,7 @@ export default function RuleDatabase() {
     });
   };
 
-  const updateCount = Object.values(updateStatus).filter(s => s.hasUpdate && !s.checking).length;
+  const updateCount = Object.values(ruleDatabaseUpdateStatus).filter(s => s.hasUpdate && !s.checking).length;
 
   const getIconForType = (fileName: string) => {
     const lower = fileName.toLowerCase();
@@ -300,7 +288,7 @@ export default function RuleDatabase() {
           <Button 
             variant="ghost" 
             size="sm" 
-            onClick={checkAllUpdates}
+            onClick={handleCheckAllUpdates}
             disabled={checkingAll}
             className="rounded-full gap-2 text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
           >
@@ -340,7 +328,7 @@ export default function RuleDatabase() {
             {databases.map((database) => {
               const status = fileStatus[database.fileName];
               const fileExists = status?.exists ?? false;
-              const dbUpdateStatus = updateStatus[database.id];
+              const dbUpdateStatus = ruleDatabaseUpdateStatus[database.id];
               const hasUpdate = dbUpdateStatus?.hasUpdate && !dbUpdateStatus?.checking;
               const isChecking = dbUpdateStatus?.checking;
               const isUpdating = updating[database.id];

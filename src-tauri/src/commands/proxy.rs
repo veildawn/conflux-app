@@ -226,6 +226,15 @@ pub async fn get_connections() -> Result<ConnectionsResponse, String> {
         .await
         .map_err(|e| e.to_string())?;
     
+    // Debug log for connections
+    if !connections.connections.is_empty() {
+        if let Some(first) = connections.connections.first() {
+            log::info!("First connection metadata: {:?}", first.metadata);
+        }
+    } else {
+        log::info!("No connections found");
+    }
+    
     Ok(connections)
 }
 

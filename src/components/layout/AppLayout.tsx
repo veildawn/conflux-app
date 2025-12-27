@@ -16,32 +16,46 @@ export default function AppLayout() {
       status: state.status,
     }))
   );
-  const { fetchSettings } = useAppStore();
-  const initialized = useRef(false);
+  const { fetchSettings, checkRuleDatabaseUpdates } = useAppStore();
+  const initStarted = useRef(false);
 
   useEffect(() => {
-    // 初始化加载 - 仅执行一次
-    if (initialized.current) return;
-    initialized.current = true;
+    // 防止重复初始化
+    if (initStarted.current) {
+      console.log('AppLayout: Init already started, skipping...');
+      return;
+    }
+    initStarted.current = true;
 
     const init = async () => {
-      await fetchSettings();
-      await fetchStatus();
-      
-      // 如果 mihomo 未运行，自动启动
-      const currentStatus = useProxyStore.getState().status;
-      if (!currentStatus.running) {
-        try {
+      console.log('AppLayout: Starting initialization...');
+      try {
+        await fetchSettings();
+        console.log('AppLayout: Settings fetched');
+        await fetchStatus();
+        console.log('AppLayout: Status fetched');
+        
+        // 如果 mihomo 未运行，自动启动
+        const currentStatus = useProxyStore.getState().status;
+        console.log('AppLayout: Current status:', currentStatus);
+        if (!currentStatus.running) {
+          console.log('AppLayout: Starting MiHomo...');
           await start();
           console.log('MiHomo started automatically');
-        } catch (error) {
-          console.error('Failed to auto-start MiHomo:', error);
+        } else {
+          console.log('AppLayout: MiHomo already running');
         }
+        
+        // 应用启动时检查规则数据库更新（只检查一次）
+        checkRuleDatabaseUpdates();
+        console.log('AppLayout: Rule database update check initiated');
+      } catch (error) {
+        console.error('AppLayout: Init failed:', error);
       }
     };
 
     init();
-  }, [fetchSettings, fetchStatus, start]);
+  }, [fetchSettings, fetchStatus, start, checkRuleDatabaseUpdates]);
 
   // 定时刷新流量数据和连接数据
   useEffect(() => {

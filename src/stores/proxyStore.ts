@@ -12,7 +12,6 @@ export interface TrafficHistoryPoint {
 // 连接统计数据
 export interface ConnectionStats {
   totalConnections: number;
-  totalProcesses: number;
   downloadTotal: number;
   uploadTotal: number;
 }
@@ -56,7 +55,6 @@ const initialStatus: ProxyStatus = {
 
 const initialConnectionStats: ConnectionStats = {
   totalConnections: 0,
-  totalProcesses: 0,
   downloadTotal: 0,
   uploadTotal: 0,
 };
@@ -212,19 +210,10 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
     try {
       const response = await ipc.getConnections();
       
-      // 计算进程数量
-      const processes = new Set<string>();
-      for (const conn of response.connections) {
-        if (conn.metadata.process) {
-          processes.add(conn.metadata.process);
-        }
-      }
-
       set({
-        connections: response.connections,
+        connections: response.connections || [],
         connectionStats: {
-          totalConnections: response.connections.length,
-          totalProcesses: processes.size,
+          totalConnections: response.connections ? response.connections.length : 0,
           downloadTotal: response.downloadTotal,
           uploadTotal: response.uploadTotal,
         }
@@ -259,7 +248,6 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         connectionStats: {
           ...get().connectionStats,
           totalConnections: 0,
-          totalProcesses: 0,
         }
       });
     } catch (error) {
