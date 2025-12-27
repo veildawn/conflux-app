@@ -109,3 +109,11 @@ export interface RulesResponse {
   rules: RuleItem[];
 }
 
+/**
+ * 核心版本信息
+ */
+export interface VersionInfo {
+  version: string;
+  meta: boolean;
+}
+

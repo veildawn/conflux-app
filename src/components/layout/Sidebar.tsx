@@ -31,10 +31,10 @@ const navGroups: NavGroup[] = [
   {
     title: '代理',
     items: [
-      { path: '/proxy', icon: Globe, label: '代理' },
       { path: '/subscription', icon: BookOpen, label: '订阅' },
+      { path: '/proxy', icon: Globe, label: '代理' },
       { path: '/rules', icon: Shield, label: '规则' },
-      { path: '/external-resources', icon: Database, label: '外部规则' },
+      { path: '/rule-database', icon: Database, label: '规则数据库' },
     ]
   },
   {
@@ -72,14 +72,22 @@ export default function Sidebar() {
                   key={item.path}
                   to={item.path}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-300 text-[13px] font-medium no-drag relative group',
+                    'flex items-center gap-3 px-3 py-2 rounded-[14px] transition-all duration-200 text-[13px] font-medium no-drag group',
                     isActive 
-                      ? 'bg-white dark:bg-zinc-800 text-black dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-zinc-700' 
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200/50 dark:hover:bg-zinc-800/50 hover:text-black dark:hover:text-white'
+                      ? 'bg-white dark:bg-zinc-800 text-gray-900 dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-none' 
+                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-zinc-800/50 hover:text-gray-700 dark:hover:text-gray-200'
                   )}
                 >
-                  <Icon className={cn("w-4 h-4 transition-colors", isActive ? "text-blue-500 dark:text-blue-400" : "text-gray-500 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-gray-200")} />
-                  <span>{item.label}</span>
+                  <Icon 
+                    className={cn(
+                      "w-[18px] h-[18px] transition-colors", 
+                      isActive 
+                        ? "text-blue-500 dark:text-blue-400" 
+                        : "text-gray-400 group-hover:text-gray-600 dark:text-gray-500 dark:group-hover:text-gray-300"
+                    )} 
+                    strokeWidth={isActive ? 2.5 : 2}
+                  />
+                  <span className={cn(isActive && "font-semibold")}>{item.label}</span>
                 </Link>
               );
             })}

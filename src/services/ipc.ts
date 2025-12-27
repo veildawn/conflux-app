@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ProxyStatus, ProxyGroup, TrafficData, ConnectionsResponse, RuleItem } from '@/types/proxy';
-import type { MihomoConfig, AppSettings } from '@/types/config';
+import type { ProxyStatus, ProxyGroup, TrafficData, ConnectionsResponse, RuleItem, VersionInfo } from '@/types/proxy';
+import type { MihomoConfig, AppSettings, DownloadResourceResult, ResourceUpdateCheckRequest, ResourceUpdateCheckResult } from '@/types/config';
 
 /**
  * IPC 服务 - 与 Tauri 后端通信
@@ -160,6 +160,65 @@ export const ipc = {
   async getRulesFromApi(): Promise<RuleItem[]> {
     // 后端使用 serde(rename = "type")，所以返回的字段就是 type
     return invoke<RuleItem[]>('get_rules_from_api');
+  },
+
+  /**
+   * 下载外部资源文件（GeoIP、GeoSite 等）
+   * 支持版本检查，如果传入 currentEtag 或 currentModified，会先检查是否有更新
+   * @param url 下载地址
+   * @param fileName 文件名
+   * @param currentEtag 当前的 ETag（可选，用于版本检查）
+   * @param currentModified 当前的 Last-Modified（可选，用于版本检查）
+   * @param force 是否强制下载（忽略版本检查）
+   * @returns 下载结果，包含是否实际下载了文件以及新的版本信息
+   */
+  async downloadResource(
+    url: string, 
+    fileName: string,
+    currentEtag?: string,
+    currentModified?: string,
+    force?: boolean
+  ): Promise<DownloadResourceResult> {
+    return invoke('download_resource', { 
+      url, 
+      fileName, 
+      currentEtag, 
+      currentModified,
+      force
+    });
+  },
+
+  /**
+   * 检查外部资源文件状态
+   */
+  async checkResourceFiles(fileNames: string[]): Promise<{
+    fileName: string;
+    exists: boolean;
+    size: number | null;
+    modified: string | null;
+  }[]> {
+    return invoke('check_resource_files', { fileNames });
+  },
+
+  /**
+   * 批量检查资源是否有更新（只检查，不下载）
+   */
+  async checkResourceUpdates(resources: ResourceUpdateCheckRequest[]): Promise<ResourceUpdateCheckResult[]> {
+    return invoke('check_resource_updates', { resources });
+  },
+
+  /**
+   * 重新加载 GEO 数据库
+   */
+  async reloadGeoDatabase(): Promise<void> {
+    return invoke('reload_geo_database');
+  },
+
+  /**
+   * 获取核心版本信息
+   */
+  async getCoreVersion(): Promise<VersionInfo> {
+    return invoke('get_core_version');
   },
 
   // ============= 系统命令 =============

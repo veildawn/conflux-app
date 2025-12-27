@@ -1,8 +1,20 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Server, Zap, Check, RefreshCw, Globe, Shield, Activity, BookOpen, Plus, ExternalLink, Wifi } from 'lucide-react';
+import { 
+  Server, 
+  Zap, 
+  Check, 
+  RefreshCw, 
+  Globe, 
+  Shield, 
+  Activity, 
+  BookOpen, 
+  Plus, 
+  ExternalLink, 
+  Wifi,
+  MoreHorizontal
+} from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -14,17 +26,77 @@ import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
 import type { ProxyMode, ProxyServerInfo } from '@/types/proxy';
 
-// 代理类型对应的颜色
+// -----------------------------------------------------------------------------
+// UI Components
+// -----------------------------------------------------------------------------
+
+function BentoCard({ 
+  className, 
+  children, 
+  title, 
+  icon: Icon,
+  iconColor = "text-gray-500",
+  action 
+}: { 
+  className?: string; 
+  children: React.ReactNode; 
+  title?: string;
+  icon?: React.ElementType;
+  iconColor?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className={cn(
+      "bg-white dark:bg-zinc-900 rounded-[20px] p-5 shadow-xs border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden",
+      className
+    )}>
+      {(title || Icon) && (
+        <div className="flex justify-between items-center mb-4 z-10">
+          <div className="flex items-center gap-2">
+            {Icon && <Icon className={cn("w-4 h-4", iconColor)} />}
+            {title && (
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                {title}
+              </span>
+            )}
+          </div>
+          {action}
+        </div>
+      )}
+      <div className="flex-1 z-10">{children}</div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Helper Data
+// -----------------------------------------------------------------------------
+
 const getProxyTypeColor = (type: string) => {
   const t = type.toLowerCase();
-  if (t.includes('ss') || t === 'shadowsocks') return 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400';
-  if (t.includes('vmess') || t.includes('vless')) return 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
-  if (t.includes('trojan')) return 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400';
-  if (t.includes('hysteria')) return 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400';
-  if (t.includes('wireguard')) return 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400';
-  if (t.includes('tuic')) return 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400';
-  return 'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400';
+  if (t.includes('ss') || t === 'shadowsocks') return 'bg-violet-500/10 text-violet-600 dark:text-violet-400';
+  if (t.includes('vmess') || t.includes('vless')) return 'bg-blue-500/10 text-blue-600 dark:text-blue-400';
+  if (t.includes('trojan')) return 'bg-red-500/10 text-red-600 dark:text-red-400';
+  if (t.includes('hysteria')) return 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
+  if (t.includes('wireguard')) return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
+  if (t.includes('tuic')) return 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400';
+  return 'bg-gray-500/10 text-gray-600 dark:text-gray-400';
 };
+
+const getProxyTypeBgColor = (type: string) => {
+  const t = type.toLowerCase();
+  if (t.includes('ss') || t === 'shadowsocks') return 'bg-violet-500';
+  if (t.includes('vmess') || t.includes('vless')) return 'bg-blue-500';
+  if (t.includes('trojan')) return 'bg-red-500';
+  if (t.includes('hysteria')) return 'bg-amber-500';
+  if (t.includes('wireguard')) return 'bg-emerald-500';
+  if (t.includes('tuic')) return 'bg-cyan-500';
+  return 'bg-gray-500';
+};
+
+// -----------------------------------------------------------------------------
+// Main Component
+// -----------------------------------------------------------------------------
 
 export default function Proxy() {
   const navigate = useNavigate();
@@ -78,18 +150,14 @@ export default function Proxy() {
   const { mainGroup, strategyGroups } = useMemo(() => {
     if (!groups.length) return { mainGroup: null, strategyGroups: [] };
 
-    // 尝试找到主要代理组 (通常名为 "Proxy" 或 "GLOBAL")
-    // 优先找 "Proxy" 或 "节点选择" 等常见名称，如果没有则找 "GLOBAL"
     let main = groups.find(g => ['Proxy', '节点选择', 'PROXY'].includes(g.name));
     if (!main) {
       main = groups.find(g => g.name === 'GLOBAL');
     }
-    // 如果还是没找到，就取第一个 Select 类型的组
     if (!main) {
       main = groups.find(g => g.type === 'Selector');
     }
 
-    // 剩下的组
     const strategies = groups.filter(g => g.name !== main?.name && g.name !== 'GLOBAL');
 
     return { mainGroup: main, strategyGroups: strategies };
@@ -149,7 +217,6 @@ export default function Proxy() {
     }
   };
 
-  // 测试所有代理服务器延迟
   const handleTestAllServerDelays = async () => {
     for (const server of proxyServers) {
       handleTestDelay(server.name);
@@ -157,158 +224,154 @@ export default function Proxy() {
   };
 
   const renderGroupCard = (group: any, isMain = false) => (
-    <Card 
+    <BentoCard 
       key={group.name} 
-      className={cn(
-        "bg-white dark:bg-zinc-800 rounded-[24px] shadow-sm border transition-all hover:shadow-md",
-        isMain ? "border-blue-100 dark:border-blue-900/30" : "border-gray-100 dark:border-zinc-700"
-      )}
-    >
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 pt-6 px-6">
-        <div className="flex items-center gap-3">
-          <div className={cn(
-            "w-10 h-10 rounded-xl flex items-center justify-center shadow-sm",
-            isMain 
-              ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" 
-              : "bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400"
-          )}>
-            <Server className="w-5 h-5" />
-          </div>
-          <div>
-            <CardTitle className="text-base font-semibold text-gray-900 dark:text-gray-100">
-              {group.name}
-            </CardTitle>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant="secondary" className="text-xs font-normal rounded-md px-1.5 py-0 bg-gray-100 dark:bg-zinc-700/50 text-gray-500 dark:text-gray-400">
-                {group.type}
-              </Badge>
-              <span className="text-xs text-muted-foreground">{group.all.length} 个节点</span>
-            </div>
-          </div>
-        </div>
+      title={group.name}
+      icon={Server}
+      iconColor={isMain ? "text-blue-500" : "text-orange-500"}
+      className="p-4"
+      action={
         <Button
           variant="ghost"
           size="sm"
           onClick={() => handleTestAllDelays(group.all)}
           disabled={loading}
-          className="text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg gap-1.5 h-9"
+          className="h-7 px-2 text-xs text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
         >
-          <Zap className="w-4 h-4" />
-          <span className="text-xs font-medium">测速全部</span>
+          <Zap className="w-3.5 h-3.5 mr-1" />
+          测速全部
         </Button>
-      </CardHeader>
-      <CardContent className="px-6 pb-6">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+      }
+    >
+        <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {group.all.map((nodeName: string) => {
             const isSelected = group.now === nodeName;
             const isTesting = testingNodes.has(nodeName);
             const delay = delays[nodeName];
             const isSpecial = ['DIRECT', 'REJECT', 'COMPATIBLE'].includes(nodeName);
+            
+            // 简单的类型推断用于装饰颜色
+            const typeColorClass = isSpecial 
+              ? 'bg-gray-500' 
+              : nodeName.toLowerCase().includes('hk') ? 'bg-red-500'
+              : nodeName.toLowerCase().includes('us') ? 'bg-blue-500'
+              : nodeName.toLowerCase().includes('jp') ? 'bg-pink-500'
+              : nodeName.toLowerCase().includes('sg') ? 'bg-green-500'
+              : 'bg-blue-500';
 
             return (
               <button
                 key={nodeName}
                 onClick={() => handleSelectProxy(group.name, nodeName)}
                 className={cn(
-                  'relative p-3 rounded-xl border text-left transition-all duration-200 group',
+                  'relative p-2.5 rounded-xl border text-left transition-all duration-200 group flex flex-col justify-between h-[72px] overflow-hidden',
                   isSelected 
-                    ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 shadow-sm ring-1 ring-blue-500/10' 
-                    : 'border-gray-100 dark:border-zinc-700 bg-gray-50/30 dark:bg-zinc-900/30 hover:bg-white dark:hover:bg-zinc-800 hover:border-gray-200 dark:hover:border-zinc-600 hover:shadow-sm'
+                    ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 shadow-md shadow-blue-500/10 ring-1 ring-blue-500/20' 
+                    : 'border-gray-100 dark:border-zinc-700 bg-white dark:bg-zinc-800/50 hover:bg-gray-50 dark:hover:bg-zinc-800 hover:border-gray-200 dark:hover:border-zinc-600 hover:shadow-sm'
                 )}
               >
-                {/* 选中标识 */}
+                {/* 装饰性背景光晕 */}
                 {isSelected && (
-                  <div className="absolute top-2 right-2">
-                    <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center">
-                      <Check className="w-2.5 h-2.5 text-white" />
-                    </div>
+                  <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-blue-500/10 to-transparent rounded-bl-3xl -mr-2 -mt-2 pointer-events-none" />
+                )}
+                
+                {/* 选中标识 - 简化版 */}
+                {isSelected && (
+                  <div className="absolute top-2 right-2 z-10">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-sm ring-2 ring-white dark:ring-zinc-900" />
                   </div>
                 )}
 
                 {/* 节点名称 */}
                 <div className={cn(
-                  "font-medium truncate pr-6 text-sm",
+                  "font-medium text-xs line-clamp-2 leading-tight pr-3 z-10",
                   isSelected ? "text-blue-700 dark:text-blue-300" : "text-gray-700 dark:text-gray-300"
                 )}>
                   {nodeName}
                 </div>
 
-                {/* 延迟信息 */}
-                <div className="flex items-center justify-between mt-2.5">
+                {/* 底部信息栏 */}
+                <div className="flex items-center justify-between mt-auto pt-1.5 z-10">
+                   {/* 类型/特殊标签 */}
                   {isSpecial ? (
-                    <span className="text-xs text-gray-400 font-medium">
-                      内置
-                    </span>
-                  ) : isTesting ? (
-                    <span className="text-xs text-gray-400 flex items-center gap-1.5">
-                      <RefreshCw className="w-3 h-3 animate-spin" />
-                      测试中
-                    </span>
-                  ) : delay !== undefined ? (
-                    <span
-                      className={cn('text-xs font-medium px-1.5 py-0.5 rounded-md bg-white dark:bg-zinc-800 shadow-sm border border-gray-100 dark:border-zinc-700', getDelayColorClass(delay))}
-                    >
-                      {formatDelay(delay)}
-                    </span>
+                     <div className="flex items-center gap-1">
+                        <div className="w-1 h-3 rounded-full bg-gray-300 dark:bg-gray-600" />
+                        <span className="text-[10px] text-gray-500">内置</span>
+                     </div>
                   ) : (
-                    <span
-                      className="text-xs text-gray-400 group-hover:text-blue-500 transition-colors cursor-pointer"
+                    <div className="flex items-center gap-1.5">
+                       {/* 延迟指示点 */}
+                       <div className={cn(
+                         "w-1.5 h-1.5 rounded-full",
+                         delay !== undefined 
+                           ? (delay < 0 ? 'bg-red-400' : delay < 200 ? 'bg-emerald-400' : 'bg-amber-400')
+                           : 'bg-gray-200 dark:bg-zinc-700'
+                       )} />
+                       
+                       {delay !== undefined ? (
+                        <span className={cn(
+                          "text-[10px] font-medium tabular-nums",
+                          delay < 0 ? 'text-gray-400' : delay < 200 ? 'text-emerald-500' : delay < 500 ? 'text-amber-500' : 'text-red-500'
+                        )}>
+                          {formatDelay(delay)}
+                        </span>
+                       ) : isTesting ? (
+                         <RefreshCw className="w-2.5 h-2.5 animate-spin text-gray-400" />
+                       ) : (
+                         <span className="text-[9px] text-gray-400 group-hover:text-blue-500 transition-colors">测速</span>
+                       )}
+                    </div>
+                  )}
+
+                  {/* 测速按钮 (仅在未测速且非特殊节点时显示) */}
+                  {!isTesting && delay === undefined && !isSpecial && (
+                    <div 
+                      className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-2 right-2 p-1 hover:bg-gray-100 dark:hover:bg-zinc-700 rounded-md"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleTestDelay(nodeName);
                       }}
                     >
-                      点击测速
-                    </span>
+                      <Zap className="w-3 h-3 text-gray-400 hover:text-blue-500" />
+                    </div>
                   )}
                 </div>
               </button>
             );
           })}
         </div>
-      </CardContent>
-    </Card>
+    </BentoCard>
   );
 
   // 渲染代理服务器列表卡片
   const renderProxyServersCard = () => (
-    <Card className="bg-white dark:bg-zinc-800 rounded-[24px] shadow-sm border border-emerald-100 dark:border-emerald-900/30 transition-all hover:shadow-md">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 pt-6 px-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">
-            <Wifi className="w-5 h-5" />
-          </div>
-          <div>
-            <CardTitle className="text-base font-semibold text-gray-900 dark:text-gray-100">
-              全部代理
-            </CardTitle>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs text-muted-foreground">{proxyServers.length} 个服务器</span>
-            </div>
-          </div>
-        </div>
+    <BentoCard 
+      title="全部代理" 
+      icon={Wifi} 
+      iconColor="text-emerald-500"
+      action={
         <Button
           variant="ghost"
           size="sm"
           onClick={handleTestAllServerDelays}
           disabled={loading || loadingServers}
-          className="text-gray-500 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg gap-1.5 h-9"
+          className="h-7 px-2 text-xs text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
         >
-          <Zap className="w-4 h-4" />
-          <span className="text-xs font-medium">测速全部</span>
+          <Zap className="w-3.5 h-3.5 mr-1" />
+          测速全部
         </Button>
-      </CardHeader>
-      <CardContent className="px-6 pb-6">
+      }
+    >
         {loadingServers ? (
-          <div className="flex items-center justify-center py-8">
-            <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+          <div className="flex items-center justify-center py-12">
+            <RefreshCw className="w-6 h-6 animate-spin text-gray-300" />
           </div>
         ) : proxyServers.length === 0 ? (
-          <div className="text-center py-8 text-gray-400">
+          <div className="text-center py-12 text-gray-400">
             <p className="text-sm">暂无代理服务器</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {proxyServers.map((server) => {
               const isTesting = testingNodes.has(server.name);
               const delay = delays[server.name];
@@ -316,89 +379,97 @@ export default function Proxy() {
               return (
                 <div
                   key={server.name}
-                  className="relative p-3 rounded-xl border border-gray-100 dark:border-zinc-700 bg-gray-50/30 dark:bg-zinc-900/30 text-left"
+                  className="relative p-2.5 rounded-xl border border-gray-100 dark:border-zinc-700 bg-white dark:bg-zinc-900/50 text-left hover:bg-gray-50 dark:hover:bg-zinc-800 hover:border-gray-200 dark:hover:border-zinc-600 transition-all flex flex-col justify-between h-[80px] group overflow-hidden"
                 >
-                  {/* 节点名称 */}
-                  <div className="font-medium truncate text-sm text-gray-700 dark:text-gray-300">
-                    {server.name}
+                  <div className="z-10">
+                    {/* 节点名称 */}
+                    <div className="font-medium text-xs text-gray-700 dark:text-gray-300 line-clamp-1 mb-0.5">
+                      {server.name}
+                    </div>
+
+                     {/* 服务器地址 */}
+                    <div className="text-[10px] text-gray-400 font-mono truncate opacity-60">
+                      {server.server}:{server.port}
+                    </div>
                   </div>
 
-                  {/* 服务器信息 */}
-                  <div className="flex items-center gap-2 mt-2">
-                    <Badge className={cn("text-[10px] font-medium rounded px-1.5 py-0", getProxyTypeColor(server.type))}>
-                      {server.type.toUpperCase()}
-                    </Badge>
-                    {server.tls && (
-                      <Badge variant="secondary" className="text-[10px] font-normal rounded px-1 py-0 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
-                        TLS
-                      </Badge>
-                    )}
-                    {server.udp && (
-                      <Badge variant="secondary" className="text-[10px] font-normal rounded px-1 py-0 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                        UDP
-                      </Badge>
-                    )}
-                  </div>
+                  {/* 装饰性背景 */}
+                  <div className={cn(
+                    "absolute -right-4 -bottom-4 w-12 h-12 rounded-full opacity-5 pointer-events-none transition-opacity group-hover:opacity-10",
+                    getProxyTypeBgColor(server.type)
+                  )} />
 
-                  {/* 服务器地址 */}
-                  <div className="text-[11px] text-gray-400 mt-1.5 font-mono truncate">
-                    {server.server}:{server.port}
-                  </div>
+                  <div className="flex items-end justify-between z-10">
+                    {/* 服务器信息 */}
+                    <div className="flex flex-wrap gap-1">
+                      <span className={cn("text-[9px] font-bold rounded-md px-1 py-0.5 uppercase tracking-wider", getProxyTypeColor(server.type))}>
+                        {server.type}
+                      </span>
+                      {server.udp && (
+                         <span className="text-[9px] font-bold rounded-md px-1 py-0.5 bg-blue-500/5 text-blue-600 dark:text-blue-400 border border-blue-500/10">UDP</span>
+                      )}
+                    </div>
 
-                  {/* 延迟信息 */}
-                  <div className="flex items-center mt-2">
-                    {isTesting ? (
-                      <span className="text-xs text-gray-400 flex items-center gap-1.5">
-                        <RefreshCw className="w-3 h-3 animate-spin" />
-                        测试中
-                      </span>
-                    ) : delay !== undefined ? (
-                      <span
-                        className={cn('text-xs font-medium px-1.5 py-0.5 rounded-md bg-white dark:bg-zinc-800 shadow-sm border border-gray-100 dark:border-zinc-700', getDelayColorClass(delay))}
-                      >
-                        {formatDelay(delay)}
-                      </span>
-                    ) : (
-                      <span
-                        className="text-xs text-gray-400 hover:text-emerald-500 transition-colors cursor-pointer"
-                        onClick={() => handleTestDelay(server.name)}
-                      >
-                        点击测速
-                      </span>
-                    )}
+                    {/* 延迟信息 */}
+                    <div>
+                      {isTesting ? (
+                        <RefreshCw className="w-3 h-3 animate-spin text-gray-400" />
+                      ) : delay !== undefined ? (
+                        <div className="flex items-center gap-1">
+                          <div className={cn(
+                             "w-1.5 h-1.5 rounded-full",
+                             delay < 0 ? 'bg-red-400' : delay < 200 ? 'bg-emerald-400' : 'bg-amber-400'
+                           )} />
+                          <span
+                            className={cn('text-[10px] font-bold', getDelayColorClass(delay).replace('bg-', 'text-').replace('/10', ''))}
+                          >
+                            {formatDelay(delay)}
+                          </span>
+                        </div>
+                      ) : (
+                        <div 
+                           className="opacity-0 group-hover:opacity-100 transition-opacity p-1 -mr-1 hover:bg-gray-100 dark:hover:bg-zinc-700 rounded-md cursor-pointer"
+                           onClick={() => handleTestDelay(server.name)}
+                        >
+                          <Zap className="w-3 h-3 text-gray-400 hover:text-emerald-500" />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
         )}
-      </CardContent>
-    </Card>
+    </BentoCard>
   );
 
   const renderContent = () => {
     if (!status.running) {
       return (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-700 rounded-[24px] bg-gray-50/50 dark:bg-zinc-800/50">
-          <Server className="w-12 h-12 mb-4 opacity-50" />
-          <p className="font-medium">服务未启动</p>
-          <p className="text-sm mt-1">请先启动代理服务</p>
+        <div className="flex flex-col items-center justify-center py-20 text-gray-400 border border-dashed border-gray-200 dark:border-zinc-800 rounded-[20px] bg-gray-50/50 dark:bg-zinc-900/50">
+          <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center mb-4">
+             <Server className="w-8 h-8 opacity-40" />
+          </div>
+          <p className="font-semibold text-gray-600 dark:text-gray-300">服务未启动</p>
+          <p className="text-sm mt-1">请先启动核心服务</p>
         </div>
       );
     }
 
-    // 没有订阅时，显示添加订阅引导
     if (!hasAnySub) {
       return (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-700 rounded-[24px] bg-gray-50/50 dark:bg-zinc-800/50">
-          <BookOpen className="w-12 h-12 mb-4 opacity-50" />
-          <p className="font-medium text-gray-600 dark:text-gray-300">还没有添加订阅</p>
-          <p className="text-sm mt-1 text-center max-w-sm">
+        <div className="flex flex-col items-center justify-center py-20 text-gray-400 border border-dashed border-gray-200 dark:border-zinc-800 rounded-[20px] bg-gray-50/50 dark:bg-zinc-900/50">
+          <div className="w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center mb-4">
+            <BookOpen className="w-8 h-8 text-blue-500 opacity-60" />
+          </div>
+          <p className="font-semibold text-gray-900 dark:text-white">还没有添加订阅</p>
+          <p className="text-sm mt-1 text-center max-w-xs mb-6">
             订阅是获取代理节点的来源，请先添加订阅以使用代理功能
           </p>
           <Button 
             onClick={() => navigate('/subscription')} 
-            className="mt-6 bg-blue-600 hover:bg-blue-700 text-white gap-2"
+            className="rounded-full px-6 bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm"
           >
             <Plus className="w-4 h-4" />
             添加订阅
@@ -409,14 +480,16 @@ export default function Proxy() {
 
     if (groups.length === 0 && proxyServers.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-700 rounded-[24px] bg-gray-50/50 dark:bg-zinc-800/50">
-          <Server className="w-12 h-12 mb-4 opacity-50" />
-          <p className="font-medium">暂无代理</p>
-          <p className="text-sm mt-1">当前订阅中没有可用的代理</p>
+        <div className="flex flex-col items-center justify-center py-20 text-gray-400 border border-dashed border-gray-200 dark:border-zinc-800 rounded-[20px] bg-gray-50/50 dark:bg-zinc-900/50">
+          <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center mb-4">
+             <Server className="w-8 h-8 opacity-40" />
+          </div>
+          <p className="font-semibold text-gray-600 dark:text-gray-300">暂无代理</p>
+          <p className="text-sm mt-1">当前订阅中没有可用的代理节点</p>
           <Button 
             variant="outline" 
             onClick={() => navigate('/subscription')} 
-            className="mt-4 gap-2"
+            className="mt-6 rounded-full gap-2"
           >
             <ExternalLink className="w-4 h-4" />
             管理订阅
@@ -427,18 +500,10 @@ export default function Proxy() {
 
     return (
       <div className="space-y-6">
-        {/* 代理服务器列表 */}
-        {proxyServers.length > 0 && (
-          <div className="space-y-3">
-            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 px-1">代理</h2>
-            {renderProxyServersCard()}
-          </div>
-        )}
-
         {/* 策略组 (主策略组) */}
         {mainGroup && (
           <div className="space-y-3">
-            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 px-1">策略组</h2>
+            <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 px-1 uppercase tracking-wider">策略组</h2>
             {renderGroupCard(mainGroup, true)}
           </div>
         )}
@@ -446,7 +511,16 @@ export default function Proxy() {
         {/* 其他策略组 */}
         {strategyGroups.length > 0 && (
           <div className="space-y-4">
+             {/* 可以在这里添加一个小标题，如果需要区分的话 */}
             {strategyGroups.map(group => renderGroupCard(group))}
+          </div>
+        )}
+
+         {/* 代理服务器列表 */}
+        {proxyServers.length > 0 && (
+          <div className="space-y-3">
+            <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 px-1 uppercase tracking-wider">所有节点</h2>
+            {renderProxyServersCard()}
           </div>
         )}
       </div>
@@ -454,39 +528,36 @@ export default function Proxy() {
   };
 
   return (
-    <div className="space-y-4 pb-4">
+    <div className="space-y-6 pb-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl min-[960px]:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">代理</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            管理代理服务器及策略组
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">代理</h1>
         </div>
 
         {/* 模式切换 */}
         {status.running && (
-           <div className="bg-gray-100/50 dark:bg-zinc-800/50 p-1 rounded-xl border border-gray-200/50 dark:border-zinc-700/50">
+           <div className="bg-gray-100 dark:bg-zinc-800 p-1 rounded-full border border-gray-200 dark:border-zinc-700 inline-flex">
             <Tabs value={status.mode} onValueChange={handleModeChange} className="w-full md:w-auto">
-              <TabsList className="bg-transparent h-9 gap-1">
-                <TabsTrigger 
-                  value="global" 
-                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 rounded-lg transition-all"
-                >
-                  <Globe className="w-4 h-4 mr-2" />
-                  全局
-                </TabsTrigger>
+              <TabsList className="bg-transparent h-8 p-0 gap-1">
                 <TabsTrigger 
                   value="rule" 
-                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 rounded-lg transition-all"
+                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 rounded-full transition-all text-xs h-full"
                 >
-                  <Shield className="w-4 h-4 mr-2" />
+                  <Shield className="w-3.5 h-3.5 mr-1.5" />
                   规则
                 </TabsTrigger>
                 <TabsTrigger 
-                  value="direct" 
-                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 rounded-lg transition-all"
+                  value="global" 
+                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 rounded-full transition-all text-xs h-full"
                 >
-                  <Activity className="w-4 h-4 mr-2" />
+                  <Globe className="w-3.5 h-3.5 mr-1.5" />
+                  全局
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="direct" 
+                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 rounded-full transition-all text-xs h-full"
+                >
+                  <Activity className="w-3.5 h-3.5 mr-1.5" />
                   直连
                 </TabsTrigger>
               </TabsList>

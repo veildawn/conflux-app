@@ -83,16 +83,92 @@ pub async fn save_app_settings(settings: AppSettings) -> Result<(), String> {
     Ok(())
 }
 
-/// 下载资源文件
+/// 下载资源文件响应
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadResourceResult {
+    /// 是否已下载（false 表示无需更新）
+    pub downloaded: bool,
+    /// 新的 ETag（如果有）
+    pub etag: Option<String>,
+    /// 新的 Last-Modified（如果有）
+    pub remote_modified: Option<String>,
+}
+
+/// 下载资源文件（GeoIP、GeoSite 等）
+/// 支持版本检查：如果传入 current_etag 或 current_modified，会先检查是否有更新
+/// 下载完成后会自动让 mihomo 重新加载 GEO 数据库
 #[tauri::command]
-pub async fn download_resource(url: String, file_name: String) -> Result<(), String> {
+pub async fn download_resource(
+    url: String, 
+    file_name: String,
+    current_etag: Option<String>,
+    current_modified: Option<String>,
+    force: Option<bool>,
+) -> Result<DownloadResourceResult, String> {
     log::info!("Downloading resource: {} -> {}", url, file_name);
     
     let target_dir = crate::utils::get_app_data_dir()
         .map_err(|e| e.to_string())?;
     let target_path = target_dir.join(&file_name);
     
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(300)) // 5分钟超时，因为文件可能较大
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    
+    // 如果不是强制下载，且有版本信息，先检查是否需要更新
+    let force_download = force.unwrap_or(false);
+    if !force_download && (current_etag.is_some() || current_modified.is_some()) {
+        log::info!("Checking for updates with etag={:?}, modified={:?}", current_etag, current_modified);
+        
+        // 发送 HEAD 请求检查版本
+        let head_response = client.head(&url)
+            .header("User-Agent", "Conflux/0.1.0")
+            .send()
+            .await
+            .map_err(|e| format!("Failed to check resource version: {}", e))?;
+        
+        if head_response.status().is_success() {
+            let remote_etag = head_response.headers()
+                .get("etag")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string());
+            
+            let remote_modified = head_response.headers()
+                .get("last-modified")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string());
+            
+            // 检查 ETag 是否匹配
+            if let (Some(ref current), Some(ref remote)) = (&current_etag, &remote_etag) {
+                if current == remote {
+                    log::info!("Resource {} is up to date (ETag match)", file_name);
+                    return Ok(DownloadResourceResult {
+                        downloaded: false,
+                        etag: remote_etag,
+                        remote_modified,
+                    });
+                }
+            }
+            
+            // 检查 Last-Modified 是否匹配
+            if let (Some(ref current), Some(ref remote)) = (&current_modified, &remote_modified) {
+                if current == remote {
+                    log::info!("Resource {} is up to date (Last-Modified match)", file_name);
+                    return Ok(DownloadResourceResult {
+                        downloaded: false,
+                        etag: remote_etag,
+                        remote_modified: Some(remote.clone()),
+                    });
+                }
+            }
+            
+            log::info!("Resource {} has updates, downloading...", file_name);
+        }
+    }
+    
+    // 下载文件
     let response = client.get(&url)
         .header("User-Agent", "Conflux/0.1.0")
         .send()
@@ -103,15 +179,263 @@ pub async fn download_resource(url: String, file_name: String) -> Result<(), Str
         return Err(format!("Request failed with status: {}", response.status()));
     }
     
+    // 提取版本信息
+    let new_etag = response.headers()
+        .get("etag")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    
+    let new_modified = response.headers()
+        .get("last-modified")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    
     let content = response.bytes()
         .await
         .map_err(|e| format!("Failed to read response body: {}", e))?;
         
-    std::fs::write(&target_path, content)
+    std::fs::write(&target_path, &content)
         .map_err(|e| format!("Failed to write file: {}", e))?;
         
-    log::info!("Resource downloaded successfully: {:?}", target_path);
+    log::info!("Resource downloaded successfully: {:?} ({} bytes)", target_path, content.len());
+    
+    // 如果 mihomo 正在运行，立即重新加载 GEO 数据库
+    let state = get_app_state();
+    if state.mihomo_manager.is_running().await {
+        // 判断是否是 GEO 相关文件
+        let is_geo_file = file_name.contains("geoip") 
+            || file_name.contains("geosite") 
+            || file_name.contains("GeoLite")
+            || file_name.ends_with(".dat")
+            || file_name.ends_with(".metadb")
+            || file_name.ends_with(".mmdb");
+        
+        if is_geo_file {
+            // 调用 update_geo API 重新加载 GEO 数据库
+            match state.mihomo_api.update_geo().await {
+                Ok(_) => log::info!("GEO database reloaded successfully"),
+                Err(e) => {
+                    log::warn!("Failed to reload GEO via API: {}, trying config reload...", e);
+                    // 如果 update_geo 失败，尝试重载配置
+                    let config_path = state.config_manager.mihomo_config_path();
+                    match state
+                        .mihomo_api
+                        .reload_configs(config_path.to_str().unwrap_or(""), true)
+                        .await
+                    {
+                        Ok(_) => log::info!("Config reloaded after resource download"),
+                        Err(e) => log::warn!("Failed to reload config: {}", e),
+                    }
+                }
+            }
+        } else {
+            // 非 GEO 文件，尝试重载配置
+            let config_path = state.config_manager.mihomo_config_path();
+            match state
+                .mihomo_api
+                .reload_configs(config_path.to_str().unwrap_or(""), true)
+                .await
+            {
+                Ok(_) => log::info!("Config reloaded after resource download"),
+                Err(e) => log::warn!("Failed to reload config: {}", e),
+            }
+        }
+    }
+    
+    Ok(DownloadResourceResult {
+        downloaded: true,
+        etag: new_etag,
+        remote_modified: new_modified,
+    })
+}
+
+/// 重新加载 GEO 数据库
+#[tauri::command]
+pub async fn reload_geo_database() -> Result<(), String> {
+    log::info!("Reloading GEO database...");
+    
+    let state = get_app_state();
+    
+    if !state.mihomo_manager.is_running().await {
+        return Err("Mihomo is not running".to_string());
+    }
+    
+    state.mihomo_api
+        .update_geo()
+        .await
+        .map_err(|e| format!("Failed to reload GEO database: {}", e))?;
+    
+    log::info!("GEO database reloaded successfully");
     Ok(())
+}
+
+/// 资源更新检查请求
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceUpdateCheckRequest {
+    pub url: String,
+    pub current_etag: Option<String>,
+    pub current_modified: Option<String>,
+}
+
+/// 资源更新检查结果
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceUpdateCheckResult {
+    pub url: String,
+    pub has_update: bool,
+    pub etag: Option<String>,
+    pub remote_modified: Option<String>,
+    pub error: Option<String>,
+}
+
+/// 批量检查资源是否有更新（只检查，不下载）
+#[tauri::command]
+pub async fn check_resource_updates(
+    resources: Vec<ResourceUpdateCheckRequest>,
+) -> Result<Vec<ResourceUpdateCheckResult>, String> {
+    log::info!("Checking updates for {} resources", resources.len());
+    
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    
+    let mut results = Vec::new();
+    
+    for resource in resources {
+        let result = check_single_resource_update(&client, &resource).await;
+        results.push(result);
+    }
+    
+    Ok(results)
+}
+
+async fn check_single_resource_update(
+    client: &reqwest::Client,
+    resource: &ResourceUpdateCheckRequest,
+) -> ResourceUpdateCheckResult {
+    let url = &resource.url;
+    
+    // 发送 HEAD 请求获取远程文件信息
+    let response = match client
+        .head(url)
+        .header("User-Agent", "Conflux/0.1.0")
+        .send()
+        .await
+    {
+        Ok(resp) => resp,
+        Err(e) => {
+            return ResourceUpdateCheckResult {
+                url: url.clone(),
+                has_update: false,
+                etag: None,
+                remote_modified: None,
+                error: Some(format!("Request failed: {}", e)),
+            };
+        }
+    };
+    
+    if !response.status().is_success() {
+        return ResourceUpdateCheckResult {
+            url: url.clone(),
+            has_update: false,
+            etag: None,
+            remote_modified: None,
+            error: Some(format!("HTTP error: {}", response.status())),
+        };
+    }
+    
+    let remote_etag = response
+        .headers()
+        .get("etag")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    
+    let remote_modified = response
+        .headers()
+        .get("last-modified")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    
+    // 判断是否有更新
+    let has_update = if resource.current_etag.is_none() && resource.current_modified.is_none() {
+        // 没有本地版本信息，认为需要更新
+        true
+    } else {
+        // 检查 ETag
+        let etag_changed = match (&resource.current_etag, &remote_etag) {
+            (Some(current), Some(remote)) => current != remote,
+            (Some(_), None) => true, // 远程没有 ETag 了
+            (None, _) => false, // 本地没有 ETag，不比较
+        };
+        
+        // 检查 Last-Modified
+        let modified_changed = match (&resource.current_modified, &remote_modified) {
+            (Some(current), Some(remote)) => current != remote,
+            (Some(_), None) => true, // 远程没有 Last-Modified 了
+            (None, _) => false, // 本地没有 Last-Modified，不比较
+        };
+        
+        etag_changed || modified_changed
+    };
+    
+    ResourceUpdateCheckResult {
+        url: url.clone(),
+        has_update,
+        etag: remote_etag,
+        remote_modified,
+        error: None,
+    }
+}
+
+/// 外部资源文件信息
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceFileInfo {
+    pub file_name: String,
+    pub exists: bool,
+    pub size: Option<u64>,
+    pub modified: Option<String>,
+}
+
+/// 检查外部资源文件状态
+#[tauri::command]
+pub async fn check_resource_files(file_names: Vec<String>) -> Result<Vec<ResourceFileInfo>, String> {
+    let data_dir = crate::utils::get_app_data_dir()
+        .map_err(|e| e.to_string())?;
+    
+    let mut results = Vec::new();
+    
+    for file_name in file_names {
+        let file_path = data_dir.join(&file_name);
+        let exists = file_path.exists();
+        
+        let (size, modified) = if exists {
+            match std::fs::metadata(&file_path) {
+                Ok(meta) => {
+                    let size = Some(meta.len());
+                    let modified = meta.modified().ok().map(|time| {
+                        let datetime: chrono::DateTime<chrono::Local> = time.into();
+                        datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+                    });
+                    (size, modified)
+                }
+                Err(_) => (None, None),
+            }
+        } else {
+            (None, None)
+        };
+        
+        results.push(ResourceFileInfo {
+            file_name,
+            exists,
+            size,
+            modified,
+        });
+    }
+    
+    Ok(results)
 }
 
 /// 获取规则列表

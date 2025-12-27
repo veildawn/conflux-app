@@ -7,7 +7,7 @@ import Proxy from './pages/Proxy';
 import Rules from './pages/Rules';
 import Settings from './pages/Settings';
 import Subscription from './pages/Subscription';
-import ExternalResources from './pages/ExternalResources';
+import RuleDatabase from './pages/RuleDatabase';
 import { Toaster } from './components/ui/toaster';
 import { useProxyStore } from './stores/proxyStore';
 
@@ -44,7 +44,7 @@ function App() {
           <Route path="proxy" element={<Proxy />} />
           <Route path="subscription" element={<Subscription />} />
           <Route path="rules" element={<Rules />} />
-          <Route path="external-resources" element={<ExternalResources />} />
+          <Route path="rule-database" element={<RuleDatabase />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

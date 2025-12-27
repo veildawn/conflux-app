@@ -27,6 +27,22 @@ pub struct MihomoConfig {
     #[serde(default)]
     pub secret: String,
     
+    // GeoData 相关配置
+    #[serde(rename = "geodata-mode", default)]
+    pub geodata_mode: bool,
+    
+    #[serde(rename = "geodata-loader", skip_serializing_if = "Option::is_none")]
+    pub geodata_loader: Option<String>,
+    
+    #[serde(rename = "geo-auto-update", default)]
+    pub geo_auto_update: bool,
+    
+    #[serde(rename = "geo-update-interval", skip_serializing_if = "Option::is_none")]
+    pub geo_update_interval: Option<u32>,
+    
+    #[serde(rename = "geox-url", skip_serializing_if = "Option::is_none")]
+    pub geox_url: Option<GeoxUrl>,
+    
     #[serde(default)]
     pub proxies: Vec<ProxyConfig>,
     
@@ -38,6 +54,22 @@ pub struct MihomoConfig {
     
     #[serde(default)]
     pub rules: Vec<String>,
+}
+
+/// GeoX URL 配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeoxUrl {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub geoip: Option<String>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub geosite: Option<String>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mmdb: Option<String>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub asn: Option<String>,
 }
 
 fn default_port() -> u16 { 7890 }
@@ -57,6 +89,11 @@ impl Default for MihomoConfig {
             log_level: default_log_level(),
             external_controller: default_external_controller(),
             secret: String::new(),
+            geodata_mode: true,
+            geodata_loader: Some("memconservative".to_string()),
+            geo_auto_update: false,
+            geo_update_interval: Some(24),
+            geox_url: None,
             proxies: vec![],
             proxy_groups: vec![
                 ProxyGroupConfig {
@@ -170,6 +207,26 @@ pub struct Subscription {
     pub selected: bool,
 }
 
+/// 规则数据库配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuleDatabaseItem {
+    pub id: String,
+    pub name: String,
+    pub url: String,
+    pub file_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<String>,
+    #[serde(default)]
+    pub auto_update: bool,
+    /// 远程文件的 ETag，用于版本检查
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub etag: Option<String>,
+    /// 远程文件的 Last-Modified，用于版本检查
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remote_modified: Option<String>,
+}
+
 /// 应用设置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
@@ -193,6 +250,9 @@ pub struct AppSettings {
 
     #[serde(default)]
     pub subscriptions: Vec<Subscription>,
+    
+    #[serde(rename = "ruleDatabases", default)]
+    pub rule_databases: Vec<RuleDatabaseItem>,
 }
 
 fn default_theme() -> String { "system".to_string() }
@@ -209,6 +269,7 @@ impl Default for AppSettings {
             start_minimized: false,
             close_to_tray: default_close_to_tray(),
             subscriptions: vec![],
+            rule_databases: vec![],
         }
     }
 }
