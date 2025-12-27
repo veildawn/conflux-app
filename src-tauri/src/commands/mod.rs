@@ -18,6 +18,7 @@ pub struct AppState {
     pub mihomo_api: Arc<MihomoApi>,
     pub config_manager: Arc<ConfigManager>,
     pub system_proxy_enabled: Arc<Mutex<bool>>,
+    pub enhanced_mode: Arc<Mutex<bool>>,
 }
 
 /// 全局应用状态
@@ -49,11 +50,28 @@ pub async fn init_app_state(_app: &AppHandle) -> Result<()> {
     let current_system_proxy = crate::system::SystemProxy::get_proxy_status().unwrap_or(false);
     log::info!("Detected system proxy status: {}", current_system_proxy);
 
+    let enhanced_mode = if mihomo_manager.is_running().await {
+        match mihomo_api.get_configs().await {
+            Ok(configs) => configs
+                .get("tun")
+                .and_then(|tun| tun.get("enable"))
+                .and_then(|enabled| enabled.as_bool())
+                .unwrap_or(false),
+            Err(err) => {
+                log::warn!("Failed to fetch MiHomo configs: {}", err);
+                false
+            }
+        }
+    } else {
+        false
+    };
+
     let state = AppState {
         mihomo_manager,
         mihomo_api,
         config_manager,
         system_proxy_enabled: Arc::new(Mutex::new(current_system_proxy)),
+        enhanced_mode: Arc::new(Mutex::new(enhanced_mode)),
     };
 
     APP_STATE
