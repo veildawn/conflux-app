@@ -75,7 +75,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Download release info
-curl -fsSL "${CURL_AUTH_ARGS[@]}" "$API_URL" > "$tmp_json"
+curl -fsSL ${CURL_AUTH_ARGS[@]+"${CURL_AUTH_ARGS[@]}"} "$API_URL" > "$tmp_json"
 
 release_tag="$("$PYTHON_BIN" -c "
 import json
