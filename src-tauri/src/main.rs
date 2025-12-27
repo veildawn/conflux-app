@@ -6,6 +6,7 @@ mod config;
 mod mihomo;
 mod models;
 mod system;
+mod tray_menu;
 mod utils;
 
 use std::time::Duration;
@@ -18,15 +19,51 @@ use std::sync::Arc;
 
 use tauri::{
     image::Image,
-    menu::{Menu, MenuItem},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
+    tray::TrayIconBuilder,
     AppHandle, Manager, RunEvent,
 };
+
+use crate::tray_menu::TrayMenuState;
 
 const TRAY_ID: &str = "main-tray";
 
 fn load_tray_icon() -> Option<Image<'static>> {
     Image::from_bytes(include_bytes!("../icons/tray-icon.png")).ok()
+}
+
+fn build_terminal_proxy_command() -> Result<String, String> {
+    let config_manager = crate::config::ConfigManager::new().map_err(|e| e.to_string())?;
+    let config = config_manager
+        .load_mihomo_config()
+        .map_err(|e| e.to_string())?;
+    let http = format!("http://127.0.0.1:{}", config.port);
+    let socks = format!("socks5://127.0.0.1:{}", config.socks_port);
+    Ok(format!(
+        "export http_proxy={http} https_proxy={http} all_proxy={socks}"
+    ))
+}
+
+#[cfg(target_os = "macos")]
+fn copy_to_clipboard(text: &str) -> Result<(), String> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    let mut child = Command::new("pbcopy")
+        .stdin(Stdio::piped())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    {
+        let stdin = child.stdin.as_mut().ok_or("Failed to open pbcopy stdin")?;
+        stdin.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    child.wait().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn copy_to_clipboard(_text: &str) -> Result<(), String> {
+    Err("Clipboard copy is not implemented on this platform".to_string())
 }
 
 #[cfg(target_os = "macos")]
@@ -284,10 +321,70 @@ fn main() {
 
             // 创建系统托盘
             let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let show_item = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
-            let hide_item = MenuItem::with_id(app, "hide", "隐藏窗口", true, None::<&str>)?;
+            let show_item = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
+            let separator_top = PredefinedMenuItem::separator(app)?;
 
-            let menu = Menu::with_items(app, &[&show_item, &hide_item, &quit_item])?;
+            let mode_rule_item =
+                CheckMenuItem::with_id(app, "mode_rule", "规则", true, true, None::<&str>)?;
+            let mode_global_item =
+                CheckMenuItem::with_id(app, "mode_global", "全局", true, false, None::<&str>)?;
+            let mode_direct_item =
+                CheckMenuItem::with_id(app, "mode_direct", "直连", true, false, None::<&str>)?;
+            let mode_menu = Submenu::with_items(
+                app,
+                "出站模式",
+                true,
+                &[&mode_rule_item, &mode_global_item, &mode_direct_item],
+            )?;
+
+            let separator_middle = PredefinedMenuItem::separator(app)?;
+            let system_proxy_item = CheckMenuItem::with_id(
+                app,
+                "system_proxy",
+                "设置为系统代理",
+                true,
+                false,
+                None::<&str>,
+            )?;
+            let enhanced_mode_item = CheckMenuItem::with_id(
+                app,
+                "enhanced_mode",
+                "增强模式",
+                true,
+                false,
+                None::<&str>,
+            )?;
+            let copy_proxy_item = MenuItem::with_id(
+                app,
+                "copy_terminal_proxy",
+                "复制终端代理命令",
+                true,
+                None::<&str>,
+            )?;
+            let separator_bottom = PredefinedMenuItem::separator(app)?;
+
+            let menu = Menu::with_items(
+                app,
+                &[
+                    &show_item,
+                    &separator_top,
+                    &mode_menu,
+                    &separator_middle,
+                    &system_proxy_item,
+                    &enhanced_mode_item,
+                    &copy_proxy_item,
+                    &separator_bottom,
+                    &quit_item,
+                ],
+            )?;
+
+            app.manage(TrayMenuState {
+                mode_rule_item: mode_rule_item.clone(),
+                mode_global_item: mode_global_item.clone(),
+                mode_direct_item: mode_direct_item.clone(),
+                system_proxy_item: system_proxy_item.clone(),
+                enhanced_mode_item: enhanced_mode_item.clone(),
+            });
 
             let tray_icon = load_tray_icon()
                 .or_else(|| app.default_window_icon().cloned())
@@ -297,8 +394,8 @@ fn main() {
                 .icon(tray_icon)
                 .icon_as_template(true)
                 .menu(&menu)
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id.as_ref() {
+                .show_menu_on_left_click(true)
+                .on_menu_event(move |app, event| match event.id.as_ref() {
                     "quit" => {
                         app.exit(0);
                     }
@@ -308,26 +405,65 @@ fn main() {
                             let _ = window.set_focus();
                         }
                     }
-                    "hide" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.hide();
-                        }
+                    "mode_rule" => {
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = commands::proxy::switch_mode(app, "rule".to_string()).await;
+                        });
+                    }
+                    "mode_global" => {
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = commands::proxy::switch_mode(app, "global".to_string()).await;
+                        });
+                    }
+                    "mode_direct" => {
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = commands::proxy::switch_mode(app, "direct".to_string()).await;
+                        });
+                    }
+                    "system_proxy" => {
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let current = commands::system::get_system_proxy_status()
+                                .await
+                                .unwrap_or(false);
+                            let next = !current;
+                            let _ = if next {
+                                commands::system::set_system_proxy(app).await
+                            } else {
+                                commands::system::clear_system_proxy(app).await
+                            };
+                        });
+                    }
+                    "enhanced_mode" => {
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let current = commands::proxy::get_proxy_status()
+                                .await
+                                .ok()
+                                .map(|status| status.enhanced_mode)
+                                .unwrap_or(false);
+                            let next = !current;
+                            let _ = commands::proxy::set_tun_mode(app, next).await;
+                        });
+                    }
+                    "copy_terminal_proxy" => {
+                        tauri::async_runtime::spawn(async move {
+                            match build_terminal_proxy_command() {
+                                Ok(command) => {
+                                    if let Err(err) = copy_to_clipboard(&command) {
+                                        log::warn!("Failed to copy command: {}", err);
+                                    }
+                                }
+                                Err(err) => {
+                                    log::warn!("Failed to build proxy command: {}", err);
+                                }
+                            }
+                        });
                     }
                     _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
                 })
                 .build(app)?;
 
@@ -337,6 +473,11 @@ fn main() {
                 if let Err(e) = commands::init_app_state(&app_handle).await {
                     log::error!("Failed to initialize app state: {}", e);
                     return;
+                }
+                if let Ok(status) = commands::proxy::get_proxy_status().await {
+                    app_handle
+                        .state::<TrayMenuState>()
+                        .sync_from_status(&status);
                 }
                 run_tray_traffic_loop(app_handle).await;
             });

@@ -4,4 +4,5 @@ pub mod config;
 pub mod mihomo;
 pub mod models;
 pub mod system;
+pub mod tray_menu;
 pub mod utils;

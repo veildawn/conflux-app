@@ -28,6 +28,7 @@ interface ProxyState {
   error: string | null;
 
   // 动作
+  applyStatus: (status: ProxyStatus) => void;
   fetchStatus: () => Promise<void>;
   start: () => Promise<void>;
   stop: () => Promise<void>;
@@ -78,6 +79,13 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
   connectionStats: initialConnectionStats,
   loading: false,
   error: null,
+
+  applyStatus: (status) => {
+    set((state) => ({
+      status: { ...state.status, ...status },
+      error: null,
+    }));
+  },
 
   fetchStatus: async () => {
     try {
