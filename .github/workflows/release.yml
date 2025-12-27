@@ -50,9 +50,19 @@ jobs:
 
       - name: Fetch MiHomo binaries
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
+
+      - name: Verify MiHomo binaries
+        run: |
+          ls -la src-tauri/resources/
+          if [ ! -f "src-tauri/resources/mihomo-darwin-arm64" ]; then
+            echo "ERROR: mihomo-darwin-arm64 not found!"
+            exit 1
+          fi
 
       - name: Install frontend dependencies
         run: pnpm install
@@ -119,9 +129,19 @@ jobs:
 
       - name: Fetch MiHomo binaries
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
+
+      - name: Verify MiHomo binaries
+        run: |
+          ls -la src-tauri/resources/
+          if [ ! -f "src-tauri/resources/mihomo-darwin-amd64" ]; then
+            echo "ERROR: mihomo-darwin-amd64 not found!"
+            exit 1
+          fi
 
       - name: Install frontend dependencies
         run: pnpm install
@@ -183,9 +203,20 @@ jobs:
 
       - name: Fetch MiHomo binaries
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
+
+      - name: Verify MiHomo binaries
+        shell: bash
+        run: |
+          ls -la src-tauri/resources/
+          if [ ! -f "src-tauri/resources/mihomo-windows-amd64.exe" ]; then
+            echo "ERROR: mihomo-windows-amd64.exe not found!"
+            exit 1
+          fi
 
       - name: Install frontend dependencies
         run: pnpm install
