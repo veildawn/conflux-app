@@ -305,8 +305,13 @@ export default function Rules() {
       {/* Header */}
       <div className="flex flex-col gap-4 shrink-0">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">规则管理</h1>
-          
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">规则管理</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              管理流量路由规则,控制不同流量的转发策略
+            </p>
+          </div>
+
           <div className="flex items-center gap-3">
              {activeTab === 'config' && (
                 <div className="relative">

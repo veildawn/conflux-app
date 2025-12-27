@@ -233,9 +233,11 @@ export default function RuleDatabase() {
   };
 
   const handleUpdateAll = async () => {
-    for (const database of databases) {
-      await handleUpdate(database.id, database.url, database.fileName, false);
-    }
+    await Promise.all(
+      databases.map(database =>
+        handleUpdate(database.id, database.url, database.fileName, false)
+      )
+    );
   };
 
   const handleAutoUpdateToggle = async (id: string, checked: boolean) => {
