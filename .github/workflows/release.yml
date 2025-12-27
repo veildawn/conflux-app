@@ -61,7 +61,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-
 
+      - name: Cache MiHomo binaries
+        id: cache-mihomo
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/mihomo-*
+          key: mihomo-binaries-v1
+
       - name: Fetch MiHomo binaries
+        if: steps.cache-mihomo.outputs.cache-hit != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -181,7 +189,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-
 
+      - name: Cache MiHomo binaries
+        id: cache-mihomo
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/mihomo-*
+          key: mihomo-binaries-v1
+
       - name: Fetch MiHomo binaries
+        if: steps.cache-mihomo.outputs.cache-hit != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -304,7 +320,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-
 
+      - name: Cache MiHomo binaries
+        id: cache-mihomo
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/mihomo-*
+          key: mihomo-binaries-v1
+
       - name: Fetch MiHomo binaries
+        if: steps.cache-mihomo.outputs.cache-hit != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
