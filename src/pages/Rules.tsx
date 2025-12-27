@@ -1,21 +1,19 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, createElement } from 'react';
 import { 
   Shield, 
   Plus, 
   Trash2, 
-  GripVertical,
   Search,
   Filter,
   Save,
   RefreshCw,
-  ArrowRight,
   Activity,
   FileCode,
+  PenLine,
+  X
 } from 'lucide-react';
 import { getRuleIconComponent } from '@/components/icons/RuleIcons';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -35,7 +33,6 @@ import {
 } from '@/components/ui/select';
 import {
   Tabs,
-  TabsContent,
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
@@ -45,11 +42,54 @@ import { useToast } from '@/hooks/useToast';
 import { RULE_TYPES, parseRule, buildRule, type RuleType } from '@/types/config';
 import type { RuleItem } from '@/types/proxy';
 
-// 使用自定义 SVG 图标
+// -----------------------------------------------------------------------------
+// UI Components
+// -----------------------------------------------------------------------------
+
+function BentoCard({ 
+  className, 
+  children, 
+  title, 
+  icon: Icon,
+  iconColor = "text-gray-500",
+  action 
+}: { 
+  className?: string; 
+  children: React.ReactNode; 
+  title?: string;
+  icon?: React.ElementType;
+  iconColor?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className={cn(
+      "bg-white dark:bg-zinc-900 rounded-[24px] shadow-sm border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden",
+      className
+    )}>
+      {(title || Icon) && (
+        <div className="flex justify-between items-center px-6 pt-5 pb-3 z-10 border-b border-gray-50 dark:border-zinc-800/50">
+          <div className="flex items-center gap-2">
+            {Icon && <Icon className={cn("w-4 h-4", iconColor)} />}
+            {title && (
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                {title}
+              </span>
+            )}
+          </div>
+          {action}
+        </div>
+      )}
+      <div className="flex-1 z-10 flex flex-col min-h-0">{children}</div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Helper Data & Functions
+// -----------------------------------------------------------------------------
+
 const getRuleIcon = getRuleIconComponent;
 
-// 规则类型对应的颜色
-// 支持配置规则格式（大写+连字符）和运行时规则格式（驼峰/混合）
 const getRuleColor = (type: string) => {
   const normalizedType = type.toUpperCase().replace(/-/g, '');
   
@@ -57,76 +97,65 @@ const getRuleColor = (type: string) => {
     case 'DOMAIN':
     case 'DOMAINSUFFIX':
     case 'DOMAINKEYWORD':
-      return 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
+      return 'bg-blue-500/10 text-blue-600 dark:text-blue-400';
     case 'GEOIP':
     case 'GEOSITE':
-      return 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400';
+      return 'bg-green-500/10 text-green-600 dark:text-green-400';
     case 'IPCIDR':
     case 'IPCIDR6':
     case 'SRCIPCIDR':
-      return 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400';
-    case 'SRCPORT':
-    case 'DSTPORT':
-      return 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400';
-    case 'PROCESSNAME':
-    case 'PROCESSPATH':
-      return 'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400';
-    case 'RULESET':
-      return 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400';
-    case 'MATCH':
-      return 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400';
+      return 'bg-purple-500/10 text-purple-600 dark:text-purple-400';
     default:
-      return 'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400';
+      return 'bg-gray-500/10 text-gray-600 dark:text-gray-400';
   }
 };
 
-// 策略颜色
-const getPolicyColor = (policy: string) => {
+const getPolicyStyle = (policy: string) => {
   switch (policy.toUpperCase()) {
     case 'DIRECT':
-      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
+      return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border-emerald-200/50 dark:border-emerald-500/20';
     case 'REJECT':
-      return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+      return 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400 border-red-200/50 dark:border-red-500/20';
     case 'PROXY':
-      return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+      return 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border-blue-200/50 dark:border-blue-500/20';
     default:
-      return 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400';
+      return 'bg-gray-50 text-gray-700 dark:bg-zinc-800 dark:text-gray-300 border-gray-200/50 dark:border-zinc-700';
   }
 };
 
-// 默认策略选项
 const DEFAULT_POLICIES = ['DIRECT', 'REJECT', 'PROXY'];
+
+// -----------------------------------------------------------------------------
+// Main Component
+// -----------------------------------------------------------------------------
 
 export default function Rules() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'running' | 'config'>('running');
   
-  // 配置文件规则
+  // Data State
   const [rules, setRules] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   
-  // 运行时规则（来自 mihomo API）
   const [runningRules, setRunningRules] = useState<RuleItem[]>([]);
   const [loadingRunning, setLoadingRunning] = useState(true);
   
-  // 搜索和过滤
+  // UI State
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   
-  // 添加/编辑规则对话框
+  // Dialog State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [ruleType, setRuleType] = useState<RuleType>('DOMAIN');
   const [rulePayload, setRulePayload] = useState('');
   const [rulePolicy, setRulePolicy] = useState('DIRECT');
   
-  // 代理组选项
   const [proxyGroups, setProxyGroups] = useState<string[]>([]);
 
-  // 加载配置文件规则
-  const loadRules = async () => {
+  const loadRules = useCallback(async () => {
     setLoading(true);
     try {
       const data = await ipc.getRules();
@@ -134,60 +163,45 @@ export default function Rules() {
       setHasChanges(false);
     } catch (error) {
       console.error('Failed to load rules:', error);
-      toast({
-        title: '加载失败',
-        description: '无法加载规则列表',
-        variant: 'destructive',
-      });
+      toast({ title: '加载失败', description: '无法加载规则列表', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
-  // 从 mihomo API 加载运行时规则
-  const loadRunningRules = async () => {
+  const loadRunningRules = useCallback(async () => {
     setLoadingRunning(true);
     try {
       const data = await ipc.getRulesFromApi();
       setRunningRules(data);
     } catch (error) {
       console.error('Failed to load running rules:', error);
-      // 代理未运行时不显示错误提示
       setRunningRules([]);
     } finally {
       setLoadingRunning(false);
     }
-  };
+  }, []);
 
-  // 加载代理组
-  const loadProxyGroups = async () => {
+  const loadProxyGroups = useCallback(async () => {
     try {
       const groups = await ipc.getProxies();
       setProxyGroups(groups.map(g => g.name));
-    } catch (error) {
-      // 代理未运行时忽略错误
+    } catch {
       console.log('Proxy not running, using default policies');
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadRules();
     loadRunningRules();
     loadProxyGroups();
-  }, []);
+  }, [loadRules, loadRunningRules, loadProxyGroups]);
 
-  // 过滤后的配置规则
   const filteredRules = useMemo(() => {
     return rules.filter((rule) => {
       const parsed = parseRule(rule);
       if (!parsed) return true;
-      
-      // 类型过滤
-      if (filterType !== 'all' && parsed.type !== filterType) {
-        return false;
-      }
-      
-      // 搜索过滤
+      if (filterType !== 'all' && parsed.type !== filterType) return false;
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         return (
@@ -196,20 +210,13 @@ export default function Rules() {
           parsed.policy.toLowerCase().includes(query)
         );
       }
-      
       return true;
     });
   }, [rules, searchQuery, filterType]);
 
-  // 过滤后的运行时规则
   const filteredRunningRules = useMemo(() => {
     return runningRules.filter((rule) => {
-      // 类型过滤
-      if (filterType !== 'all' && rule.type !== filterType) {
-        return false;
-      }
-      
-      // 搜索过滤
+      if (filterType !== 'all' && rule.type !== filterType) return false;
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         return (
@@ -218,34 +225,24 @@ export default function Rules() {
           rule.proxy.toLowerCase().includes(query)
         );
       }
-      
       return true;
     });
   }, [runningRules, searchQuery, filterType]);
 
-  // 保存规则
   const handleSave = async () => {
     setSaving(true);
     try {
       await ipc.saveRules(rules);
       setHasChanges(false);
-      toast({
-        title: '保存成功',
-        description: '规则已保存并应用',
-      });
+      toast({ title: '保存成功', description: '规则已保存并应用' });
     } catch (error) {
       console.error('Failed to save rules:', error);
-      toast({
-        title: '保存失败',
-        description: String(error),
-        variant: 'destructive',
-      });
+      toast({ title: '保存失败', description: String(error), variant: 'destructive' });
     } finally {
       setSaving(false);
     }
   };
 
-  // 打开添加对话框
   const openAddDialog = () => {
     setEditingIndex(null);
     setRuleType('DOMAIN');
@@ -254,8 +251,8 @@ export default function Rules() {
     setIsDialogOpen(true);
   };
 
-  // 打开编辑对话框
   const openEditDialog = (index: number) => {
+    // Note: index here is the index in the FULL rules array
     const rule = rules[index];
     const parsed = parseRule(rule);
     if (parsed) {
@@ -267,17 +264,13 @@ export default function Rules() {
     }
   };
 
-  // 保存规则（添加或编辑）
   const handleSaveRule = () => {
     const newRule = buildRule(ruleType, rulePayload, rulePolicy);
-    
     if (editingIndex !== null) {
-      // 编辑现有规则
       const newRules = [...rules];
       newRules[editingIndex] = newRule;
       setRules(newRules);
     } else {
-      // 添加新规则（在 MATCH 规则之前插入）
       const matchIndex = rules.findIndex(r => r.startsWith('MATCH,'));
       if (matchIndex !== -1) {
         const newRules = [...rules];
@@ -287,25 +280,16 @@ export default function Rules() {
         setRules([...rules, newRule]);
       }
     }
-    
     setHasChanges(true);
     setIsDialogOpen(false);
   };
 
-  // 删除规则
-  const handleDelete = (index: number) => {
-    const actualIndex = rules.indexOf(filteredRules[index]);
-    if (actualIndex !== -1) {
-      const newRules = rules.filter((_, i) => i !== actualIndex);
-      setRules(newRules);
-      setHasChanges(true);
-    }
+  const handleDelete = (fullIndex: number) => {
+    const newRules = rules.filter((_, i) => i !== fullIndex);
+    setRules(newRules);
+    setHasChanges(true);
   };
 
-  // 获取规则类型配置
-  const currentRuleTypeConfig = RULE_TYPES.find(t => t.value === ruleType);
-
-  // 刷新当前标签页的数据
   const handleRefresh = () => {
     if (activeTab === 'running') {
       loadRunningRules();
@@ -314,319 +298,211 @@ export default function Rules() {
     }
   };
 
+  const currentRuleTypeConfig = RULE_TYPES.find(t => t.value === ruleType);
+
   return (
-    <div className="space-y-2 min-[960px]:space-y-4 pb-2 min-[960px]:pb-4">
-      {/* 头部 */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
-        <div>
-          <h1 className="text-2xl min-[960px]:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">规则管理</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            配置流量分流规则，决定每个连接的代理策略
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={handleRefresh}
-            disabled={activeTab === 'running' ? loadingRunning : loading}
-            className="gap-2"
-          >
-            <RefreshCw className={cn("w-4 h-4", (activeTab === 'running' ? loadingRunning : loading) && "animate-spin")} />
-            刷新
-          </Button>
-          {activeTab === 'config' && (
-            <Button 
-              onClick={handleSave}
-              disabled={!hasChanges || saving}
-              className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Save className="w-4 h-4" />
-              {saving ? '保存中...' : '保存规则'}
-            </Button>
-          )}
-        </div>
-      </div>
+    <div className="space-y-6 pb-6 h-full flex flex-col">
+      {/* Header */}
+      <div className="flex flex-col gap-4 shrink-0">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">规则管理</h1>
+          
+          <div className="flex items-center gap-3">
+             {activeTab === 'config' && (
+                <div className="relative">
+                  {hasChanges && (
+                    <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                    </span>
+                  )}
+                  <Button 
+                    onClick={handleSave}
+                    disabled={!hasChanges || saving}
+                    variant={hasChanges ? "default" : "secondary"}
+                    className={cn(
+                      "rounded-full gap-2 shadow-sm transition-all h-9 px-4 text-sm",
+                      hasChanges ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-white dark:bg-zinc-800 text-gray-600 border border-gray-200 dark:border-zinc-700 hover:bg-gray-50"
+                    )}
+                  >
+                    <Save className="w-4 h-4" />
+                    {saving ? '保存中...' : '保存规则'}
+                  </Button>
+                </div>
+              )}
 
-      {/* Tab 切换 */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'running' | 'config')}>
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="running" className="gap-2">
-            <Activity className="w-4 h-4" />
-            运行时规则
-          </TabsTrigger>
-          <TabsTrigger value="config" className="gap-2">
-            <FileCode className="w-4 h-4" />
-            配置规则
-          </TabsTrigger>
-        </TabsList>
-
-        {/* 搜索和过滤栏 */}
-        <Card className="bg-white dark:bg-zinc-800 rounded-[20px] shadow-sm border border-gray-100 dark:border-zinc-700 p-4 mt-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-1 gap-3">
-              {/* 搜索框 */}
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  placeholder="搜索规则..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 bg-gray-50 dark:bg-zinc-900 border-gray-200 dark:border-zinc-700"
-                />
+             <div className="bg-gray-100 dark:bg-zinc-800 p-1 rounded-full border border-gray-200 dark:border-zinc-700 inline-flex h-9">
+                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'running' | 'config')}>
+                  <TabsList className="bg-transparent h-full p-0 gap-1">
+                    <TabsTrigger value="running" className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 text-xs h-full font-medium transition-all">
+                      <Activity className="w-3.5 h-3.5" />
+                      运行时
+                    </TabsTrigger>
+                    <TabsTrigger value="config" className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 text-xs h-full font-medium transition-all">
+                      <FileCode className="w-3.5 h-3.5" />
+                      配置
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </div>
-              
-              {/* 类型过滤 */}
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-[160px] bg-gray-50 dark:bg-zinc-900 border-gray-200 dark:border-zinc-700">
-                  <Filter className="w-4 h-4 mr-2 text-gray-400" />
-                  <SelectValue placeholder="全部类型" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部类型</SelectItem>
-                  {RULE_TYPES.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      {type.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          </div>
+        </div>
+
+        {/* Toolbar */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1 group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+            <Input
+              placeholder="搜索规则..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-10 bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 rounded-xl shadow-xs focus:shadow-sm"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <Select value={filterType} onValueChange={setFilterType}>
+            <SelectTrigger className="w-full sm:w-[160px] h-10 bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 rounded-xl shadow-xs">
+              <div className="flex items-center gap-2 text-sm">
+                <Filter className="w-4 h-4 text-gray-400" />
+                <SelectValue placeholder="全部类型" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部类型</SelectItem>
+              {RULE_TYPES.map((type) => (
+                <SelectItem key={type.value} value={type.value}>
+                  {type.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleRefresh}
+              disabled={activeTab === 'running' ? loadingRunning : loading}
+              size="icon"
+              className="h-10 w-10 shrink-0 bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 rounded-xl shadow-xs hover:bg-gray-50 dark:hover:bg-zinc-800"
+            >
+              <RefreshCw className={cn("w-4 h-4", (activeTab === 'running' ? loadingRunning : loading) && "animate-spin")} />
+            </Button>
             
-            {/* 添加按钮（仅配置规则页面显示） */}
             {activeTab === 'config' && (
-              <Button onClick={openAddDialog} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white">
+              <Button onClick={openAddDialog} className="h-10 shrink-0 bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800 text-blue-600 dark:text-blue-400 rounded-xl shadow-xs gap-2 border font-medium px-4 text-sm">
                 <Plus className="w-4 h-4" />
                 添加规则
               </Button>
             )}
           </div>
-          
-          {/* 统计信息 */}
-          <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100 dark:border-zinc-700 text-sm text-gray-500">
+        </div>
+      </div>
+
+      {/* Rules Table/List */}
+      <BentoCard 
+        className="flex-1 p-0 overflow-hidden bg-white dark:bg-zinc-900 border-gray-100 dark:border-zinc-800 flex flex-col" 
+        title=""
+      >
+         {/* Table Header */}
+         <div className="grid grid-cols-[48px_110px_1fr_100px_50px] gap-3 px-4 py-3 border-b border-gray-100 dark:border-zinc-800/50 bg-gray-50/50 dark:bg-zinc-900/50 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider shrink-0">
+           <div className="text-center">#</div>
+           <div>类型</div>
+           <div>匹配内容</div>
+           <div>策略</div>
+           <div className="text-center">操作</div>
+         </div>
+
+         {/* Scrollable Content */}
+         <div className="flex-1 overflow-y-auto min-h-0">
             {activeTab === 'running' ? (
-              <>
-                <span>共 {runningRules.length} 条规则</span>
-                {(searchQuery || filterType !== 'all') && (
-                  <span>• 显示 {filteredRunningRules.length} 条</span>
-                )}
-              </>
+               loadingRunning ? (
+                  <div className="flex items-center justify-center h-full">
+                    <RefreshCw className="w-8 h-8 animate-spin text-gray-300" />
+                  </div>
+                ) : filteredRunningRules.length === 0 ? (
+                  <EmptyState searchQuery={searchQuery} />
+                ) : (
+                  <div className="divide-y divide-gray-100 dark:divide-zinc-800/50">
+                    {filteredRunningRules.map((rule, index) => (
+                      <RuleTableRow 
+                        key={`${rule.type}-${rule.payload}-${index}`}
+                        index={index + 1}
+                        type={rule.type}
+                        payload={rule.payload}
+                        policy={rule.proxy}
+                        isConfig={false}
+                      />
+                    ))}
+                  </div>
+                )
             ) : (
-              <>
-                <span>共 {rules.length} 条规则</span>
-                {(searchQuery || filterType !== 'all') && (
-                  <span>• 显示 {filteredRules.length} 条</span>
-                )}
-                {hasChanges && (
-                  <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                    有未保存的更改
-                  </Badge>
-                )}
-              </>
+               loading ? (
+                  <div className="flex items-center justify-center h-full">
+                    <RefreshCw className="w-8 h-8 animate-spin text-gray-300" />
+                  </div>
+                ) : filteredRules.length === 0 ? (
+                  <EmptyState searchQuery={searchQuery} isConfig />
+                ) : (
+                  <div className="divide-y divide-gray-100 dark:divide-zinc-800/50">
+                    {filteredRules.map((rule, index) => {
+                      const parsed = typeof rule === 'string' ? parseRule(rule) : null;
+                      if (!parsed) return null;
+                      
+                      // Find the actual index in the full rules array for editing/deleting
+                      const fullIndex = rules.indexOf(rule);
+                      
+                      return (
+                        <RuleTableRow 
+                          key={`${rule}-${index}`}
+                          index={index + 1}
+                          type={parsed.type}
+                          payload={parsed.payload}
+                          policy={parsed.policy}
+                          isConfig={true}
+                          onEdit={() => openEditDialog(fullIndex)}
+                          onDelete={() => handleDelete(fullIndex)}
+                        />
+                      );
+                    })}
+                  </div>
+                )
             )}
-          </div>
-        </Card>
+         </div>
+      </BentoCard>
 
-        {/* 运行时规则列表 */}
-        <TabsContent value="running" className="mt-4">
-          <Card className="bg-white dark:bg-zinc-800 rounded-[20px] shadow-sm border border-gray-100 dark:border-zinc-700 overflow-hidden">
-            {loadingRunning ? (
-              <div className="flex items-center justify-center py-20">
-                <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
-              </div>
-            ) : filteredRunningRules.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                <Activity className="w-12 h-12 mb-4 opacity-50" />
-                <p className="font-medium">
-                  {searchQuery || filterType !== 'all' ? '没有匹配的规则' : '暂无运行时规则'}
-                </p>
-                <p className="text-sm mt-1">
-                  {searchQuery || filterType !== 'all' ? '尝试调整搜索条件' : '请确保代理已启动'}
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100 dark:divide-zinc-700">
-                {filteredRunningRules.map((rule, index) => {
-                  const IconComponent = getRuleIcon(rule.type);
-                  
-                  return (
-                    <div
-                      key={`${rule.type}-${rule.payload}-${index}`}
-                      className="group flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-700/50 transition-colors"
-                    >
-                      {/* 序号 */}
-                      <div className="w-12 text-center text-sm text-gray-400 font-mono">
-                        {index + 1}
-                      </div>
-                      
-                      {/* 规则类型图标 */}
-                      <div className={cn(
-                        "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
-                        getRuleColor(rule.type)
-                      )}>
-                        <IconComponent className="w-4 h-4" />
-                      </div>
-                      
-                      {/* 规则信息 */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-xs font-medium rounded-md px-2">
-                            {rule.type}
-                          </Badge>
-                          {rule.payload && (
-                            <span className="text-sm font-mono text-gray-600 dark:text-gray-300 truncate">
-                              {rule.payload}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* 箭头 */}
-                      <ArrowRight className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" />
-                      
-                      {/* 策略 */}
-                      <Badge className={cn(
-                        "text-xs font-medium rounded-md px-2.5 py-1 shrink-0",
-                        getPolicyColor(rule.proxy)
-                      )}>
-                        {rule.proxy}
-                      </Badge>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-        </TabsContent>
-
-        {/* 配置规则列表 */}
-        <TabsContent value="config" className="mt-4">
-          <Card className="bg-white dark:bg-zinc-800 rounded-[20px] shadow-sm border border-gray-100 dark:border-zinc-700 overflow-hidden">
-            {loading ? (
-              <div className="flex items-center justify-center py-20">
-                <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
-              </div>
-            ) : filteredRules.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                <Shield className="w-12 h-12 mb-4 opacity-50" />
-                <p className="font-medium">
-                  {searchQuery || filterType !== 'all' ? '没有匹配的规则' : '暂无规则'}
-                </p>
-                <p className="text-sm mt-1">
-                  {searchQuery || filterType !== 'all' ? '尝试调整搜索条件' : '点击上方添加按钮创建规则'}
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100 dark:divide-zinc-700">
-                {filteredRules.map((rule, index) => {
-                  const parsed = parseRule(rule);
-                  if (!parsed) return null;
-                  
-                  const IconComponent = getRuleIcon(parsed.type);
-                  
-                  return (
-                    <div
-                      key={`${rule}-${index}`}
-                      className="group flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-700/50 transition-colors cursor-pointer"
-                      onClick={() => openEditDialog(rules.indexOf(rule))}
-                    >
-                      {/* 拖拽手柄 */}
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab text-gray-400">
-                        <GripVertical className="w-4 h-4" />
-                      </div>
-                      
-                      {/* 序号 */}
-                      <div className="w-8 text-center text-sm text-gray-400 font-mono">
-                        {rules.indexOf(rule) + 1}
-                      </div>
-                      
-                      {/* 规则类型图标 */}
-                      <div className={cn(
-                        "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
-                        getRuleColor(parsed.type)
-                      )}>
-                        <IconComponent className="w-4 h-4" />
-                      </div>
-                      
-                      {/* 规则信息 */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-xs font-medium rounded-md px-2">
-                            {parsed.type}
-                          </Badge>
-                          {parsed.payload && (
-                            <span className="text-sm font-mono text-gray-600 dark:text-gray-300 truncate">
-                              {parsed.payload}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* 箭头 */}
-                      <ArrowRight className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" />
-                      
-                      {/* 策略 */}
-                      <Badge className={cn(
-                        "text-xs font-medium rounded-md px-2.5 py-1 shrink-0",
-                        getPolicyColor(parsed.policy)
-                      )}>
-                        {parsed.policy}
-                      </Badge>
-                      
-                      {/* 删除按钮 */}
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(index);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* 添加/编辑规则对话框 */}
+      {/* Add/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] rounded-[24px]">
           <DialogHeader>
-            <DialogTitle>
-              {editingIndex !== null ? '编辑规则' : '添加规则'}
-            </DialogTitle>
-            <DialogDescription>
-              配置规则类型、匹配内容和目标策略
-            </DialogDescription>
+            <DialogTitle>{editingIndex !== null ? '编辑规则' : '添加规则'}</DialogTitle>
+            <DialogDescription>配置规则类型、匹配内容和目标策略</DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
-            {/* 规则类型 */}
             <div className="space-y-2">
               <Label>规则类型</Label>
               <Select value={ruleType} onValueChange={(v) => setRuleType(v as RuleType)}>
-                <SelectTrigger>
+                <SelectTrigger className="rounded-xl h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {RULE_TYPES.map((type) => (
                     <SelectItem key={type.value} value={type.value}>
-                      <div className="flex flex-col">
-                        <span>{type.label}</span>
-                        <span className="text-xs text-gray-500">{type.description}</span>
-                      </div>
+                      <span className="font-medium">{type.label}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             
-            {/* 匹配内容 */}
             {currentRuleTypeConfig?.hasPayload && (
               <div className="space-y-2">
                 <Label>匹配内容</Label>
@@ -634,68 +510,33 @@ export default function Rules() {
                   placeholder={getPayloadPlaceholder(ruleType)}
                   value={rulePayload}
                   onChange={(e) => setRulePayload(e.target.value)}
+                  className="rounded-xl font-mono h-11"
                 />
-                <p className="text-xs text-gray-500">
-                  {getPayloadHint(ruleType)}
-                </p>
+                <p className="text-xs text-gray-500">{getPayloadHint(ruleType)}</p>
               </div>
             )}
             
-            {/* 目标策略 */}
             <div className="space-y-2">
               <Label>目标策略</Label>
               <Select value={rulePolicy} onValueChange={setRulePolicy}>
-                <SelectTrigger>
+                <SelectTrigger className="rounded-xl h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="DIRECT">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                      DIRECT (直连)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="REJECT">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-red-500" />
-                      REJECT (拒绝)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="PROXY">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-blue-500" />
-                      PROXY (代理)
-                    </div>
-                  </SelectItem>
+                  <SelectItem value="DIRECT">DIRECT (直连)</SelectItem>
+                  <SelectItem value="REJECT">REJECT (拒绝)</SelectItem>
+                  <SelectItem value="PROXY">PROXY (代理)</SelectItem>
                   {proxyGroups.filter(g => !DEFAULT_POLICIES.includes(g)).map((group) => (
-                    <SelectItem key={group} value={group}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-violet-500" />
-                        {group}
-                      </div>
-                    </SelectItem>
+                    <SelectItem key={group} value={group}>{group}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            
-            {/* 规则预览 */}
-            <div className="space-y-2">
-              <Label>规则预览</Label>
-              <div className="p-3 bg-gray-50 dark:bg-zinc-900 rounded-lg font-mono text-sm">
-                {buildRule(ruleType, rulePayload, rulePolicy)}
-              </div>
-            </div>
           </div>
           
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              取消
-            </Button>
-            <Button 
-              onClick={handleSaveRule}
-              disabled={currentRuleTypeConfig?.hasPayload && !rulePayload}
-            >
+            <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="rounded-xl">取消</Button>
+            <Button onClick={handleSaveRule} disabled={currentRuleTypeConfig?.hasPayload && !rulePayload} className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white">
               {editingIndex !== null ? '保存更改' : '添加规则'}
             </Button>
           </DialogFooter>
@@ -705,70 +546,149 @@ export default function Rules() {
   );
 }
 
-// 获取匹配内容的占位符
+// -----------------------------------------------------------------------------
+// Sub-components
+// -----------------------------------------------------------------------------
+
+function RuleTableRow({ 
+  index, 
+  type, 
+  payload, 
+  policy, 
+  isConfig,
+  onEdit,
+  onDelete
+}: {
+  index: number;
+  type: string;
+  payload?: string;
+  policy: string;
+  isConfig: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}) {
+  const Icon = getRuleIcon(type);
+
+  return (
+    <div
+      onClick={isConfig ? onEdit : undefined}
+      className={cn(
+        "group grid grid-cols-[48px_110px_1fr_100px_50px] gap-3 px-4 h-[52px] items-center transition-colors border-l-2 border-transparent text-sm",
+        isConfig ? "cursor-pointer hover:bg-blue-50/30 dark:hover:bg-blue-900/10 hover:border-blue-500" : "hover:bg-gray-50 dark:hover:bg-zinc-800/50"
+      )}
+    >
+      {/* Index */}
+      <div className="text-center text-xs font-mono text-gray-400 truncate">
+        {index}
+      </div>
+
+      {/* Type */}
+      <div className="flex items-center gap-2 min-w-0">
+        <div className={cn(
+          "w-6 h-6 rounded-md flex items-center justify-center shrink-0",
+          getRuleColor(type)
+        )}>
+          {createElement(Icon, { className: "w-3.5 h-3.5" })}
+        </div>
+        <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 truncate" title={type}>
+          {type}
+        </span>
+      </div>
+
+      {/* Payload */}
+      <div className="min-w-0 pr-2">
+        {payload ? (
+            <span className="text-sm font-mono text-gray-900 dark:text-gray-200 truncate block" title={payload}>
+              {payload}
+            </span>
+          ) : (
+            <span className="text-xs text-gray-400 italic">
+              (无参数)
+            </span>
+        )}
+      </div>
+
+      {/* Policy */}
+      <div className="min-w-0">
+        <span className={cn(
+          "px-2 py-0.5 rounded text-[10px] font-bold border truncate block w-fit max-w-full",
+          getPolicyStyle(policy)
+        )}>
+          {policy}
+        </span>
+      </div>
+
+      {/* Actions */}
+      <div className="flex justify-center">
+        {isConfig && (
+          <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit?.();
+                }}
+              >
+                <PenLine className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete?.();
+                }}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ searchQuery, isConfig = false }: { searchQuery: string, isConfig?: boolean }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-gray-400">
+      <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center mb-4">
+        <Shield className="w-8 h-8 opacity-40" />
+      </div>
+      <p className="font-semibold text-gray-900 dark:text-white">
+        {searchQuery ? '未找到匹配规则' : '暂无规则'}
+      </p>
+      <p className="text-sm mt-1 text-center max-w-xs text-gray-500">
+        {searchQuery 
+          ? '请尝试更换搜索关键词或清除过滤条件' 
+          : isConfig 
+            ? '点击右上角的"添加规则"按钮开始配置'
+            : '当前没有生效的运行时规则'}
+      </p>
+    </div>
+  );
+}
+
 function getPayloadPlaceholder(type: RuleType): string {
   switch (type) {
-    case 'DOMAIN':
-      return 'example.com';
-    case 'DOMAIN-SUFFIX':
-      return 'example.com';
-    case 'DOMAIN-KEYWORD':
-      return 'google';
-    case 'GEOIP':
-      return 'CN';
-    case 'GEOSITE':
-      return 'cn';
-    case 'IP-CIDR':
-      return '192.168.1.0/24';
-    case 'IP-CIDR6':
-      return '2001:db8::/32';
-    case 'SRC-IP-CIDR':
-      return '192.168.1.0/24';
-    case 'SRC-PORT':
-      return '8080';
-    case 'DST-PORT':
-      return '443';
-    case 'PROCESS-NAME':
-      return 'chrome';
-    case 'PROCESS-PATH':
-      return '/Applications/Chrome.app';
-    case 'RULE-SET':
-      return 'rule-set-name';
-    default:
-      return '';
+    case 'DOMAIN': return 'example.com';
+    case 'DOMAIN-SUFFIX': return 'example.com';
+    case 'DOMAIN-KEYWORD': return 'google';
+    case 'IP-CIDR': return '192.168.1.0/24';
+    case 'PROCESS-NAME': return 'chrome.exe';
+    default: return '';
   }
 }
 
-// 获取匹配内容的提示
 function getPayloadHint(type: RuleType): string {
   switch (type) {
-    case 'DOMAIN':
-      return '精确匹配完整域名';
-    case 'DOMAIN-SUFFIX':
-      return '匹配域名后缀，如输入 example.com 将匹配 *.example.com';
-    case 'DOMAIN-KEYWORD':
-      return '匹配域名中包含的关键词';
-    case 'GEOIP':
-      return '使用国家/地区代码，如 CN（中国）、US（美国）';
-    case 'GEOSITE':
-      return '使用预定义的域名分类，如 cn、google、netflix';
-    case 'IP-CIDR':
-      return '使用 CIDR 格式的 IPv4 地址段';
-    case 'IP-CIDR6':
-      return '使用 CIDR 格式的 IPv6 地址段';
-    case 'SRC-IP-CIDR':
-      return '匹配源 IP 地址段';
-    case 'SRC-PORT':
-      return '匹配源端口号';
-    case 'DST-PORT':
-      return '匹配目标端口号';
-    case 'PROCESS-NAME':
-      return '匹配发起连接的进程名';
-    case 'PROCESS-PATH':
-      return '匹配发起连接的进程完整路径';
-    case 'RULE-SET':
-      return '使用外部规则集文件';
-    default:
-      return '';
+    case 'DOMAIN-SUFFIX': return '匹配域名后缀，如 example.com 匹配 *.example.com';
+    case 'DOMAIN-KEYWORD': return '匹配域名中包含的关键词';
+    case 'IP-CIDR': return 'CIDR 格式的 IP 段';
+    default: return '';
   }
 }

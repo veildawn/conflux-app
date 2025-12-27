@@ -93,6 +93,10 @@ fn main() {
             commands::config::apply_subscription,
             commands::config::get_rules,
             commands::config::save_rules,
+            commands::config::download_resource,
+            commands::config::check_resource_files,
+            commands::config::check_resource_updates,
+            commands::config::reload_geo_database,
             // 系统命令
             commands::system::set_system_proxy,
             commands::system::clear_system_proxy,
@@ -107,6 +111,8 @@ fn main() {
             commands::proxy::set_tun_mode,
             // 规则命令
             commands::proxy::get_rules_from_api,
+            // 版本信息
+            commands::proxy::get_core_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

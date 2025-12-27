@@ -35,18 +35,15 @@ export function formatDelay(delay: number | null | undefined): string {
  */
 export function getDelayColorClass(delay: number | null | undefined): string {
   if (delay === null || delay === undefined || delay < 0) {
-    return 'delay-timeout';
+    return 'bg-gray-100 text-gray-500 dark:bg-zinc-800 dark:text-gray-400';
   }
-  if (delay < 100) {
-    return 'delay-fast';
-  }
-  if (delay < 300) {
-    return 'delay-medium';
+  if (delay < 200) {
+    return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
   }
   if (delay < 500) {
-    return 'delay-slow';
+    return 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
   }
-  return 'delay-timeout';
+  return 'bg-red-500/10 text-red-600 dark:text-red-400';
 }
 
 /**

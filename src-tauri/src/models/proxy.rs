@@ -115,12 +115,11 @@ pub struct TrafficData {
 }
 
 /// 版本信息
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VersionInfo {
     pub version: String,
     #[serde(default)]
-    pub premium: bool,
+    pub meta: bool,
 }
 
 /// 前端代理节点显示

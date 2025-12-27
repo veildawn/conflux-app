@@ -1,5 +1,4 @@
-import { Settings as SettingsIcon, Moon, Sun, Monitor, Globe } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Settings as SettingsIcon, Moon, Sun, Monitor, Globe, Laptop, Shield, Info } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import {
   Select,
@@ -10,6 +9,82 @@ import {
 } from '@/components/ui/select';
 import { useAppStore } from '@/stores/appStore';
 import { useToast } from '@/hooks/useToast';
+import { cn } from '@/utils/cn';
+
+function BentoCard({ 
+  className, 
+  children, 
+  title, 
+  icon: Icon,
+  iconColor = "text-gray-500",
+  action 
+}: { 
+  className?: string; 
+  children: React.ReactNode; 
+  title?: string;
+  icon?: React.ElementType;
+  iconColor?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className={cn(
+      "bg-white dark:bg-zinc-900 rounded-[24px] shadow-sm border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden",
+      className
+    )}>
+      {(title || Icon) && (
+        <div className="flex justify-between items-center px-6 pt-5 pb-3 z-10 border-b border-gray-50 dark:border-zinc-800/50">
+          <div className="flex items-center gap-2">
+            {Icon && <Icon className={cn("w-4 h-4", iconColor)} />}
+            {title && (
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                {title}
+              </span>
+            )}
+          </div>
+          {action}
+        </div>
+      )}
+      <div className="flex-1 z-10 flex flex-col min-h-0">{children}</div>
+    </div>
+  );
+}
+
+function SettingItem({ 
+  icon: Icon,
+  iconColor = "text-gray-500", 
+  title, 
+  description, 
+  action,
+  className
+}: { 
+  icon?: React.ElementType;
+  iconColor?: string;
+  title: string; 
+  description?: string; 
+  action: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex items-center justify-between px-6 py-4 hover:bg-gray-50/50 dark:hover:bg-zinc-800/30 transition-colors", className)}>
+      <div className="flex items-center gap-4">
+        {Icon && (
+          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center bg-gray-100 dark:bg-zinc-800", iconColor)}>
+            <Icon className="w-4 h-4" />
+          </div>
+        )}
+        <div>
+          <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{title}</div>
+          {description && (
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {description}
+            </div>
+          )}
+        </div>
+      </div>
+      {action}
+    </div>
+  );
+}
 
 export default function Settings() {
   const { settings, updateSettings } = useAppStore();
@@ -18,9 +93,7 @@ export default function Settings() {
   const handleThemeChange = async (theme: string) => {
     try {
       await updateSettings({ theme: theme as 'light' | 'dark' | 'system' });
-      toast({
-        title: '主题已更新',
-      });
+      toast({ title: '主题已更新' });
     } catch (error) {
       toast({
         title: '更新失败',
@@ -33,9 +106,7 @@ export default function Settings() {
   const handleSettingChange = async (key: keyof typeof settings, value: boolean) => {
     try {
       await updateSettings({ [key]: value });
-      toast({
-        title: '设置已保存',
-      });
+      toast({ title: '设置已保存' });
     } catch (error) {
       toast({
         title: '保存失败',
@@ -45,159 +116,109 @@ export default function Settings() {
     }
   };
 
-  const cardClassName = "bg-white dark:bg-zinc-800 rounded-[24px] shadow-sm border border-gray-100 dark:border-zinc-700";
-
   return (
-    <div className="space-y-2 min-[960px]:space-y-4 pb-2 min-[960px]:pb-4">
+    <div className="space-y-6 pb-6 h-full overflow-y-auto">
       <div>
-        <h1 className="text-2xl min-[960px]:text-3xl font-bold text-gray-900 tracking-tight">设置</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">设置</h1>
       </div>
 
-      <div className="space-y-4 max-w-3xl">
-        {/* 外观设置 */}
-        <Card className={cardClassName}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Moon className="w-5 h-5" />
-              外观设置
-            </CardTitle>
-            <CardDescription>自定义应用的外观主题</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium">主题模式</div>
-                <div className="text-sm text-muted-foreground">
-                  选择应用的颜色主题
-                </div>
-              </div>
-              <Select value={settings.theme} onValueChange={handleThemeChange}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="light">
-                    <div className="flex items-center gap-2">
-                      <Sun className="w-4 h-4" />
-                      <span>亮色</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="dark">
-                    <div className="flex items-center gap-2">
-                      <Moon className="w-4 h-4" />
-                      <span>暗色</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="system">
-                    <div className="flex items-center gap-2">
-                      <Monitor className="w-4 h-4" />
-                      <span>跟随系统</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 通用设置 */}
-        <Card className={cardClassName}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <SettingsIcon className="w-5 h-5" />
-              通用设置
-            </CardTitle>
-            <CardDescription>配置应用的基本行为</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium">开机自启动</div>
-                <div className="text-sm text-muted-foreground">
-                  系统启动时自动运行 Conflux
-                </div>
-              </div>
-              <Switch
-                checked={settings.autoStart}
-                onCheckedChange={(checked) => handleSettingChange('autoStart', checked)}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-5xl items-start">
+        {/* Left Column: General Settings (Merged) */}
+        <div className="space-y-4">
+          <BentoCard title="通用设置" icon={SettingsIcon} iconColor="text-gray-500">
+            <div className="divide-y divide-gray-100 dark:divide-zinc-800/50">
+              <SettingItem
+                icon={Laptop}
+                iconColor="text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10"
+                title="开机自启动"
+                description="系统启动时自动运行"
+                action={
+                  <Switch
+                    checked={settings.autoStart}
+                    onCheckedChange={(checked) => handleSettingChange('autoStart', checked)}
+                    className="data-[state=checked]:bg-emerald-500"
+                  />
+                }
+              />
+              <SettingItem
+                icon={Monitor}
+                iconColor="text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10"
+                title="启动时最小化"
+                description="启动后最小化到系统托盘"
+                action={
+                  <Switch
+                    checked={settings.startMinimized}
+                    onCheckedChange={(checked) => handleSettingChange('startMinimized', checked)}
+                    className="data-[state=checked]:bg-indigo-500"
+                  />
+                }
+              />
+              <SettingItem
+                icon={SettingsIcon}
+                iconColor="text-gray-500 bg-gray-50 dark:bg-gray-500/10"
+                title="关闭时最小化"
+                description="点击关闭时最小化而不是退出"
+                action={
+                  <Switch
+                    checked={settings.closeToTray}
+                    onCheckedChange={(checked) => handleSettingChange('closeToTray', checked)}
+                    className="data-[state=checked]:bg-gray-500"
+                  />
+                }
               />
             </div>
+          </BentoCard>
+        </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium">启动时最小化</div>
-                <div className="text-sm text-muted-foreground">
-                  应用启动后最小化到系统托盘
-                </div>
-              </div>
-              <Switch
-                checked={settings.startMinimized}
-                onCheckedChange={(checked) => handleSettingChange('startMinimized', checked)}
+        {/* Right Column: Appearance & About */}
+        <div className="space-y-4">
+          <BentoCard title="外观" icon={Moon} iconColor="text-purple-500">
+            <div className="divide-y divide-gray-100 dark:divide-zinc-800/50">
+              <SettingItem
+                icon={Sun}
+                iconColor="text-orange-500 bg-orange-50 dark:bg-orange-500/10"
+                title="主题模式"
+                description="选择应用的颜色主题"
+                action={
+                  <Select value={settings.theme} onValueChange={handleThemeChange}>
+                    <SelectTrigger className="w-[140px] h-9 rounded-xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="light">
+                        <div className="flex items-center gap-2">
+                          <Sun className="w-4 h-4" />
+                          <span>亮色</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="dark">
+                        <div className="flex items-center gap-2">
+                          <Moon className="w-4 h-4" />
+                          <span>暗色</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="system">
+                        <div className="flex items-center gap-2">
+                          <Monitor className="w-4 h-4" />
+                          <span>跟随系统</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                }
               />
             </div>
+          </BentoCard>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium">关闭时最小化到托盘</div>
-                <div className="text-sm text-muted-foreground">
-                  点击关闭按钮时最小化而不是退出
-                </div>
-              </div>
-              <Switch
-                checked={settings.closeToTray}
-                onCheckedChange={(checked) => handleSettingChange('closeToTray', checked)}
+          <BentoCard title="关于" icon={Info} iconColor="text-gray-400">
+             <div className="divide-y divide-gray-100 dark:divide-zinc-800/50">
+              <SettingItem
+                title="当前版本"
+                action={<span className="text-sm font-mono font-medium text-gray-500">0.1.0</span>}
               />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 代理设置 */}
-        <Card className={cardClassName}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Globe className="w-5 h-5" />
-              代理设置
-            </CardTitle>
-            <CardDescription>配置系统代理相关选项</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium">自动设置系统代理</div>
-                <div className="text-sm text-muted-foreground">
-                  启动代理时自动配置系统代理
-                </div>
-              </div>
-              <Switch
-                checked={settings.systemProxy}
-                onCheckedChange={(checked) => handleSettingChange('systemProxy', checked)}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 关于 */}
-        <Card className={cardClassName}>
-          <CardHeader>
-            <CardTitle>关于</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">版本</span>
-                <span>0.1.0</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">框架</span>
-                <span>Tauri 2 + React</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">代理核心</span>
-                <span>MiHomo</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+             </div>
+          </BentoCard>
+        </div>
       </div>
     </div>
   );

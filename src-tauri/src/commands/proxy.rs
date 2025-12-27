@@ -1,5 +1,5 @@
 use crate::commands::get_app_state;
-use crate::models::{ConnectionsResponse, ProxyGroup, ProxyStatus, RuleItem, TrafficData};
+use crate::models::{ConnectionsResponse, ProxyGroup, ProxyStatus, RuleItem, TrafficData, VersionInfo};
 
 /// 启动代理
 #[tauri::command]
@@ -300,5 +300,23 @@ pub async fn get_rules_from_api() -> Result<Vec<RuleItem>, String> {
         .map_err(|e| e.to_string())?;
     
     Ok(response.rules)
+}
+
+/// 获取核心版本信息
+#[tauri::command]
+pub async fn get_core_version() -> Result<VersionInfo, String> {
+    let state = get_app_state();
+    
+    if !state.mihomo_manager.is_running().await {
+        return Err("Proxy is not running".to_string());
+    }
+    
+    let version = state
+        .mihomo_api
+        .get_version()
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    Ok(version)
 }
 

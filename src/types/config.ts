@@ -1,4 +1,14 @@
 /**
+ * GeoX URL 配置
+ */
+export interface GeoxUrl {
+  geoip?: string;
+  geosite?: string;
+  mmdb?: string;
+  asn?: string;
+}
+
+/**
  * MiHomo 配置
  */
 export interface MihomoConfig {
@@ -10,6 +20,12 @@ export interface MihomoConfig {
   'log-level': string;
   'external-controller': string;
   secret: string;
+  // GeoData 相关配置
+  'geodata-mode'?: boolean;
+  'geodata-loader'?: string;
+  'geo-auto-update'?: boolean;
+  'geo-update-interval'?: number;
+  'geox-url'?: GeoxUrl;
   proxies: ProxyConfig[];
   'proxy-groups': ProxyGroupConfig[];
   rules: string[];
@@ -141,22 +157,58 @@ export interface AppSettings {
   startMinimized: boolean;
   closeToTray: boolean;
   subscriptions: Subscription[];
-  externalResources: ExternalResource[];
+  ruleDatabases: RuleDatabaseItem[];
 }
 
 /**
- * 外部资源配置
+ * 规则数据库配置
  */
-export interface ExternalResource {
+export interface RuleDatabaseItem {
   id: string;
   name: string;
   url: string;
   fileName: string;
   updatedAt?: string;
   autoUpdate: boolean;
+  /** 远程文件的 ETag，用于版本检查 */
+  etag?: string;
+  /** 远程文件的 Last-Modified，用于版本检查 */
+  remoteModified?: string;
 }
 
-export const DEFAULT_EXTERNAL_RESOURCES: ExternalResource[] = [
+/**
+ * 下载资源结果
+ */
+export interface DownloadResourceResult {
+  /** 是否已下载（false 表示无需更新） */
+  downloaded: boolean;
+  /** 新的 ETag */
+  etag?: string;
+  /** 新的 Last-Modified */
+  remoteModified?: string;
+}
+
+/**
+ * 资源更新检查请求
+ */
+export interface ResourceUpdateCheckRequest {
+  url: string;
+  currentEtag?: string;
+  currentModified?: string;
+}
+
+/**
+ * 资源更新检查结果
+ */
+export interface ResourceUpdateCheckResult {
+  url: string;
+  hasUpdate: boolean;
+  etag?: string;
+  remoteModified?: string;
+  error?: string;
+}
+
+export const DEFAULT_RULE_DATABASES: RuleDatabaseItem[] = [
   {
     id: 'geoip-lite',
     name: 'GeoIP Lite',
@@ -198,5 +250,5 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   startMinimized: false,
   closeToTray: true,
   subscriptions: [],
-  externalResources: DEFAULT_EXTERNAL_RESOURCES,
+  ruleDatabases: DEFAULT_RULE_DATABASES,
 };

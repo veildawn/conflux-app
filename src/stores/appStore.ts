@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { ipc } from '@/services/ipc';
-import type { AppSettings, Subscription, ExternalResource } from '@/types/config';
-import { DEFAULT_APP_SETTINGS, DEFAULT_EXTERNAL_RESOURCES } from '@/types/config';
+import type { AppSettings, Subscription, RuleDatabaseItem } from '@/types/config';
+import { DEFAULT_APP_SETTINGS, DEFAULT_RULE_DATABASES } from '@/types/config';
 
 interface AppState {
   // 状态
@@ -22,8 +22,8 @@ interface AppState {
   updateSubscription: (id: string, subscription: Partial<Subscription>) => Promise<void>;
   removeSubscription: (id: string) => Promise<void>;
 
-  // 外部资源管理
-  updateExternalResource: (id: string, resource: Partial<ExternalResource>) => Promise<void>;
+  // 规则数据库管理
+  updateRuleDatabase: (id: string, updates: Partial<RuleDatabaseItem>) => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -50,16 +50,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         settings.subscriptions = [];
       }
       
-      // 初始化外部资源
-      if (!settings.externalResources || settings.externalResources.length === 0) {
-        settings.externalResources = DEFAULT_EXTERNAL_RESOURCES;
+      // 初始化规则数据库
+      if (!settings.ruleDatabases || settings.ruleDatabases.length === 0) {
+        settings.ruleDatabases = DEFAULT_RULE_DATABASES;
       } else {
-        // 确保所有默认资源都在，如果有新的默认资源加入，这里可以合并
-        // 目前简化处理，假设 id 不变
-        const currentIds = new Set(settings.externalResources.map(r => r.id));
-        const missingResources = DEFAULT_EXTERNAL_RESOURCES.filter(r => !currentIds.has(r.id));
-        if (missingResources.length > 0) {
-          settings.externalResources = [...settings.externalResources, ...missingResources];
+        // 确保所有默认数据库都在，如果有新的默认数据库加入，这里可以合并
+        const currentIds = new Set(settings.ruleDatabases.map(r => r.id));
+        const missingDatabases = DEFAULT_RULE_DATABASES.filter(r => !currentIds.has(r.id));
+        if (missingDatabases.length > 0) {
+          settings.ruleDatabases = [...settings.ruleDatabases, ...missingDatabases];
         }
       }
 
@@ -122,11 +121,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     await updateSettings({ subscriptions: newSubscriptions });
   },
 
-  updateExternalResource: async (id: string, updates: Partial<ExternalResource>) => {
+  updateRuleDatabase: async (id: string, updates: Partial<RuleDatabaseItem>) => {
     const { settings, updateSettings } = get();
-    const newResources = settings.externalResources.map(res => 
-      res.id === id ? { ...res, ...updates } : res
+    const newDatabases = settings.ruleDatabases.map(db => 
+      db.id === id ? { ...db, ...updates } : db
     );
-    await updateSettings({ externalResources: newResources });
+    await updateSettings({ ruleDatabases: newDatabases });
   },
 }));
