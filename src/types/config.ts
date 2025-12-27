@@ -9,6 +9,17 @@ export interface GeoxUrl {
 }
 
 /**
+ * DNS 配置
+ */
+export interface DnsConfig {
+  enable?: boolean;
+  listen?: string;
+  'enhanced-mode'?: string;
+  nameserver?: string[];
+  fallback?: string[];
+}
+
+/**
  * MiHomo 配置
  */
 export interface MihomoConfig {
@@ -22,12 +33,14 @@ export interface MihomoConfig {
   'log-level': string;
   'external-controller': string;
   secret: string;
+  'find-process-mode'?: string;
   // GeoData 相关配置
   'geodata-mode'?: boolean;
   'geodata-loader'?: string;
   'geo-auto-update'?: boolean;
   'geo-update-interval'?: number;
   'geox-url'?: GeoxUrl;
+  dns?: DnsConfig;
   proxies: ProxyConfig[];
   'proxy-groups': ProxyGroupConfig[];
   rules: string[];
@@ -271,3 +284,11 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   subscriptions: [],
   ruleDatabases: DEFAULT_RULE_DATABASES,
 };
+
+/**
+ * 应用版本信息
+ */
+export interface AppVersionInfo {
+  version: string;
+  coreVersion: string;
+}

@@ -531,6 +531,9 @@ fn main() {
             commands::proxy::set_ports,
             commands::proxy::set_ipv6,
             commands::proxy::set_tcp_concurrent,
+            commands::proxy::set_mixed_port,
+            commands::proxy::set_find_process_mode,
+            commands::proxy::get_app_version,
             // Provider 命令
             commands::proxy::get_proxy_providers,
             commands::proxy::update_proxy_provider,

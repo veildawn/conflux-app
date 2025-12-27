@@ -1,12 +1,31 @@
 import { useEffect, useRef } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { Outlet } from 'react-router-dom';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useShallow } from 'zustand/react/shallow';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useProxyStore } from '@/stores/proxyStore';
 import { useAppStore } from '@/stores/appStore';
 import type { ProxyStatus } from '@/types/proxy';
+
+const dragIgnoreSelector = [
+  '[data-no-drag]',
+  '.no-drag',
+  'button',
+  'a',
+  'input',
+  'textarea',
+  'select',
+  'option',
+  'label',
+  '[role="button"]',
+  '[role="link"]',
+  '[role="menuitem"]',
+  '[contenteditable="true"]',
+  '.cursor-pointer'
+].join(', ');
 
 export default function AppLayout() {
   const { applyStatus, fetchStatus, fetchTraffic, fetchConnections, start, status } = useProxyStore(
@@ -79,6 +98,25 @@ export default function AppLayout() {
     };
   }, [applyStatus]);
 
+  useEffect(() => {
+    const blockContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+    };
+    const blockCopy = (event: ClipboardEvent) => {
+      event.preventDefault();
+    };
+
+    document.addEventListener('contextmenu', blockContextMenu);
+    document.addEventListener('copy', blockCopy);
+    document.addEventListener('cut', blockCopy);
+
+    return () => {
+      document.removeEventListener('contextmenu', blockContextMenu);
+      document.removeEventListener('copy', blockCopy);
+      document.removeEventListener('cut', blockCopy);
+    };
+  }, []);
+
   // 定时刷新流量数据和连接数据
   useEffect(() => {
     let trafficInterval: NodeJS.Timeout | null = null;
@@ -108,10 +146,26 @@ export default function AppLayout() {
     };
   }, [status.running, fetchTraffic, fetchConnections]);
 
+  const handleMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (!target || target.closest(dragIgnoreSelector)) {
+      return;
+    }
+    void getCurrentWindow()
+      .startDragging()
+      .catch((error) => {
+        console.warn('Failed to start dragging:', error);
+      });
+  };
+
   return (
     <div 
       className="flex flex-col h-screen bg-gray-50 dark:bg-zinc-950 overflow-hidden rounded-xl border border-gray-200 dark:border-zinc-800 shadow-2xl"
       style={{ willChange: 'transform' }}
+      onMouseDown={handleMouseDown}
     >
       {/* 顶部栏 - 全宽 */}
       <Header />
