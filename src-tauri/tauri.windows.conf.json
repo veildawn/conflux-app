@@ -17,15 +17,13 @@
     ]
   },
   "bundle": {
+    "targets": ["nsis"],
     "resources": [
       "resources/*"
     ],
     "windows": {
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
-      },
-      "wix": {
-        "language": ["zh-CN", "en-US"]
       },
       "nsis": {
         "languages": ["SimpChinese", "English"],
