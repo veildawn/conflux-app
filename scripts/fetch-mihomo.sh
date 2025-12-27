@@ -51,6 +51,15 @@ echo "Fetching release info from $API_URL..."
 tmp_json="$(mktemp)"
 work_dir="$(mktemp -d)"
 
+# Helper to get path for Python (converts to Windows path on Windows)
+python_path() {
+  if [[ "$OS_TYPE" == "windows" ]]; then
+    cygpath -w "$1"
+  else
+    echo "$1"
+  fi
+}
+
 cleanup() {
   rm -f "$tmp_json" 2>/dev/null || true
   rm -rf "$work_dir" 2>/dev/null || true
@@ -62,7 +71,7 @@ curl -fsSL "$API_URL" > "$tmp_json"
 
 release_tag="$("$PYTHON_BIN" -c "
 import json
-with open('$tmp_json') as f:
+with open('$(python_path "$tmp_json")') as f:
     data = json.load(f)
 print(data.get('tag_name', 'unknown'))
 ")"
@@ -77,9 +86,11 @@ download_and_extract() {
   local archive_type="$3"
   
   local url
+  local tmp_json_path
+  tmp_json_path="$(python_path "$tmp_json")"
   url="$("$PYTHON_BIN" -c "
 import json
-with open('$tmp_json') as f:
+with open('$tmp_json_path') as f:
     data = json.load(f)
 for asset in data.get('assets', []):
     if asset.get('name', '') == '$asset_pattern':
