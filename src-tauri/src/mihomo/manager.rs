@@ -374,7 +374,9 @@ impl MihomoManager {
             }
             #[cfg(windows)]
             {
-                true // Windows 上简单返回 true
+                // Windows 上通过进程 ID 存在性判断
+                let _ = child.id();
+                true
             }
         } else {
             false
