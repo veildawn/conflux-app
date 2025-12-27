@@ -3,6 +3,7 @@ use crate::models::{
     ConnectionsResponse, ProxyGroup, ProxyStatus, RuleItem, TrafficData, VersionInfo,
 };
 use crate::tray_menu::TrayMenuState;
+use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 /// 启动代理
@@ -520,4 +521,195 @@ pub async fn get_core_version() -> Result<VersionInfo, String> {
         .map_err(|e| e.to_string())?;
 
     Ok(version)
+}
+
+// ============= Provider 命令 =============
+
+/// 代理 Provider 返回给前端的结构
+#[derive(Debug, Clone, Serialize)]
+pub struct ProxyProviderFrontend {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub provider_type: String,
+    #[serde(rename = "vehicleType")]
+    pub vehicle_type: String,
+    pub proxies: Vec<ProxyProviderProxyFrontend>,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: Option<String>,
+    #[serde(rename = "subscriptionInfo")]
+    pub subscription_info: Option<SubscriptionInfoFrontend>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProxyProviderProxyFrontend {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub proxy_type: String,
+    pub udp: bool,
+    pub now: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SubscriptionInfoFrontend {
+    #[serde(rename = "Upload")]
+    pub upload: Option<u64>,
+    #[serde(rename = "Download")]
+    pub download: Option<u64>,
+    #[serde(rename = "Total")]
+    pub total: Option<u64>,
+    #[serde(rename = "Expire")]
+    pub expire: Option<u64>,
+}
+
+/// 规则 Provider 返回给前端的结构
+#[derive(Debug, Clone, Serialize)]
+pub struct RuleProviderFrontend {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub provider_type: String,
+    pub behavior: String,
+    #[serde(rename = "ruleCount")]
+    pub rule_count: u32,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: Option<String>,
+    #[serde(rename = "vehicleType")]
+    pub vehicle_type: String,
+}
+
+/// 获取代理 Provider 列表
+#[tauri::command]
+pub async fn get_proxy_providers() -> Result<Vec<ProxyProviderFrontend>, String> {
+    let state = get_app_state();
+
+    if !state.mihomo_manager.is_running().await {
+        return Err("Proxy is not running".to_string());
+    }
+
+    let response = state
+        .mihomo_api
+        .get_proxy_providers()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut providers: Vec<ProxyProviderFrontend> = response
+        .providers
+        .into_iter()
+        .filter(|(_, info)| info.vehicle_type != "Compatible")
+        .map(|(_, info)| ProxyProviderFrontend {
+            name: info.name,
+            provider_type: info.provider_type,
+            vehicle_type: info.vehicle_type,
+            proxies: info
+                .proxies
+                .into_iter()
+                .map(|p| ProxyProviderProxyFrontend {
+                    name: p.name,
+                    proxy_type: p.proxy_type,
+                    udp: p.udp,
+                    now: p.now,
+                })
+                .collect(),
+            updated_at: info.updated_at,
+            subscription_info: info.subscription_info.map(|s| SubscriptionInfoFrontend {
+                upload: s.upload,
+                download: s.download,
+                total: s.total,
+                expire: s.expire,
+            }),
+        })
+        .collect();
+
+    providers.sort_by(|a, b| a.name.cmp(&b.name));
+
+    Ok(providers)
+}
+
+/// 更新代理 Provider
+#[tauri::command]
+pub async fn update_proxy_provider(name: String) -> Result<(), String> {
+    let state = get_app_state();
+
+    if !state.mihomo_manager.is_running().await {
+        return Err("Proxy is not running".to_string());
+    }
+
+    state
+        .mihomo_api
+        .update_proxy_provider(&name)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    log::info!("Updated proxy provider: {}", name);
+    Ok(())
+}
+
+/// 代理 Provider 健康检查
+#[tauri::command]
+pub async fn health_check_proxy_provider(name: String) -> Result<(), String> {
+    let state = get_app_state();
+
+    if !state.mihomo_manager.is_running().await {
+        return Err("Proxy is not running".to_string());
+    }
+
+    state
+        .mihomo_api
+        .health_check_proxy_provider(&name)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    log::info!("Health checked proxy provider: {}", name);
+    Ok(())
+}
+
+/// 获取规则 Provider 列表
+#[tauri::command]
+pub async fn get_rule_providers() -> Result<Vec<RuleProviderFrontend>, String> {
+    let state = get_app_state();
+
+    if !state.mihomo_manager.is_running().await {
+        return Err("Proxy is not running".to_string());
+    }
+
+    let response = state
+        .mihomo_api
+        .get_rule_providers()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut providers: Vec<RuleProviderFrontend> = response
+        .providers
+        .into_iter()
+        .map(|(_, info)| RuleProviderFrontend {
+            name: info.name,
+            provider_type: info.provider_type,
+            behavior: info.behavior,
+            rule_count: info.rule_count,
+            updated_at: info.updated_at,
+            vehicle_type: info.vehicle_type,
+        })
+        .collect();
+
+    providers.sort_by(|a, b| a.name.cmp(&b.name));
+
+    Ok(providers)
+}
+
+/// 更新规则 Provider
+#[tauri::command]
+pub async fn update_rule_provider(name: String) -> Result<(), String> {
+    let state = get_app_state();
+
+    if !state.mihomo_manager.is_running().await {
+        return Err("Proxy is not running".to_string());
+    }
+
+    state
+        .mihomo_api
+        .update_rule_provider(&name)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    log::info!("Updated rule provider: {}", name);
+    Ok(())
 }

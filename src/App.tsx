@@ -7,6 +7,8 @@ import Rules from './pages/Rules';
 import Settings from './pages/Settings';
 import Subscription from './pages/Subscription';
 import RuleDatabase from './pages/RuleDatabase';
+import Logs from './pages/Logs';
+import Providers from './pages/Providers';
 import { Toaster } from './components/ui/toaster';
 
 function App() {
@@ -21,6 +23,8 @@ function App() {
           <Route path="subscription" element={<Subscription />} />
           <Route path="rules" element={<Rules />} />
           <Route path="rule-database" element={<RuleDatabase />} />
+          <Route path="providers" element={<Providers />} />
+          <Route path="logs" element={<Logs />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

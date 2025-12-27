@@ -4,7 +4,8 @@ use serde_json::json;
 use std::time::Duration;
 
 use crate::models::{
-    ConnectionsResponse, DelayResponse, ProxiesResponse, RulesResponse, TrafficData, VersionInfo,
+    ConnectionsResponse, DelayResponse, ProxiesResponse, ProxyProvidersResponse,
+    RuleProvidersResponse, RulesResponse, TrafficData, VersionInfo,
 };
 
 /// MiHomo REST API 客户端
@@ -254,6 +255,87 @@ impl MihomoApi {
         } else {
             let error_text = response.text().await.unwrap_or_default();
             Err(anyhow::anyhow!("Failed to update GEO: {}", error_text))
+        }
+    }
+
+    /// 获取代理 Provider 列表
+    pub async fn get_proxy_providers(&self) -> Result<ProxyProvidersResponse> {
+        let url = format!("{}/providers/proxies", self.base_url);
+        let request = self.client.get(&url);
+        let response = self.auth_header(request).send().await?;
+        let providers = response.json().await?;
+        Ok(providers)
+    }
+
+    /// 更新代理 Provider
+    pub async fn update_proxy_provider(&self, name: &str) -> Result<()> {
+        let url = format!(
+            "{}/providers/proxies/{}",
+            self.base_url,
+            urlencoding::encode(name)
+        );
+        let request = self.client.put(&url);
+        let response = self.auth_header(request).send().await?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            let error_text = response.text().await.unwrap_or_default();
+            Err(anyhow::anyhow!(
+                "Failed to update proxy provider: {}",
+                error_text
+            ))
+        }
+    }
+
+    /// 代理 Provider 健康检查
+    pub async fn health_check_proxy_provider(&self, name: &str) -> Result<()> {
+        let url = format!(
+            "{}/providers/proxies/{}/healthcheck",
+            self.base_url,
+            urlencoding::encode(name)
+        );
+        let request = self.client.get(&url);
+        let response = self.auth_header(request).send().await?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            let error_text = response.text().await.unwrap_or_default();
+            Err(anyhow::anyhow!(
+                "Failed to health check proxy provider: {}",
+                error_text
+            ))
+        }
+    }
+
+    /// 获取规则 Provider 列表
+    pub async fn get_rule_providers(&self) -> Result<RuleProvidersResponse> {
+        let url = format!("{}/providers/rules", self.base_url);
+        let request = self.client.get(&url);
+        let response = self.auth_header(request).send().await?;
+        let providers = response.json().await?;
+        Ok(providers)
+    }
+
+    /// 更新规则 Provider
+    pub async fn update_rule_provider(&self, name: &str) -> Result<()> {
+        let url = format!(
+            "{}/providers/rules/{}",
+            self.base_url,
+            urlencoding::encode(name)
+        );
+        let request = self.client.put(&url);
+        let response = self.auth_header(request).send().await?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            let error_text = response.text().await.unwrap_or_default();
+            Err(anyhow::anyhow!(
+                "Failed to update rule provider: {}",
+                error_text
+            ))
         }
     }
 }

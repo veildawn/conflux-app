@@ -299,6 +299,85 @@ export const ipc = {
   async getSystemProxyStatus(): Promise<boolean> {
     return invoke('get_system_proxy_status');
   },
+
+  // ============= Provider 命令 =============
+
+  /**
+   * 获取代理 Provider 列表
+   */
+  async getProxyProviders(): Promise<{
+    name: string;
+    type: string;
+    vehicleType: string;
+    proxies: { name: string; type: string; udp?: boolean; now?: string }[];
+    updatedAt?: string;
+    subscriptionInfo?: {
+      Upload?: number;
+      Download?: number;
+      Total?: number;
+      Expire?: number;
+    };
+  }[]> {
+    return invoke('get_proxy_providers');
+  },
+
+  /**
+   * 更新代理 Provider
+   */
+  async updateProxyProvider(name: string): Promise<void> {
+    return invoke('update_proxy_provider', { name });
+  },
+
+  /**
+   * 代理 Provider 健康检查
+   */
+  async healthCheckProxyProvider(name: string): Promise<void> {
+    return invoke('health_check_proxy_provider', { name });
+  },
+
+  /**
+   * 获取规则 Provider 列表
+   */
+  async getRuleProviders(): Promise<{
+    name: string;
+    type: string;
+    behavior: string;
+    ruleCount: number;
+    updatedAt?: string;
+    vehicleType: string;
+  }[]> {
+    return invoke('get_rule_providers');
+  },
+
+  /**
+   * 更新规则 Provider
+   */
+  async updateRuleProvider(name: string): Promise<void> {
+    return invoke('update_rule_provider', { name });
+  },
+
+  // ============= 日志命令 =============
+
+  /**
+   * 开始日志流
+   */
+  async startLogStream(level: string): Promise<void> {
+    return invoke('start_log_stream', { level });
+  },
+
+  /**
+   * 停止日志流
+   */
+  async stopLogStream(): Promise<void> {
+    return invoke('stop_log_stream');
+  },
+
+  /**
+   * 设置日志级别
+   */
+  async setLogLevel(level: string): Promise<void> {
+    return invoke('set_log_level', { level });
+  },
 };
 
 export default ipc;

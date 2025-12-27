@@ -531,6 +531,16 @@ fn main() {
             commands::proxy::set_ports,
             commands::proxy::set_ipv6,
             commands::proxy::set_tcp_concurrent,
+            // Provider 命令
+            commands::proxy::get_proxy_providers,
+            commands::proxy::update_proxy_provider,
+            commands::proxy::health_check_proxy_provider,
+            commands::proxy::get_rule_providers,
+            commands::proxy::update_rule_provider,
+            // 日志命令
+            commands::logs::start_log_stream,
+            commands::logs::stop_log_stream,
+            commands::logs::set_log_level,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
