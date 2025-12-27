@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # MiHomo binary fetcher for Conflux
 # Supports: macOS (ARM64, x86_64), Windows (x86_64), Linux (x86_64)
+#
+# Environment variables:
+#   MIHOMO_PLATFORM - Specific platform to download (e.g., darwin-arm64, darwin-amd64, windows-amd64, linux-amd64)
+#                     If not set, downloads all platforms
 set -euo pipefail
 
 # Determine script directory (works on bash/zsh/Git Bash)
@@ -11,6 +15,7 @@ REPO="${MIHOMO_REPO:-MetaCubeX/mihomo}"
 VERSION="${MIHOMO_VERSION:-latest}"
 PYTHON_BIN="${PYTHON_BIN:-}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+MIHOMO_PLATFORM="${MIHOMO_PLATFORM:-}"
 
 # Build curl auth header if token is available
 CURL_AUTH_ARGS=()
@@ -163,21 +168,29 @@ for asset in data.get('assets', []):
 }
 
 echo ""
-echo "Downloading MiHomo binaries for all platforms..."
+if [[ -n "$MIHOMO_PLATFORM" ]]; then
+  echo "Downloading MiHomo binary for platform: $MIHOMO_PLATFORM"
+else
+  echo "Downloading MiHomo binaries for all platforms..."
+fi
 echo "================================================"
 
-# Download all required binaries (needed for cross-platform builds)
-# Windows x86_64
-download_and_extract "mihomo-windows-amd64-${release_tag}.zip" "mihomo-windows-amd64.exe" "zip"
+# Download based on MIHOMO_PLATFORM or all platforms
+if [[ -z "$MIHOMO_PLATFORM" || "$MIHOMO_PLATFORM" == "windows-amd64" ]]; then
+  download_and_extract "mihomo-windows-amd64-${release_tag}.zip" "mihomo-windows-amd64.exe" "zip"
+fi
 
-# macOS ARM64 (Apple Silicon)
-download_and_extract "mihomo-darwin-arm64-${release_tag}.gz" "mihomo-darwin-arm64" "gz"
+if [[ -z "$MIHOMO_PLATFORM" || "$MIHOMO_PLATFORM" == "darwin-arm64" ]]; then
+  download_and_extract "mihomo-darwin-arm64-${release_tag}.gz" "mihomo-darwin-arm64" "gz"
+fi
 
-# macOS x86_64 (Intel)
-download_and_extract "mihomo-darwin-amd64-${release_tag}.gz" "mihomo-darwin-amd64" "gz"
+if [[ -z "$MIHOMO_PLATFORM" || "$MIHOMO_PLATFORM" == "darwin-amd64" ]]; then
+  download_and_extract "mihomo-darwin-amd64-${release_tag}.gz" "mihomo-darwin-amd64" "gz"
+fi
 
-# Linux x86_64 (optional, for potential Linux support)
-download_and_extract "mihomo-linux-amd64-${release_tag}.gz" "mihomo-linux-amd64" "gz"
+if [[ -z "$MIHOMO_PLATFORM" || "$MIHOMO_PLATFORM" == "linux-amd64" ]]; then
+  download_and_extract "mihomo-linux-amd64-${release_tag}.gz" "mihomo-linux-amd64" "gz"
+fi
 
 echo ""
 echo "================================================"
