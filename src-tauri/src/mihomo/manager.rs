@@ -424,12 +424,13 @@ impl MihomoManager {
         }
 
         // macOS 应用包内的资源路径
+        // 结构: Conflux.app/Contents/MacOS/Conflux -> Conflux.app/Contents/Resources/resources/
         #[cfg(target_os = "macos")]
         {
             let bundle_path = current_dir
                 .parent()
                 .and_then(|p| p.parent())
-                .map(|p| p.join("Resources").join(binary_name));
+                .map(|p| p.join("Resources").join("resources").join(binary_name));
             if let Some(ref path) = bundle_path {
                 log::debug!("Checking macOS bundle path: {:?}", path);
                 if path.exists() {
