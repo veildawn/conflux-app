@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { 
-  MoreHorizontal, 
   Settings2, 
   Globe, 
   ShieldCheck, 
@@ -9,7 +8,6 @@ import {
   Laptop
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
-import { Button } from '@/components/ui/button';
 import { useProxyStore } from '@/stores/proxyStore';
 import { cn } from '@/utils/cn';
 

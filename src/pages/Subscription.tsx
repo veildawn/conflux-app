@@ -6,15 +6,10 @@ import {
   RefreshCw, 
   Trash2, 
   Clock,
-  CheckCircle2,
-  Check,
   Loader2,
-  Pencil,
-  Wifi,
-  MoreHorizontal
+  Pencil
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,

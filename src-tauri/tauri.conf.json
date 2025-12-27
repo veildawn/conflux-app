@@ -50,11 +50,7 @@
     "shortDescription": "现代化代理管理桌面应用",
     "longDescription": "Conflux 是一个基于 Tauri 2 + MiHomo 的现代化跨平台代理管理桌面应用",
     "macOS": {
-      "minimumSystemVersion": "10.15",
-      "infoPlist": {
-        "CFBundleDevelopmentRegion": "zh_CN",
-        "CFBundleLocalizations": ["zh_CN", "zh-Hans", "en"]
-      }
+      "minimumSystemVersion": "10.15"
     },
     "windows": {
       "webviewInstallMode": {

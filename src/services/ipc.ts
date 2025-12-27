@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ProxyStatus, ProxyGroup, TrafficData, ConnectionsResponse, RuleItem, VersionInfo } from '@/types/proxy';
+import type { ProxyStatus, ProxyGroup, TrafficData, ConnectionsResponse, RuleItem, VersionInfo, ProxyServerInfo } from '@/types/proxy';
 import type { MihomoConfig, AppSettings, DownloadResourceResult, ResourceUpdateCheckRequest, ResourceUpdateCheckResult } from '@/types/config';
 
 /**
@@ -225,6 +225,13 @@ export const ipc = {
    */
   async getCoreVersion(): Promise<VersionInfo> {
     return invoke('get_core_version');
+  },
+
+  /**
+   * 获取配置文件中的代理服务器列表
+   */
+  async getConfigProxies(): Promise<ProxyServerInfo[]> {
+    return invoke('get_config_proxies');
   },
 
   // ============= 系统命令 =============

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { ipc } from '@/services/ipc';
-import type { AppSettings, Subscription, RuleDatabaseItem, ResourceUpdateCheckResult } from '@/types/config';
+import type { AppSettings, Subscription, RuleDatabaseItem } from '@/types/config';
 import { DEFAULT_APP_SETTINGS, DEFAULT_RULE_DATABASES } from '@/types/config';
 
 interface RuleDatabaseUpdateStatus {

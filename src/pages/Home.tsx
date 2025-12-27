@@ -4,17 +4,13 @@ import {
   ArrowUp,
   Activity,
   Cpu,
-  Power,
   RefreshCw,
-  Globe,
-  Shield,
-  Zap,
   Network
 } from 'lucide-react';
 import { useProxyStore } from '@/stores/proxyStore';
 import { formatSpeed, formatBytes } from '@/utils/format';
 import { cn } from '@/utils/cn';
-import { AreaChart, Area, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis } from 'recharts';
+import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { ipc } from '@/services/ipc';
 import type { VersionInfo } from '@/types/proxy';
 
@@ -86,17 +82,6 @@ function StatValue({ value, unit, subtext }: { value: string | number; unit?: st
 // Helper Data
 // -----------------------------------------------------------------------------
 
-const processColors = [
-  'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  'bg-green-500/10 text-green-600 dark:text-green-400',
-  'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-  'bg-orange-500/10 text-orange-600 dark:text-orange-400',
-  'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
-  'bg-pink-500/10 text-pink-600 dark:text-pink-400',
-  'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
-  'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-];
-
 const modeLabels: Record<string, string> = {
   rule: '规则判定',
   global: '全局代理',
@@ -112,7 +97,6 @@ export default function Home() {
     status,
     traffic,
     trafficHistory,
-    connections,
     connectionStats,
     restart,
     loading,
