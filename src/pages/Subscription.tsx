@@ -121,6 +121,7 @@ export default function SubscriptionPage() {
   const handleBrowse = async () => {
     try {
       const selected = await open({
+        title: '选择配置文件',
         multiple: false,
         filters: [{
           name: '配置文件',

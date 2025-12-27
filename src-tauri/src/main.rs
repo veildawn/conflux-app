@@ -19,6 +19,7 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // 创建系统托盘
             let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
