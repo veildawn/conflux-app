@@ -1,14 +1,17 @@
 import { useEffect, useRef } from 'react';
 import { Outlet } from 'react-router-dom';
+import { listen } from '@tauri-apps/api/event';
 import { useShallow } from 'zustand/react/shallow';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useProxyStore } from '@/stores/proxyStore';
 import { useAppStore } from '@/stores/appStore';
+import type { ProxyStatus } from '@/types/proxy';
 
 export default function AppLayout() {
-  const { fetchStatus, fetchTraffic, fetchConnections, start, status } = useProxyStore(
+  const { applyStatus, fetchStatus, fetchTraffic, fetchConnections, start, status } = useProxyStore(
     useShallow((state) => ({
+      applyStatus: state.applyStatus,
       fetchStatus: state.fetchStatus,
       fetchTraffic: state.fetchTraffic,
       fetchConnections: state.fetchConnections,
@@ -56,6 +59,25 @@ export default function AppLayout() {
 
     init();
   }, [fetchSettings, fetchStatus, start, checkRuleDatabaseUpdates]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen<ProxyStatus>('proxy-status-changed', (event) => {
+      applyStatus(event.payload);
+    })
+      .then((handler) => {
+        unlisten = handler;
+      })
+      .catch((error) => {
+        console.error('Failed to listen proxy status events:', error);
+      });
+
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [applyStatus]);
 
   // 定时刷新流量数据和连接数据
   useEffect(() => {
