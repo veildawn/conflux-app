@@ -65,14 +65,15 @@ jobs:
         id: cache-mihomo
         uses: actions/cache@v4
         with:
-          path: src-tauri/resources/mihomo-*
-          key: mihomo-binaries-v1
+          path: src-tauri/resources/mihomo-darwin-arm64
+          key: mihomo-darwin-arm64-v1
 
       - name: Fetch MiHomo binaries
         if: steps.cache-mihomo.outputs.cache-hit != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MIHOMO_PLATFORM: darwin-arm64
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
@@ -193,14 +194,15 @@ jobs:
         id: cache-mihomo
         uses: actions/cache@v4
         with:
-          path: src-tauri/resources/mihomo-*
-          key: mihomo-binaries-v1
+          path: src-tauri/resources/mihomo-darwin-amd64
+          key: mihomo-darwin-amd64-v1
 
       - name: Fetch MiHomo binaries
         if: steps.cache-mihomo.outputs.cache-hit != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MIHOMO_PLATFORM: darwin-amd64
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
@@ -324,14 +326,15 @@ jobs:
         id: cache-mihomo
         uses: actions/cache@v4
         with:
-          path: src-tauri/resources/mihomo-*
-          key: mihomo-binaries-v1
+          path: src-tauri/resources/mihomo-windows-amd64.exe
+          key: mihomo-windows-amd64-v1
 
       - name: Fetch MiHomo binaries
         if: steps.cache-mihomo.outputs.cache-hit != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MIHOMO_PLATFORM: windows-amd64
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
