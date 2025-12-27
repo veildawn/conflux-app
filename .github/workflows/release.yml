@@ -198,6 +198,14 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - name: Cache WIX and NSIS toolsets
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\tauri\WixTools
+            ~\AppData\Local\tauri\NSIS
+          key: windows-tauri-tools-wix314-nsis3.11
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
