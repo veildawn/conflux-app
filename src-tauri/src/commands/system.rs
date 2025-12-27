@@ -1,9 +1,11 @@
 use crate::commands::get_app_state;
 use crate::system::SystemProxy;
+use crate::tray_menu::TrayMenuState;
+use tauri::{AppHandle, Emitter, Manager};
 
 /// 设置系统代理
 #[tauri::command]
-pub async fn set_system_proxy() -> Result<(), String> {
+pub async fn set_system_proxy(app: AppHandle) -> Result<(), String> {
     let state = get_app_state();
 
     // 获取代理端口
@@ -18,9 +20,17 @@ pub async fn set_system_proxy() -> Result<(), String> {
     // 设置 SOCKS 代理
     SystemProxy::set_socks_proxy("127.0.0.1", config.socks_port).map_err(|e| e.to_string())?;
 
-    // 更新状态
-    let mut system_proxy = state.system_proxy_enabled.lock().await;
-    *system_proxy = true;
+    // 更新状态（注意：必须在调用 get_proxy_status 之前释放锁，否则会死锁）
+    {
+        let mut system_proxy = state.system_proxy_enabled.lock().await;
+        *system_proxy = true;
+    }
+
+    // 同步状态到托盘菜单和前端
+    if let Ok(status) = crate::commands::proxy::get_proxy_status().await {
+        app.state::<TrayMenuState>().sync_from_status(&status);
+        let _ = app.emit("proxy-status-changed", status);
+    }
 
     log::info!("System proxy enabled");
     Ok(())
@@ -28,14 +38,22 @@ pub async fn set_system_proxy() -> Result<(), String> {
 
 /// 清除系统代理
 #[tauri::command]
-pub async fn clear_system_proxy() -> Result<(), String> {
+pub async fn clear_system_proxy(app: AppHandle) -> Result<(), String> {
     let state = get_app_state();
 
     SystemProxy::clear_proxy().map_err(|e| e.to_string())?;
 
-    // 更新状态
-    let mut system_proxy = state.system_proxy_enabled.lock().await;
-    *system_proxy = false;
+    // 更新状态（注意：必须在调用 get_proxy_status 之前释放锁，否则会死锁）
+    {
+        let mut system_proxy = state.system_proxy_enabled.lock().await;
+        *system_proxy = false;
+    }
+
+    // 同步状态到托盘菜单和前端
+    if let Ok(status) = crate::commands::proxy::get_proxy_status().await {
+        app.state::<TrayMenuState>().sync_from_status(&status);
+        let _ = app.emit("proxy-status-changed", status);
+    }
 
     log::info!("System proxy cleared");
     Ok(())

@@ -2,10 +2,12 @@ use crate::commands::get_app_state;
 use crate::models::{
     ConnectionsResponse, ProxyGroup, ProxyStatus, RuleItem, TrafficData, VersionInfo,
 };
+use crate::tray_menu::TrayMenuState;
+use tauri::{AppHandle, Emitter, Manager};
 
 /// 启动代理
 #[tauri::command]
-pub async fn start_proxy() -> Result<(), String> {
+pub async fn start_proxy(app: AppHandle) -> Result<(), String> {
     let state = get_app_state();
 
     state
@@ -14,13 +16,19 @@ pub async fn start_proxy() -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
 
+    // 同步状态到托盘菜单和前端
+    if let Ok(status) = get_proxy_status().await {
+        app.state::<TrayMenuState>().sync_from_status(&status);
+        let _ = app.emit("proxy-status-changed", status);
+    }
+
     log::info!("Proxy started successfully");
     Ok(())
 }
 
 /// 停止代理
 #[tauri::command]
-pub async fn stop_proxy() -> Result<(), String> {
+pub async fn stop_proxy(app: AppHandle) -> Result<(), String> {
     let state = get_app_state();
 
     // 如果系统代理已启用，先清除
@@ -31,11 +39,22 @@ pub async fn stop_proxy() -> Result<(), String> {
     }
     drop(system_proxy);
 
+    // 如果增强模式已启用，重置状态
+    let mut enhanced_mode = state.enhanced_mode.lock().await;
+    *enhanced_mode = false;
+    drop(enhanced_mode);
+
     state
         .mihomo_manager
         .stop()
         .await
         .map_err(|e| e.to_string())?;
+
+    // 同步状态到托盘菜单和前端
+    if let Ok(status) = get_proxy_status().await {
+        app.state::<TrayMenuState>().sync_from_status(&status);
+        let _ = app.emit("proxy-status-changed", status);
+    }
 
     log::info!("Proxy stopped successfully");
     Ok(())
@@ -43,7 +62,7 @@ pub async fn stop_proxy() -> Result<(), String> {
 
 /// 重启代理
 #[tauri::command]
-pub async fn restart_proxy() -> Result<(), String> {
+pub async fn restart_proxy(app: AppHandle) -> Result<(), String> {
     let state = get_app_state();
 
     state
@@ -51,6 +70,12 @@ pub async fn restart_proxy() -> Result<(), String> {
         .restart()
         .await
         .map_err(|e| e.to_string())?;
+
+    // 同步状态到托盘菜单和前端
+    if let Ok(status) = get_proxy_status().await {
+        app.state::<TrayMenuState>().sync_from_status(&status);
+        let _ = app.emit("proxy-status-changed", status);
+    }
 
     log::info!("Proxy restarted successfully");
     Ok(())
@@ -86,7 +111,7 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
 
 /// 设置 LAN 访问开关
 #[tauri::command]
-pub async fn set_allow_lan(enabled: bool) -> Result<(), String> {
+pub async fn set_allow_lan(app: AppHandle, enabled: bool) -> Result<(), String> {
     let state = get_app_state();
 
     state
@@ -103,12 +128,18 @@ pub async fn set_allow_lan(enabled: bool) -> Result<(), String> {
             .map_err(|e| format!("Failed to reload config: {}", e))?;
     }
 
+    // 同步状态到托盘菜单和前端
+    if let Ok(status) = get_proxy_status().await {
+        app.state::<TrayMenuState>().sync_from_status(&status);
+        let _ = app.emit("proxy-status-changed", status);
+    }
+
     Ok(())
 }
 
 /// 设置 HTTP/SOCKS 端口
 #[tauri::command]
-pub async fn set_ports(port: u16, socks_port: u16) -> Result<(), String> {
+pub async fn set_ports(app: AppHandle, port: u16, socks_port: u16) -> Result<(), String> {
     let state = get_app_state();
 
     state
@@ -125,12 +156,18 @@ pub async fn set_ports(port: u16, socks_port: u16) -> Result<(), String> {
             .map_err(|e| format!("Failed to reload config: {}", e))?;
     }
 
+    // 同步状态到托盘菜单和前端
+    if let Ok(status) = get_proxy_status().await {
+        app.state::<TrayMenuState>().sync_from_status(&status);
+        let _ = app.emit("proxy-status-changed", status);
+    }
+
     Ok(())
 }
 
 /// 设置 IPv6 开关
 #[tauri::command]
-pub async fn set_ipv6(enabled: bool) -> Result<(), String> {
+pub async fn set_ipv6(app: AppHandle, enabled: bool) -> Result<(), String> {
     let state = get_app_state();
 
     state
@@ -147,12 +184,18 @@ pub async fn set_ipv6(enabled: bool) -> Result<(), String> {
             .map_err(|e| format!("Failed to reload config: {}", e))?;
     }
 
+    // 同步状态到托盘菜单和前端
+    if let Ok(status) = get_proxy_status().await {
+        app.state::<TrayMenuState>().sync_from_status(&status);
+        let _ = app.emit("proxy-status-changed", status);
+    }
+
     Ok(())
 }
 
 /// 设置 TCP 并发开关
 #[tauri::command]
-pub async fn set_tcp_concurrent(enabled: bool) -> Result<(), String> {
+pub async fn set_tcp_concurrent(app: AppHandle, enabled: bool) -> Result<(), String> {
     let state = get_app_state();
 
     state
@@ -169,12 +212,18 @@ pub async fn set_tcp_concurrent(enabled: bool) -> Result<(), String> {
             .map_err(|e| format!("Failed to reload config: {}", e))?;
     }
 
+    // 同步状态到托盘菜单和前端
+    if let Ok(status) = get_proxy_status().await {
+        app.state::<TrayMenuState>().sync_from_status(&status);
+        let _ = app.emit("proxy-status-changed", status);
+    }
+
     Ok(())
 }
 
 /// 切换代理模式
 #[tauri::command]
-pub async fn switch_mode(mode: String) -> Result<(), String> {
+pub async fn switch_mode(app: AppHandle, mode: String) -> Result<(), String> {
     let state = get_app_state();
 
     // 验证模式
@@ -197,6 +246,11 @@ pub async fn switch_mode(mode: String) -> Result<(), String> {
         .config_manager
         .update_mode(&mode)
         .map_err(|e| e.to_string())?;
+
+    if let Ok(status) = get_proxy_status().await {
+        app.state::<TrayMenuState>().sync_from_status(&status);
+        let _ = app.emit("proxy-status-changed", status);
+    }
 
     log::info!("Proxy mode switched to: {}", mode);
     Ok(())
@@ -371,7 +425,7 @@ pub async fn close_all_connections() -> Result<(), String> {
 
 /// 设置 TUN 模式（增强模式）
 #[tauri::command]
-pub async fn set_tun_mode(enabled: bool) -> Result<(), String> {
+pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
     let state = get_app_state();
 
     if !state.mihomo_manager.is_running().await {
@@ -404,8 +458,17 @@ pub async fn set_tun_mode(enabled: bool) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
 
-    let mut enhanced_mode = state.enhanced_mode.lock().await;
-    *enhanced_mode = enabled;
+    // 更新状态（注意：必须在调用 get_proxy_status 之前释放锁，否则会死锁）
+    {
+        let mut enhanced_mode = state.enhanced_mode.lock().await;
+        *enhanced_mode = enabled;
+    }
+
+    // 同步状态到托盘菜单和前端
+    if let Ok(status) = get_proxy_status().await {
+        app.state::<TrayMenuState>().sync_from_status(&status);
+        let _ = app.emit("proxy-status-changed", status);
+    }
 
     log::info!("TUN mode set to: {}", enabled);
     Ok(())
