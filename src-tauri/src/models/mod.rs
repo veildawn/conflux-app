@@ -1,9 +1,5 @@
-mod proxy;
 mod config;
+mod proxy;
 
-pub use proxy::*;
 pub use config::*;
-
-
-
-
+pub use proxy::*;

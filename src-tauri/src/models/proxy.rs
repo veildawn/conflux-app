@@ -158,7 +158,3 @@ pub struct RuleItem {
 pub struct RulesResponse {
     pub rules: Vec<RuleItem>,
 }
-
-
-
-

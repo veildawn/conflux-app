@@ -1,9 +1,5 @@
-mod manager;
 mod api;
+mod manager;
 
-pub use manager::*;
 pub use api::*;
-
-
-
-
+pub use manager::*;

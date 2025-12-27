@@ -88,10 +88,10 @@ impl MihomoApi {
             self.base_url,
             urlencoding::encode(proxy)
         );
-        let request = self.client.get(&api_url).query(&[
-            ("timeout", timeout.to_string()),
-            ("url", url.to_string()),
-        ]);
+        let request = self
+            .client
+            .get(&api_url)
+            .query(&[("timeout", timeout.to_string()), ("url", url.to_string())]);
         let response = self.auth_header(request).send().await?;
 
         if response.status().is_success() {
@@ -142,7 +142,7 @@ impl MihomoApi {
         let url = format!("{}/traffic", self.base_url);
         let request = self.client.get(&url);
         let mut response = self.auth_header(request).send().await?;
-        
+
         // traffic 端点返回的是流式数据
         // 我们只取第一个 chunk，通常包含当前的数据点
         if let Some(chunk) = response.chunk().await? {
@@ -154,7 +154,7 @@ impl MihomoApi {
                 }
             }
         }
-        
+
         Ok(TrafficData::default())
     }
 
@@ -191,7 +191,7 @@ impl MihomoApi {
                 }
             })
         };
-        
+
         let request = self.client.patch(&url).json(&tun_config);
         let response = self.auth_header(request).send().await?;
 
@@ -210,7 +210,8 @@ impl MihomoApi {
             "path": path,
             "payload": ""
         }));
-        let response = self.auth_header(request)
+        let response = self
+            .auth_header(request)
             .query(&[("force", force.to_string())])
             .send()
             .await?;
@@ -256,7 +257,3 @@ impl MihomoApi {
         }
     }
 }
-
-
-
-
