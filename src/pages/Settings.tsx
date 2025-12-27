@@ -1,12 +1,5 @@
-import { Settings as SettingsIcon, Moon, Sun, Monitor, Globe, Laptop, Shield, Info } from 'lucide-react';
+import { Settings as SettingsIcon, Monitor, Laptop, Info } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useAppStore } from '@/stores/appStore';
 import { useToast } from '@/hooks/useToast';
 import { cn } from '@/utils/cn';
@@ -90,19 +83,6 @@ export default function Settings() {
   const { settings, updateSettings } = useAppStore();
   const { toast } = useToast();
 
-  const handleThemeChange = async (theme: string) => {
-    try {
-      await updateSettings({ theme: theme as 'light' | 'dark' | 'system' });
-      toast({ title: '主题已更新' });
-    } catch (error) {
-      toast({
-        title: '更新失败',
-        description: String(error),
-        variant: 'destructive',
-      });
-    }
-  };
-
   const handleSettingChange = async (key: keyof typeof settings, value: boolean) => {
     try {
       await updateSettings({ [key]: value });
@@ -141,19 +121,6 @@ export default function Settings() {
                 }
               />
               <SettingItem
-                icon={Monitor}
-                iconColor="text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10"
-                title="启动时最小化"
-                description="启动后最小化到系统托盘"
-                action={
-                  <Switch
-                    checked={settings.startMinimized}
-                    onCheckedChange={(checked) => handleSettingChange('startMinimized', checked)}
-                    className="data-[state=checked]:bg-indigo-500"
-                  />
-                }
-              />
-              <SettingItem
                 icon={SettingsIcon}
                 iconColor="text-gray-500 bg-gray-50 dark:bg-gray-500/10"
                 title="关闭时最小化"
@@ -170,46 +137,8 @@ export default function Settings() {
           </BentoCard>
         </div>
 
-        {/* Right Column: Appearance & About */}
+        {/* Right Column: About */}
         <div className="space-y-4">
-          <BentoCard title="外观" icon={Moon} iconColor="text-purple-500">
-            <div className="divide-y divide-gray-100 dark:divide-zinc-800/50">
-              <SettingItem
-                icon={Sun}
-                iconColor="text-orange-500 bg-orange-50 dark:bg-orange-500/10"
-                title="主题模式"
-                description="选择应用的颜色主题"
-                action={
-                  <Select value={settings.theme} onValueChange={handleThemeChange}>
-                    <SelectTrigger className="w-[140px] h-9 rounded-xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="light">
-                        <div className="flex items-center gap-2">
-                          <Sun className="w-4 h-4" />
-                          <span>亮色</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="dark">
-                        <div className="flex items-center gap-2">
-                          <Moon className="w-4 h-4" />
-                          <span>暗色</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="system">
-                        <div className="flex items-center gap-2">
-                          <Monitor className="w-4 h-4" />
-                          <span>跟随系统</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                }
-              />
-            </div>
-          </BentoCard>
-
           <BentoCard title="关于" icon={Info} iconColor="text-gray-400">
              <div className="divide-y divide-gray-100 dark:divide-zinc-800/50">
               <SettingItem

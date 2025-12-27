@@ -150,11 +150,9 @@ export interface Subscription {
  * 应用设置
  */
 export interface AppSettings {
-  theme: 'light' | 'dark' | 'system';
   language: string;
   autoStart: boolean;
   systemProxy: boolean;
-  startMinimized: boolean;
   closeToTray: boolean;
   subscriptions: Subscription[];
   ruleDatabases: RuleDatabaseItem[];
@@ -170,6 +168,12 @@ export interface RuleDatabaseItem {
   fileName: string;
   updatedAt?: string;
   autoUpdate: boolean;
+  /** 更新源类型 */
+  updateSourceType?: 'default' | 'github-release';
+  /** GitHub 仓库信息 (owner/repo) */
+  githubRepo?: string;
+  /** GitHub Release Asset 名称匹配模式 (可选) */
+  assetName?: string;
   /** 远程文件的 ETag，用于版本检查 */
   etag?: string;
   /** 远程文件的 Last-Modified，用于版本检查 */
@@ -195,6 +199,9 @@ export interface ResourceUpdateCheckRequest {
   url: string;
   currentEtag?: string;
   currentModified?: string;
+  updateSourceType?: 'default' | 'github-release';
+  githubRepo?: string;
+  assetName?: string;
 }
 
 /**
@@ -215,6 +222,9 @@ export const DEFAULT_RULE_DATABASES: RuleDatabaseItem[] = [
     url: 'https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip-lite.dat',
     fileName: 'geoip-lite.dat',
     autoUpdate: true,
+    updateSourceType: 'github-release',
+    githubRepo: 'MetaCubeX/meta-rules-dat',
+    assetName: 'geoip-lite.dat',
   },
   {
     id: 'geosite',
@@ -222,6 +232,9 @@ export const DEFAULT_RULE_DATABASES: RuleDatabaseItem[] = [
     url: 'https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat',
     fileName: 'geosite.dat',
     autoUpdate: true,
+    updateSourceType: 'github-release',
+    githubRepo: 'MetaCubeX/meta-rules-dat',
+    assetName: 'geosite.dat',
   },
   {
     id: 'geoip-metadb',
@@ -229,6 +242,9 @@ export const DEFAULT_RULE_DATABASES: RuleDatabaseItem[] = [
     url: 'https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb',
     fileName: 'geoip.metadb',
     autoUpdate: true,
+    updateSourceType: 'github-release',
+    githubRepo: 'MetaCubeX/meta-rules-dat',
+    assetName: 'geoip.metadb',
   },
   {
     id: 'geolite2-asn',
@@ -236,6 +252,9 @@ export const DEFAULT_RULE_DATABASES: RuleDatabaseItem[] = [
     url: 'https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/GeoLite2-ASN.mmdb',
     fileName: 'GeoLite2-ASN.mmdb',
     autoUpdate: true,
+    updateSourceType: 'github-release',
+    githubRepo: 'MetaCubeX/meta-rules-dat',
+    assetName: 'GeoLite2-ASN.mmdb',
   },
 ];
 
@@ -243,11 +262,9 @@ export const DEFAULT_RULE_DATABASES: RuleDatabaseItem[] = [
  * 默认应用设置
  */
 export const DEFAULT_APP_SETTINGS: AppSettings = {
-  theme: 'system',
   language: 'zh-CN',
   autoStart: false,
   systemProxy: false,
-  startMinimized: false,
   closeToTray: true,
   subscriptions: [],
   ruleDatabases: DEFAULT_RULE_DATABASES,

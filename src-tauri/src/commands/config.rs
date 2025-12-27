@@ -1,6 +1,19 @@
 use crate::commands::get_app_state;
 use crate::models::{AppSettings, MihomoConfig};
 
+#[derive(serde::Deserialize)]
+struct GithubRelease {
+    tag_name: String,
+    published_at: String,
+    assets: Vec<GithubAsset>,
+}
+
+#[derive(serde::Deserialize)]
+struct GithubAsset {
+    name: String,
+    browser_download_url: String,
+}
+
 /// 获取 MiHomo 配置
 #[tauri::command]
 pub async fn get_config() -> Result<MihomoConfig, String> {
@@ -10,21 +23,6 @@ pub async fn get_config() -> Result<MihomoConfig, String> {
         .config_manager
         .load_mihomo_config()
         .map_err(|e| e.to_string())
-}
-
-/// 解析配置文件返回节点数量
-#[tauri::command]
-pub async fn parse_config_file(path: String) -> Result<usize, String> {
-    let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    
-    let value: serde_yaml::Value = serde_yaml::from_str(&content)
-        .map_err(|e| format!("Invalid YAML format: {}", e))?;
-    
-    if let Some(proxies) = value.get("proxies").and_then(|v| v.as_sequence()) {
-        Ok(proxies.len())
-    } else {
-        Ok(0)
-    }
 }
 
 /// 保存 MiHomo 配置
@@ -105,6 +103,9 @@ pub async fn download_resource(
     current_etag: Option<String>,
     current_modified: Option<String>,
     force: Option<bool>,
+    update_source_type: Option<String>,
+    github_repo: Option<String>,
+    asset_name: Option<String>,
 ) -> Result<DownloadResourceResult, String> {
     log::info!("Downloading resource: {} -> {}", url, file_name);
     
@@ -117,13 +118,72 @@ pub async fn download_resource(
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     
-    // 如果不是强制下载，且有版本信息，先检查是否需要更新
+    let mut download_url = url;
+    let mut resolved_etag = None;
+    let mut resolved_modified = None;
+
+    // 如果是 GitHub Release 源，先解析真实下载地址
+    if let (Some(source_type), Some(repo)) = (&update_source_type, &github_repo) {
+        if source_type == "github-release" {
+            log::info!("Resolving download URL from GitHub release: {}", repo);
+            let api_url = format!("https://api.github.com/repos/{}/releases/latest", repo);
+            let response = client.get(&api_url)
+                .header("User-Agent", "Conflux/0.1.0")
+                .send()
+                .await
+                .map_err(|e| format!("Failed to fetch GitHub release: {}", e))?;
+                
+            if !response.status().is_success() {
+                return Err(format!("GitHub API failed: {}", response.status()));
+            }
+            
+            let release: GithubRelease = response.json().await
+                .map_err(|e| format!("Failed to parse GitHub release: {}", e))?;
+                
+            // 查找资源
+            // 优先使用 asset_name 匹配，如果没有指定，使用 file_name 模糊匹配
+            let target_pattern = asset_name.as_deref().unwrap_or(&file_name);
+            let asset = release.assets.iter()
+                .find(|a| a.name.contains(target_pattern))
+                .or_else(|| release.assets.first()); // 兜底
+
+            if let Some(asset) = asset {
+                download_url = asset.browser_download_url.clone();
+                resolved_etag = Some(release.tag_name.clone());
+                resolved_modified = Some(release.published_at.clone());
+                log::info!("Resolved GitHub URL: {} (Version: {})", download_url, release.tag_name);
+                
+                // 检查版本
+                let force_download = force.unwrap_or(false);
+                if !force_download {
+                    if let Some(ref current) = current_etag {
+                        if current == &release.tag_name {
+                            log::info!("Resource {} is up to date (Tag match: {})", file_name, release.tag_name);
+                            return Ok(DownloadResourceResult {
+                                downloaded: false,
+                                etag: resolved_etag,
+                                remote_modified: resolved_modified,
+                            });
+                        }
+                    }
+                }
+            } else {
+                return Err(format!("No matching asset found in release {}", release.tag_name));
+            }
+        }
+    }
+
+    // 如果不是 GitHub 源 (或者 GitHub 源已经解析出 download_url)，执行标准下载逻辑
+    // 如果是 GitHub 源，我们已经做过版本检查了，这里只需要针对普通 URL 做检查
+    let is_github = update_source_type.as_deref() == Some("github-release");
+    
+    // 如果不是强制下载，且有版本信息，且不是 GitHub 源（因为上面已经检查过了），先检查是否需要更新
     let force_download = force.unwrap_or(false);
-    if !force_download && (current_etag.is_some() || current_modified.is_some()) {
+    if !is_github && !force_download && (current_etag.is_some() || current_modified.is_some()) {
         log::info!("Checking for updates with etag={:?}, modified={:?}", current_etag, current_modified);
         
         // 发送 HEAD 请求检查版本
-        let head_response = client.head(&url)
+        let head_response = client.head(&download_url)
             .header("User-Agent", "Conflux/0.1.0")
             .send()
             .await
@@ -169,7 +229,7 @@ pub async fn download_resource(
     }
     
     // 下载文件
-    let response = client.get(&url)
+    let response = client.get(&download_url)
         .header("User-Agent", "Conflux/0.1.0")
         .send()
         .await
@@ -179,16 +239,24 @@ pub async fn download_resource(
         return Err(format!("Request failed with status: {}", response.status()));
     }
     
-    // 提取版本信息
-    let new_etag = response.headers()
-        .get("etag")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+    // 提取版本信息 (如果是 GitHub 源，优先使用之前解析的信息)
+    let new_etag = if is_github {
+        resolved_etag
+    } else {
+        response.headers()
+            .get("etag")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string())
+    };
     
-    let new_modified = response.headers()
-        .get("last-modified")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+    let new_modified = if is_github {
+        resolved_modified
+    } else {
+        response.headers()
+            .get("last-modified")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string())
+    };
     
     let content = response.bytes()
         .await
@@ -276,6 +344,8 @@ pub struct ResourceUpdateCheckRequest {
     pub url: String,
     pub current_etag: Option<String>,
     pub current_modified: Option<String>,
+    pub update_source_type: Option<String>,
+    pub github_repo: Option<String>,
 }
 
 /// 资源更新检查结果
@@ -311,10 +381,79 @@ pub async fn check_resource_updates(
     Ok(results)
 }
 
+async fn check_github_release_update(
+    client: &reqwest::Client,
+    resource: &ResourceUpdateCheckRequest,
+    repo: &str,
+) -> ResourceUpdateCheckResult {
+    let api_url = format!("https://api.github.com/repos/{}/releases/latest", repo);
+    
+    // Fetch release info
+    let response = match client.get(&api_url)
+        .header("User-Agent", "Conflux/0.1.0")
+        .send()
+        .await 
+    {
+        Ok(resp) => resp,
+        Err(e) => return ResourceUpdateCheckResult {
+            url: resource.url.clone(),
+            has_update: false,
+            etag: None,
+            remote_modified: None,
+            error: Some(format!("Request failed: {}", e)),
+        }
+    };
+
+    if !response.status().is_success() {
+        return ResourceUpdateCheckResult {
+            url: resource.url.clone(),
+            has_update: false,
+            etag: None,
+            remote_modified: None,
+            error: Some(format!("GitHub API error: {}", response.status())),
+        };
+    }
+
+    let release: GithubRelease = match response.json().await {
+        Ok(r) => r,
+        Err(e) => return ResourceUpdateCheckResult {
+            url: resource.url.clone(),
+            has_update: false,
+            etag: None,
+            remote_modified: None,
+            error: Some(format!("Failed to parse release: {}", e)),
+        }
+    };
+    
+    // Check version using tag_name (stored in etag)
+    let remote_tag = release.tag_name;
+    let remote_modified = release.published_at;
+    
+    let has_update = match &resource.current_etag {
+        Some(current) => current != &remote_tag,
+        None => true,
+    };
+    
+    ResourceUpdateCheckResult {
+        url: resource.url.clone(),
+        has_update,
+        etag: Some(remote_tag),
+        remote_modified: Some(remote_modified),
+        error: None,
+    }
+}
+
 async fn check_single_resource_update(
     client: &reqwest::Client,
     resource: &ResourceUpdateCheckRequest,
 ) -> ResourceUpdateCheckResult {
+    // Check for GitHub source
+    if let (Some(source_type), Some(repo)) = (&resource.update_source_type, &resource.github_repo) {
+        if source_type == "github-release" {
+            return check_github_release_update(client, resource, repo).await;
+        }
+    }
+
     let url = &resource.url;
     
     // 发送 HEAD 请求获取远程文件信息
@@ -493,91 +632,6 @@ pub struct ApplySubscriptionResult {
     pub rules_count: usize,
 }
 
-/// 代理服务器简要信息（用于前端展示）
-#[derive(serde::Serialize)]
-pub struct ProxyServerInfo {
-    pub name: String,
-    #[serde(rename = "type")]
-    pub proxy_type: String,
-    pub server: String,
-    pub port: u16,
-    pub tls: bool,
-    pub udp: bool,
-}
-
-/// 获取订阅配置中的代理服务器列表
-#[tauri::command]
-pub async fn get_subscription_proxies(path: String, sub_type: String) -> Result<Vec<ProxyServerInfo>, String> {
-    log::info!("Getting proxies from subscription: {} (type: {})", path, sub_type);
-    
-    // 读取订阅文件内容
-    let content = if sub_type == "remote" {
-        let client = reqwest::Client::new();
-        let response = client.get(&path)
-            .header("User-Agent", "Conflux/0.1.0")
-            .send()
-            .await
-            .map_err(|e| format!("Failed to fetch subscription: {}", e))?;
-            
-        if !response.status().is_success() {
-            return Err(format!("Failed to fetch subscription: HTTP {}", response.status()));
-        }
-        
-        response.text()
-            .await
-            .map_err(|e| format!("Failed to read subscription content: {}", e))?
-    } else {
-        std::fs::read_to_string(&path)
-            .map_err(|e| format!("Failed to read file: {}", e))?
-    };
-    
-    // 解析订阅文件
-    let sub_config: serde_yaml::Value = serde_yaml::from_str(&content)
-        .map_err(|e| format!("Invalid YAML format: {}", e))?;
-    
-    // 提取 proxies
-    let proxies = if let Some(proxies_value) = sub_config.get("proxies") {
-        let proxies: Vec<crate::models::ProxyConfig> = serde_yaml::from_value(proxies_value.clone())
-            .map_err(|e| format!("Failed to parse proxies: {}", e))?;
-        
-        proxies.into_iter().map(|p| ProxyServerInfo {
-            name: p.name,
-            proxy_type: p.proxy_type,
-            server: p.server,
-            port: p.port,
-            tls: p.tls.unwrap_or(false),
-            udp: p.udp,
-        }).collect()
-    } else {
-        vec![]
-    };
-    
-    log::info!("Found {} proxies in subscription", proxies.len());
-    Ok(proxies)
-}
-
-/// 获取当前运行配置中的代理服务器列表
-#[tauri::command]
-pub async fn get_config_proxies() -> Result<Vec<ProxyServerInfo>, String> {
-    let state = get_app_state();
-    
-    let config = state
-        .config_manager
-        .load_mihomo_config()
-        .map_err(|e| e.to_string())?;
-    
-    let proxies: Vec<ProxyServerInfo> = config.proxies.into_iter().map(|p| ProxyServerInfo {
-        name: p.name,
-        proxy_type: p.proxy_type,
-        server: p.server,
-        port: p.port,
-        tls: p.tls.unwrap_or(false),
-        udp: p.udp,
-    }).collect();
-    
-    Ok(proxies)
-}
-
 /// 应用订阅配置
 /// 从订阅文件中读取 proxies、proxy-groups、rules 并合并到当前配置
 #[tauri::command]
@@ -666,19 +720,35 @@ pub async fn apply_subscription(path: String, sub_type: String) -> Result<ApplyS
                     .and_then(|v| v.as_str())
                     .unwrap_or("http")
                     .to_string();
+                
                 let behavior = value.get("behavior")
                     .and_then(|v| v.as_str())
-                    .unwrap_or("classical")
-                    .to_string();
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| {
+                        // 尝试根据名称猜测 behavior
+                        let name_lower = name.to_lowercase();
+                        if name_lower.contains("ip") {
+                            "ipcidr".to_string()
+                        } else if name_lower.contains("domain") {
+                            "domain".to_string()
+                        } else {
+                            "classical".to_string()
+                        }
+                    });
+
                 let format = value.get("format")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
+                
                 let url = value.get("url")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
+                    .map(|s| s.to_string())
+                    .filter(|s| !s.is_empty());
+                    
                 let original_path = value.get("path")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
+                    .map(|s| s.to_string())
+                    .filter(|s| !s.is_empty());
                 let interval = value.get("interval")
                     .and_then(|v| v.as_u64())
                     .map(|v| v as u32);

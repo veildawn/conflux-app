@@ -11,7 +11,7 @@ mod utils;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager,
+    Manager, RunEvent,
 };
 
 fn main() {
@@ -114,6 +114,15 @@ fn main() {
             // 版本信息
             commands::proxy::get_core_version,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, event| {
+            if let RunEvent::Exit = event {
+                log::info!("Application is exiting, cleaning up...");
+                // 应用退出时清理 MiHomo 进程
+                // 使用同步方式清理，因为此时异步运行时可能已不可用
+                mihomo::MihomoManager::cleanup_stale_processes();
+                log::info!("Cleanup completed on exit");
+            }
+        });
 }
