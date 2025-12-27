@@ -415,7 +415,7 @@ impl MihomoManager {
         log::debug!("Current exe: {:?}", current_exe);
         log::debug!("Current dir: {:?}", current_dir);
 
-        // 检查当前目录的 resources 子目录
+        // 检查当前目录的 resources 子目录 (通用路径，适用于开发环境和部分打包场景)
         let resource_path = current_dir.join("resources").join(binary_name);
         log::debug!("Checking resource path: {:?}", resource_path);
         if resource_path.exists() {
@@ -437,6 +437,29 @@ impl MihomoManager {
                     log::info!("Found MiHomo at bundle path: {:?}", path);
                     return Ok(path.clone());
                 }
+            }
+        }
+
+        // Windows 打包后的资源路径
+        // 结构: Conflux/Conflux.exe -> Conflux/resources/
+        // NSIS/MSI 安装后可能在不同位置，尝试多个可能的路径
+        #[cfg(target_os = "windows")]
+        {
+            // 方式1: 直接在 exe 同级的 resources 目录 (已在上面检查过)
+            // 方式2: 检查 exe 同级目录直接放置的二进制文件
+            let same_dir_path = current_dir.join(binary_name);
+            log::debug!("Checking Windows same dir path: {:?}", same_dir_path);
+            if same_dir_path.exists() {
+                log::info!("Found MiHomo at Windows same dir: {:?}", same_dir_path);
+                return Ok(same_dir_path);
+            }
+
+            // 方式3: 某些安装方式可能放在 bin 目录
+            let bin_path = current_dir.join("bin").join(binary_name);
+            log::debug!("Checking Windows bin path: {:?}", bin_path);
+            if bin_path.exists() {
+                log::info!("Found MiHomo at Windows bin path: {:?}", bin_path);
+                return Ok(bin_path);
             }
         }
 
@@ -462,10 +485,23 @@ impl MihomoManager {
             }
         }
 
-        log::error!("MiHomo binary not found. Searched paths:");
-        log::error!("  - Data: {:?}", data_path);
-        log::error!("  - Resource: {:?}", resource_path);
-        log::error!("  - Dev: {:?}", dev_path);
+        log::error!("MiHomo binary '{}' not found. Searched paths:", binary_name);
+        log::error!("  - Data dir: {:?}", data_path);
+        log::error!("  - Resource dir: {:?}", resource_path);
+        #[cfg(target_os = "macos")]
+        {
+            let bundle_path = current_dir
+                .parent()
+                .and_then(|p| p.parent())
+                .map(|p| p.join("Resources").join("resources").join(binary_name));
+            log::error!("  - macOS bundle: {:?}", bundle_path);
+        }
+        #[cfg(target_os = "windows")]
+        {
+            log::error!("  - Windows same dir: {:?}", current_dir.join(binary_name));
+            log::error!("  - Windows bin dir: {:?}", current_dir.join("bin").join(binary_name));
+        }
+        log::error!("  - Dev path: {:?}", dev_path);
 
         // 返回默认路径（即使不存在）
         Ok(data_path)
