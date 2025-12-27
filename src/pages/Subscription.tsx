@@ -287,7 +287,10 @@ export default function SubscriptionPage() {
     <div className="space-y-6 pb-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">订阅管理</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">订阅配置</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            管理代理订阅链接。应用订阅后,可在"数据源"页面查看运行时状态
+          </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>

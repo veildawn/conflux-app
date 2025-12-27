@@ -35,8 +35,8 @@ const navGroups: NavGroup[] = [
     items: [
       { path: '/subscription', icon: BookOpen, label: '订阅' },
       { path: '/proxy', icon: Globe, label: '代理' },
-      { path: '/providers', icon: Box, label: '订阅源' },
       { path: '/rules', icon: Shield, label: '规则' },
+      { path: '/providers', icon: Box, label: '数据源' },
       { path: '/rule-database', icon: Database, label: '规则数据库' },
     ]
   },

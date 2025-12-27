@@ -273,13 +273,13 @@ export default function Providers() {
   // 全部更新
   const handleUpdateAll = async () => {
     if (activeTab === 'proxy') {
-      for (const provider of proxyProviders) {
-        await handleUpdateProxyProvider(provider.name);
-      }
+      await Promise.all(
+        proxyProviders.map(provider => handleUpdateProxyProvider(provider.name))
+      );
     } else {
-      for (const provider of ruleProviders) {
-        await handleUpdateRuleProvider(provider.name);
-      }
+      await Promise.all(
+        ruleProviders.map(provider => handleUpdateRuleProvider(provider.name))
+      );
     }
   };
 
@@ -291,7 +291,12 @@ export default function Providers() {
       {/* Header */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">订阅源</h1>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">数据源</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              查看和管理运行时加载的代理源和规则源
+            </p>
+          </div>
 
           <div className="flex items-center gap-3">
             <Button
@@ -340,7 +345,11 @@ export default function Providers() {
           <p className="font-medium text-gray-600 dark:text-gray-300">
             暂无{activeTab === 'proxy' ? '代理' : '规则'}源
           </p>
-          <p className="text-sm mt-1">配置文件中未定义 {activeTab === 'proxy' ? 'proxy-providers' : 'rule-providers'}</p>
+          <p className="text-sm mt-1 text-center">
+            订阅配置中未包含 {activeTab === 'proxy' ? 'proxy-providers' : 'rule-providers'}
+            <br />
+            <span className="text-xs text-gray-400 mt-1 inline-block">可在"订阅"页面选择包含 providers 的订阅配置</span>
+          </p>
         </div>
       ) : activeTab === 'proxy' ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
