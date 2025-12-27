@@ -12,7 +12,7 @@ import { cn } from '@/utils/cn';
 
 interface NavItem {
   path: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   label: string;
 }
 

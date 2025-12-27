@@ -1,4 +1,4 @@
-import { Settings as SettingsIcon, Monitor, Laptop, Info } from 'lucide-react';
+import { Settings as SettingsIcon, Laptop, Info } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useAppStore } from '@/stores/appStore';
 import { useToast } from '@/hooks/useToast';

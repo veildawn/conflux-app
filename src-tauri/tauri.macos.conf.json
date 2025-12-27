@@ -26,13 +26,7 @@
       "entitlements": null,
       "exceptionDomain": null,
       "signingIdentity": null,
-      "providerShortName": null,
-      "infoPlist": {
-        "CFBundleDevelopmentRegion": "zh_CN",
-        "CFBundleLocalizations": ["zh_CN", "zh-Hans", "en"],
-        "LSUIElement": false,
-        "NSHighResolutionCapable": true
-      }
+      "providerShortName": null
     }
   }
 }

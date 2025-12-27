@@ -2,10 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { 
   Database, 
   RefreshCw, 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle, 
-  HardDrive, 
   ArrowUpCircle,
   Download,
   FileBox,
@@ -82,7 +78,6 @@ export default function RuleDatabase() {
     settings, 
     updateRuleDatabase, 
     ruleDatabaseUpdateStatus, 
-    checkRuleDatabaseUpdates,
     setRuleDatabaseUpdateStatus 
   } = useAppStore();
   const databases = settings.ruleDatabases || [];

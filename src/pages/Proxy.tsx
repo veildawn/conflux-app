@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Server, 
   Zap, 
-  Check, 
   RefreshCw, 
   Globe, 
   Shield, 
@@ -11,12 +10,10 @@ import {
   BookOpen, 
   Plus, 
   ExternalLink, 
-  Wifi,
-  MoreHorizontal
+  Wifi
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProxyStore } from '@/stores/proxyStore';
 import { useAppStore } from '@/stores/appStore';
@@ -250,15 +247,6 @@ export default function Proxy() {
             const delay = delays[nodeName];
             const isSpecial = ['DIRECT', 'REJECT', 'COMPATIBLE'].includes(nodeName);
             
-            // 简单的类型推断用于装饰颜色
-            const typeColorClass = isSpecial 
-              ? 'bg-gray-500' 
-              : nodeName.toLowerCase().includes('hk') ? 'bg-red-500'
-              : nodeName.toLowerCase().includes('us') ? 'bg-blue-500'
-              : nodeName.toLowerCase().includes('jp') ? 'bg-pink-500'
-              : nodeName.toLowerCase().includes('sg') ? 'bg-green-500'
-              : 'bg-blue-500';
-
             return (
               <button
                 key={nodeName}

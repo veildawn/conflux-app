@@ -9,6 +9,18 @@ export interface ProxyStatus {
   mixed_port?: number;
   system_proxy: boolean;
   enhanced_mode?: boolean;
+  allow_lan?: boolean;
+}
+
+/**
+ * 代理服务器信息
+ */
+export interface ProxyServerInfo {
+  name: string;
+  type: string;
+  server: string;
+  port: number;
+  udp?: boolean;
 }
 
 /**
