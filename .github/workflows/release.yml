@@ -14,6 +14,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# Workflow-level permissions for GITHUB_TOKEN
+permissions:
+  contents: write
+
 jobs:
   # Build for macOS ARM64 (Apple Silicon)
   build-macos-arm64:
