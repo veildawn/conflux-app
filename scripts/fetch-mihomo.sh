@@ -10,6 +10,14 @@ TARGET_DIR="${MIHOMO_TARGET_DIR:-$ROOT_DIR/src-tauri/resources}"
 REPO="${MIHOMO_REPO:-MetaCubeX/mihomo}"
 VERSION="${MIHOMO_VERSION:-latest}"
 PYTHON_BIN="${PYTHON_BIN:-}"
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+
+# Build curl auth header if token is available
+CURL_AUTH_ARGS=()
+if [[ -n "$GITHUB_TOKEN" ]]; then
+  CURL_AUTH_ARGS=(-H "Authorization: Bearer $GITHUB_TOKEN")
+  echo "Using GitHub token for API authentication"
+fi
 
 # Detect OS
 detect_os() {
@@ -67,7 +75,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Download release info
-curl -fsSL "$API_URL" > "$tmp_json"
+curl -fsSL "${CURL_AUTH_ARGS[@]}" "$API_URL" > "$tmp_json"
 
 release_tag="$("$PYTHON_BIN" -c "
 import json
