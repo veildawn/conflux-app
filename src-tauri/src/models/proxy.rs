@@ -10,6 +10,9 @@ pub struct ProxyStatus {
     pub socks_port: u16,
     pub mixed_port: Option<u16>,
     pub system_proxy: bool,
+    pub allow_lan: bool,
+    pub ipv6: bool,
+    pub tcp_concurrent: bool,
 }
 
 impl Default for ProxyStatus {
@@ -21,6 +24,9 @@ impl Default for ProxyStatus {
             socks_port: 7891,
             mixed_port: None,
             system_proxy: false,
+            allow_lan: false,
+            ipv6: false,
+            tcp_concurrent: false,
         }
     }
 }

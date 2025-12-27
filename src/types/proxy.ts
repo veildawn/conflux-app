@@ -10,6 +10,8 @@ export interface ProxyStatus {
   system_proxy: boolean;
   enhanced_mode?: boolean;
   allow_lan?: boolean;
+  ipv6?: boolean;
+  tcp_concurrent?: boolean;
 }
 
 /**
@@ -128,4 +130,3 @@ export interface VersionInfo {
   version: string;
   meta: boolean;
 }
-

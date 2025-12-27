@@ -21,6 +21,10 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            if let Err(err) = crate::utils::ensure_mihomo_in_data_dir() {
+                log::warn!("Failed to initialize MiHomo binary in data dir: {}", err);
+            }
+
             // 创建系统托盘
             let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let show_item = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
@@ -110,10 +114,18 @@ fn main() {
             commands::proxy::close_all_connections,
             // TUN 模式命令
             commands::proxy::set_tun_mode,
+            commands::proxy::check_tun_permission,
+            commands::proxy::setup_tun_permission,
             // 规则命令
             commands::proxy::get_rules_from_api,
             // 版本信息
             commands::proxy::get_core_version,
+            // 局域网共享
+            commands::proxy::set_allow_lan,
+            // 端口与网络选项
+            commands::proxy::set_ports,
+            commands::proxy::set_ipv6,
+            commands::proxy::set_tcp_concurrent,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
