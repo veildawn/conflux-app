@@ -63,6 +63,7 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
 
     let running = state.mihomo_manager.is_running().await;
     let system_proxy = *state.system_proxy_enabled.lock().await;
+    let enhanced_mode = *state.enhanced_mode.lock().await;
 
     let config = state
         .config_manager
@@ -76,6 +77,7 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
         socks_port: config.socks_port,
         mixed_port: config.mixed_port,
         system_proxy,
+        enhanced_mode,
         allow_lan: config.allow_lan,
         ipv6: config.ipv6,
         tcp_concurrent: config.tcp_concurrent,
@@ -401,6 +403,9 @@ pub async fn set_tun_mode(enabled: bool) -> Result<(), String> {
         .set_tun(enabled)
         .await
         .map_err(|e| e.to_string())?;
+
+    let mut enhanced_mode = state.enhanced_mode.lock().await;
+    *enhanced_mode = enabled;
 
     log::info!("TUN mode set to: {}", enabled);
     Ok(())
