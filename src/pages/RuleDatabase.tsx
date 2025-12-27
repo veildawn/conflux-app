@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   Database, 
   RefreshCw, 
@@ -80,7 +80,7 @@ export default function RuleDatabase() {
     ruleDatabaseUpdateStatus, 
     setRuleDatabaseUpdateStatus 
   } = useAppStore();
-  const databases = settings.ruleDatabases || [];
+  const databases = useMemo(() => settings.ruleDatabases || [], [settings.ruleDatabases]);
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
   const [fileStatus, setFileStatus] = useState<Record<string, FileStatus>>({});
   const [checkingAll, setCheckingAll] = useState(false);

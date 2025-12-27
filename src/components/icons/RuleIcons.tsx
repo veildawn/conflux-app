@@ -270,6 +270,7 @@ export const DefaultRuleIcon = ({ className }: IconProps) => (
 
 // 根据规则类型获取对应图标组件
 // 支持配置规则格式（大写+连字符）和运行时规则格式（驼峰/混合）
+// eslint-disable-next-line react-refresh/only-export-components
 export const getRuleIconComponent = (type: string) => {
   // 统一转换为大写进行比较
   const normalizedType = type.toUpperCase().replace(/-/g, '');
