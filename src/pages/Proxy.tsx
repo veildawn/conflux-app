@@ -21,7 +21,7 @@ import { useToast } from '@/hooks/useToast';
 import { formatDelay, getDelayColorClass } from '@/utils/format';
 import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
-import type { ProxyMode, ProxyServerInfo } from '@/types/proxy';
+import type { ProxyMode, ProxyServerInfo, ProxyGroup } from '@/types/proxy';
 
 // -----------------------------------------------------------------------------
 // UI Components
@@ -195,7 +195,7 @@ export default function Proxy() {
     try {
       const delay = await testDelay(name);
       setDelays((prev) => ({ ...prev, [name]: delay }));
-    } catch (error) {
+    } catch {
       setDelays((prev) => ({ ...prev, [name]: -1 }));
     } finally {
       setTestingNodes((prev) => {
@@ -220,7 +220,7 @@ export default function Proxy() {
     }
   };
 
-  const renderGroupCard = (group: any, isMain = false) => (
+  const renderGroupCard = (group: ProxyGroup, isMain = false) => (
     <BentoCard 
       key={group.name} 
       title={group.name}

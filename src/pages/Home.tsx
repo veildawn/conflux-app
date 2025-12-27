@@ -106,24 +106,24 @@ export default function Home() {
   const [versionLoading, setVersionLoading] = useState(false);
 
   // 获取核心版本信息
-  const fetchVersion = async () => {
-    if (!status.running) {
-      setVersionInfo(null);
-      return;
-    }
-    setVersionLoading(true);
-    try {
-      const version = await ipc.getCoreVersion();
-      setVersionInfo(version);
-    } catch (error) {
-      console.debug('Failed to fetch version:', error);
-      setVersionInfo(null);
-    } finally {
-      setVersionLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const fetchVersion = async () => {
+      if (!status.running) {
+        setVersionInfo(null);
+        return;
+      }
+      setVersionLoading(true);
+      try {
+        const version = await ipc.getCoreVersion();
+        setVersionInfo(version);
+      } catch (error) {
+        console.debug('Failed to fetch version:', error);
+        setVersionInfo(null);
+      } finally {
+        setVersionLoading(false);
+      }
+    };
+
     fetchVersion();
   }, [status.running]);
 
