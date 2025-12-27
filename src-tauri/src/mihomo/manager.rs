@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
 
-use crate::utils::{get_app_data_dir, get_mihomo_config_path};
+use crate::utils::{get_app_data_dir, get_mihomo_binary_path, get_mihomo_config_path};
 
 /// MiHomo 进程管理器
 pub struct MihomoManager {
@@ -153,7 +153,7 @@ impl MihomoManager {
         Self::cleanup_stale_processes();
 
         // 获取 MiHomo 二进制路径
-        let mihomo_path = self.get_mihomo_binary_path()?;
+        let mihomo_path = get_mihomo_binary_path()?;
 
         if !mihomo_path.exists() {
             return Err(anyhow::anyhow!(
@@ -408,125 +408,6 @@ impl MihomoManager {
         }
     }
 
-    /// 获取 MiHomo 二进制路径
-    fn get_mihomo_binary_path(&self) -> Result<PathBuf> {
-        let binary_name = crate::utils::get_mihomo_binary_name();
-
-        log::debug!("Looking for MiHomo binary: {}", binary_name);
-
-        // 首先检查应用数据目录
-        let data_dir = get_app_data_dir()?;
-        let data_path = data_dir.join(binary_name);
-        log::debug!("Checking data path: {:?}", data_path);
-        if data_path.exists() {
-            log::info!("Found MiHomo at data path: {:?}", data_path);
-            return Ok(data_path);
-        }
-
-        // 获取可执行文件目录
-        let current_exe = std::env::current_exe()?;
-        let current_dir = current_exe
-            .parent()
-            .ok_or_else(|| anyhow::anyhow!("Cannot get executable directory"))?
-            .to_path_buf();
-
-        log::debug!("Current exe: {:?}", current_exe);
-        log::debug!("Current dir: {:?}", current_dir);
-
-        // 检查当前目录的 resources 子目录 (通用路径，适用于开发环境和部分打包场景)
-        let resource_path = current_dir.join("resources").join(binary_name);
-        log::debug!("Checking resource path: {:?}", resource_path);
-        if resource_path.exists() {
-            log::info!("Found MiHomo at resource path: {:?}", resource_path);
-            return Ok(resource_path);
-        }
-
-        // macOS 应用包内的资源路径
-        // 结构: Conflux.app/Contents/MacOS/Conflux -> Conflux.app/Contents/Resources/resources/
-        #[cfg(target_os = "macos")]
-        {
-            let bundle_path = current_dir
-                .parent()
-                .and_then(|p| p.parent())
-                .map(|p| p.join("Resources").join("resources").join(binary_name));
-            if let Some(ref path) = bundle_path {
-                log::debug!("Checking macOS bundle path: {:?}", path);
-                if path.exists() {
-                    log::info!("Found MiHomo at bundle path: {:?}", path);
-                    return Ok(path.clone());
-                }
-            }
-        }
-
-        // Windows 打包后的资源路径
-        // 结构: Conflux/Conflux.exe -> Conflux/resources/
-        // NSIS/MSI 安装后可能在不同位置，尝试多个可能的路径
-        #[cfg(target_os = "windows")]
-        {
-            // 方式1: 直接在 exe 同级的 resources 目录 (已在上面检查过)
-            // 方式2: 检查 exe 同级目录直接放置的二进制文件
-            let same_dir_path = current_dir.join(binary_name);
-            log::debug!("Checking Windows same dir path: {:?}", same_dir_path);
-            if same_dir_path.exists() {
-                log::info!("Found MiHomo at Windows same dir: {:?}", same_dir_path);
-                return Ok(same_dir_path);
-            }
-
-            // 方式3: 某些安装方式可能放在 bin 目录
-            let bin_path = current_dir.join("bin").join(binary_name);
-            log::debug!("Checking Windows bin path: {:?}", bin_path);
-            if bin_path.exists() {
-                log::info!("Found MiHomo at Windows bin path: {:?}", bin_path);
-                return Ok(bin_path);
-            }
-        }
-
-        // 开发环境路径 - 相对于项目根目录
-        // 在开发模式下，工作目录通常是项目根目录
-        let dev_path = PathBuf::from("src-tauri/resources").join(binary_name);
-        log::debug!("Checking dev path: {:?}", dev_path);
-        if dev_path.exists() {
-            log::info!("Found MiHomo at dev path: {:?}", dev_path);
-            return Ok(dev_path);
-        }
-
-        // 开发环境备选路径 - 从 target/debug 目录往上找
-        // target/debug/conflux -> target/debug -> target -> src-tauri -> src-tauri/resources
-        if let Some(target_dir) = current_dir.parent() {
-            if let Some(src_tauri) = target_dir.parent() {
-                let alt_dev_path = src_tauri.join("resources").join(binary_name);
-                log::debug!("Checking alt dev path: {:?}", alt_dev_path);
-                if alt_dev_path.exists() {
-                    log::info!("Found MiHomo at alt dev path: {:?}", alt_dev_path);
-                    return Ok(alt_dev_path);
-                }
-            }
-        }
-
-        log::error!("MiHomo binary '{}' not found. Searched paths:", binary_name);
-        log::error!("  - Data dir: {:?}", data_path);
-        log::error!("  - Resource dir: {:?}", resource_path);
-        #[cfg(target_os = "macos")]
-        {
-            let bundle_path = current_dir
-                .parent()
-                .and_then(|p| p.parent())
-                .map(|p| p.join("Resources").join("resources").join(binary_name));
-            log::error!("  - macOS bundle: {:?}", bundle_path);
-        }
-        #[cfg(target_os = "windows")]
-        {
-            log::error!("  - Windows same dir: {:?}", current_dir.join(binary_name));
-            log::error!(
-                "  - Windows bin dir: {:?}",
-                current_dir.join("bin").join(binary_name)
-            );
-        }
-        log::error!("  - Dev path: {:?}", dev_path);
-
-        // 返回默认路径（即使不存在）
-        Ok(data_path)
-    }
 }
 
 impl Drop for MihomoManager {
