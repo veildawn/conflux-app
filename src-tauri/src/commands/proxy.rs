@@ -713,3 +713,68 @@ pub async fn update_rule_provider(name: String) -> Result<(), String> {
     log::info!("Updated rule provider: {}", name);
     Ok(())
 }
+
+// ============= 设置命令 =============
+
+/// 设置混合端口
+#[tauri::command]
+pub async fn set_mixed_port(app: AppHandle, port: Option<u16>) -> Result<(), String> {
+    let state = get_app_state();
+
+    state
+        .config_manager
+        .update_mixed_port(port)
+        .map_err(|e| e.to_string())?;
+
+    if state.mihomo_manager.is_running().await {
+        let config_path = state.config_manager.mihomo_config_path();
+        state
+            .mihomo_api
+            .reload_configs(config_path.to_str().unwrap_or(""), true)
+            .await
+            .map_err(|e| format!("Failed to reload config: {}", e))?;
+    }
+
+    // 同步状态到托盘菜单和前端
+    if let Ok(status) = get_proxy_status().await {
+        app.state::<TrayMenuState>().sync_from_status(&status);
+        let _ = app.emit("proxy-status-changed", status);
+    }
+
+    Ok(())
+}
+
+/// 设置进程查找模式
+#[tauri::command]
+pub async fn set_find_process_mode(_app: AppHandle, mode: String) -> Result<(), String> {
+    let state = get_app_state();
+
+    // 验证模式
+    let valid_modes = ["always", "strict", "off"];
+    if !valid_modes.contains(&mode.as_str()) {
+        return Err(format!("Invalid find-process-mode: {}", mode));
+    }
+
+    state
+        .config_manager
+        .update_find_process_mode(mode.clone())
+        .map_err(|e| e.to_string())?;
+
+    if state.mihomo_manager.is_running().await {
+        let config_path = state.config_manager.mihomo_config_path();
+        state
+            .mihomo_api
+            .reload_configs(config_path.to_str().unwrap_or(""), true)
+            .await
+            .map_err(|e| format!("Failed to reload config: {}", e))?;
+    }
+
+    log::info!("Find process mode set to: {}", mode);
+    Ok(())
+}
+
+/// 获取应用版本
+#[tauri::command]
+pub async fn get_app_version() -> Result<String, String> {
+    Ok(env!("CARGO_PKG_VERSION").to_string())
+}

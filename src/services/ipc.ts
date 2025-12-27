@@ -378,6 +378,29 @@ export const ipc = {
   async setLogLevel(level: string): Promise<void> {
     return invoke('set_log_level', { level });
   },
+
+  // ============= 设置命令 =============
+
+  /**
+   * 设置混合端口
+   */
+  async setMixedPort(port: number | null): Promise<void> {
+    return invoke('set_mixed_port', { port });
+  },
+
+  /**
+   * 设置进程查找模式
+   */
+  async setFindProcessMode(mode: string): Promise<void> {
+    return invoke('set_find_process_mode', { mode });
+  },
+
+  /**
+   * 获取应用版本
+   */
+  async getAppVersion(): Promise<string> {
+    return invoke('get_app_version');
+  },
 };
 
 export default ipc;
