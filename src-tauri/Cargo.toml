@@ -8,6 +8,10 @@ repository = ""
 edition = "2021"
 rust-version = "1.77"
 
+[[bin]]
+name = "Conflux"
+path = "src/main.rs"
+
 [lib]
 name = "conflux_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
