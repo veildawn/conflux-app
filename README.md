@@ -11,19 +11,29 @@
 - 📊 **实时统计**: 流量监控、连接管理、速度测试
 - 🎯 **灵活规则**: 强大的规则管理系统
 
+## 下载安装
+
+前往 [Releases](https://github.com/yourusername/conflux/releases) 页面下载对应平台的安装包：
+
+| 平台 | 架构 | 文件格式 |
+|------|------|----------|
+| macOS | Apple Silicon (M1/M2/M3) | `.dmg` |
+| macOS | Intel (x86_64) | `.dmg` |
+| Windows | x86_64 | `.msi` / `.exe` |
+
 ## 技术栈
 
 ### 前端
-- React 18
+- React 19
 - TypeScript 5
-- Tailwind CSS 3
-- Shadcn/ui
+- Tailwind CSS 4
+- Radix UI
 - Zustand (状态管理)
-- Vite 5
+- Vite 7
 
 ### 后端
 - Tauri 2
-- Rust 1.75+
+- Rust 1.77+
 - Tokio (异步运行时)
 - MiHomo (代理核心)
 
@@ -31,7 +41,8 @@
 
 - Node.js >= 18.0.0
 - pnpm >= 8.0.0
-- Rust >= 1.75.0
+- Rust >= 1.77.0
+- Python 3 (用于下载 MiHomo)
 - 系统依赖（参考 [Tauri 前置要求](https://v2.tauri.app/start/prerequisites/)）
 
 ## 快速开始
@@ -49,9 +60,15 @@ cd conflux
 pnpm install
 ```
 
-### 3. 下载 MiHomo
+### 3. 下载 MiHomo 二进制文件
 
-从 [MiHomo Releases](https://github.com/MetaCubeX/mihomo/releases) 下载对应平台的二进制文件，放置到 `src-tauri/resources/` 目录：
+使用自动下载脚本（推荐）：
+
+```bash
+./scripts/fetch-mihomo.sh
+```
+
+或手动从 [MiHomo Releases](https://github.com/MetaCubeX/mihomo/releases) 下载，放置到 `src-tauri/resources/` 目录：
 
 - Windows: `mihomo-windows-amd64.exe`
 - macOS (Apple Silicon): `mihomo-darwin-arm64`
@@ -67,7 +84,15 @@ pnpm tauri dev
 ### 5. 构建应用
 
 ```bash
+# 构建当前平台
 pnpm tauri build
+
+# 指定目标平台 (macOS)
+pnpm tauri build --target aarch64-apple-darwin  # Apple Silicon
+pnpm tauri build --target x86_64-apple-darwin   # Intel
+
+# 指定目标平台 (Windows)
+pnpm tauri build --target x86_64-pc-windows-msvc
 ```
 
 ## 项目结构
@@ -75,10 +100,75 @@ pnpm tauri build
 ```
 conflux/
 ├── src/                    # 前端源代码
-├── src-tauri/             # Tauri 后端
-├── public/                # 静态资源
+│   ├── components/         # React 组件
+│   ├── pages/              # 页面组件
+│   ├── services/           # IPC 服务
+│   ├── stores/             # Zustand 状态管理
+│   ├── hooks/              # 自定义 Hooks
+│   ├── types/              # TypeScript 类型定义
+│   └── utils/              # 工具函数
+├── src-tauri/              # Tauri 后端
+│   ├── src/
+│   │   ├── commands/       # Tauri 命令
+│   │   ├── config/         # 配置管理
+│   │   ├── mihomo/         # MiHomo 核心集成
+│   │   ├── models/         # 数据模型
+│   │   ├── system/         # 系统功能
+│   │   └── utils/          # 工具函数
+│   ├── resources/          # MiHomo 二进制文件
+│   └── icons/              # 应用图标
+├── scripts/                # 构建脚本
+├── .github/workflows/      # CI/CD 配置
 └── package.json
 ```
+
+## CI/CD 流程
+
+本项目使用 GitHub Actions 实现自动化构建和发布。
+
+### 持续集成 (CI)
+
+每次推送到 `main` 或 `develop` 分支，以及 Pull Request 时自动运行：
+
+- **前端检查**: ESLint、TypeScript 类型检查、构建测试
+- **Rust 检查**: Clippy、格式检查、多平台构建测试
+- **单元测试**: Vitest 测试
+
+### 发布构建
+
+推送 `v*` 格式的 tag 时自动触发多平台构建：
+
+```bash
+# 创建新版本
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+构建完成后会在 Releases 页面生成草稿，包含以下产物：
+- `Conflux_x.x.x_aarch64.dmg` - macOS ARM64
+- `Conflux_x.x.x_x64.dmg` - macOS x86_64
+- `Conflux_x.x.x_x64-setup.exe` - Windows NSIS 安装程序
+- `Conflux_x.x.x_x64_en-US.msi` - Windows MSI 安装程序
+
+### 手动构建测试
+
+可在 GitHub Actions 页面手动触发 "Build Test" workflow，支持选择性构建单个或全部平台。
+
+### 代码签名配置（可选）
+
+在 GitHub Secrets 中配置以下变量启用代码签名：
+
+**macOS:**
+- `APPLE_CERTIFICATE` - Base64 编码的 .p12 证书
+- `APPLE_CERTIFICATE_PASSWORD` - 证书密码
+- `APPLE_SIGNING_IDENTITY` - 签名标识
+- `APPLE_ID` - Apple ID
+- `APPLE_PASSWORD` - App 专用密码
+- `APPLE_TEAM_ID` - Team ID
+
+**Windows:**
+- `TAURI_SIGNING_PRIVATE_KEY` - 签名私钥
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` - 私钥密码
 
 ## 功能列表
 
@@ -105,13 +195,35 @@ conflux/
 - [ ] 性能优化
 - [ ] 自动更新
 
+## 开发命令
+
+```bash
+# 安装依赖
+pnpm install
+
+# 开发模式
+pnpm tauri dev
+
+# 构建应用
+pnpm tauri build
+
+# 代码检查
+pnpm lint
+pnpm lint:fix
+
+# 类型检查
+pnpm type-check
+
+# 运行测试
+pnpm test
+
+# 代码格式化
+pnpm format
+```
+
 ## 开发文档
 
-- [需求设计](需求设计.md)
-- [架构设计](架构设计.md)
-- [阶段任务详解](阶段任务详解.md)
-- [开发规范](开发规范.md)
-- [开发指南](开发指南.md)
+- [MiHomo API 文档](MIHOMO_API.md)
 
 ## 许可证
 
@@ -123,4 +235,4 @@ MIT License
 - [MiHomo](https://github.com/MetaCubeX/mihomo) - 代理核心
 - [React](https://react.dev/) - UI 框架
 - [Tailwind CSS](https://tailwindcss.com/) - CSS 框架
-- [Shadcn/ui](https://ui.shadcn.com/) - 组件库
+- [Radix UI](https://www.radix-ui.com/) - 无障碍组件库

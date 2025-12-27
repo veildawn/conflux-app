@@ -2,15 +2,21 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main, develop]
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  check:
+  # Frontend checks (lint, type-check, build)
+  frontend-check:
+    name: Frontend Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -18,9 +24,22 @@ jobs:
           node-version: 20
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 9
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
         run: pnpm install
@@ -31,6 +50,108 @@ jobs:
       - name: Type Check
         run: pnpm type-check
 
-      - name: Build Check
+      - name: Build Frontend
         run: pnpm build
 
+  # Rust checks (clippy, fmt, build) for each platform
+  rust-check:
+    name: Rust Check (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS-ARM64
+            os: macos-latest
+            target: aarch64-apple-darwin
+          - platform: macOS-x86_64
+            os: macos-13
+            target: x86_64-apple-darwin
+          - platform: Windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          components: clippy, rustfmt
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Fetch MiHomo binaries
+        shell: bash
+        run: |
+          chmod +x scripts/fetch-mihomo.sh
+          ./scripts/fetch-mihomo.sh
+
+      - name: Check formatting
+        working-directory: src-tauri
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --target ${{ matrix.target }} -- -D warnings
+
+      - name: Build check
+        working-directory: src-tauri
+        run: cargo build --target ${{ matrix.target }} --release
+
+  # Integration test (optional, runs on ubuntu for speed)
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: [frontend-check]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run tests
+        run: pnpm test --run
+
+  # Summary job for branch protection
+  ci-complete:
+    name: CI Complete
+    needs: [frontend-check, rust-check, test]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check all jobs
+        run: |
+          if [[ "${{ needs.frontend-check.result }}" != "success" ]]; then
+            echo "Frontend check failed"
+            exit 1
+          fi
+          if [[ "${{ needs.rust-check.result }}" != "success" ]]; then
+            echo "Rust check failed"
+            exit 1
+          fi
+          if [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "Tests failed"
+            exit 1
+          fi
+          echo "✅ All CI checks passed!"
