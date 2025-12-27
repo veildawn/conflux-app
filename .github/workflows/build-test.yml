@@ -73,7 +73,7 @@ jobs:
   build-macos-x86:
     name: Build macOS x86_64
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'macos-x86' }}
-    runs-on: macos-13
+    runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

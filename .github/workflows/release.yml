@@ -87,7 +87,7 @@ jobs:
   # Build for macOS x86_64 (Intel)
   build-macos-x86:
     name: Build macOS x86_64
-    runs-on: macos-13  # macOS 13 runs on Intel hardware
+    runs-on: macos-latest  # Cross-compile for Intel on ARM64 runner
     permissions:
       contents: write
     steps:
