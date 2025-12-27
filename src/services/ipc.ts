@@ -94,9 +94,52 @@ export const ipc = {
 
   /**
    * 设置 TUN 模式（增强模式）
+   * 在 macOS 上，如果没有权限会自动请求设置
    */
   async setTunMode(enabled: boolean): Promise<void> {
     return invoke('set_tun_mode', { enabled });
+  },
+
+  /**
+   * 设置 LAN 访问开关
+   */
+  async setAllowLan(enabled: boolean): Promise<void> {
+    return invoke('set_allow_lan', { enabled });
+  },
+
+  /**
+   * 设置 HTTP/SOCKS 端口
+   */
+  async setPorts(port: number, socksPort: number): Promise<void> {
+    return invoke('set_ports', { port, socks_port: socksPort });
+  },
+
+  /**
+   * 设置 IPv6 开关
+   */
+  async setIpv6(enabled: boolean): Promise<void> {
+    return invoke('set_ipv6', { enabled });
+  },
+
+  /**
+   * 设置 TCP 并发开关
+   */
+  async setTcpConcurrent(enabled: boolean): Promise<void> {
+    return invoke('set_tcp_concurrent', { enabled });
+  },
+
+  /**
+   * 检查 TUN 权限状态
+   */
+  async checkTunPermission(): Promise<boolean> {
+    return invoke('check_tun_permission');
+  },
+
+  /**
+   * 手动设置 TUN 权限
+   */
+  async setupTunPermission(): Promise<void> {
+    return invoke('setup_tun_permission');
   },
 
   // ============= 配置命令 =============
@@ -259,7 +302,5 @@ export const ipc = {
 };
 
 export default ipc;
-
-
 
 

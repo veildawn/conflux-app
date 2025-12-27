@@ -68,6 +68,12 @@ pub struct MihomoConfig {
 
     #[serde(default)]
     pub rules: Vec<String>,
+
+    #[serde(default)]
+    pub ipv6: bool,
+
+    #[serde(rename = "tcp-concurrent", default)]
+    pub tcp_concurrent: bool,
 }
 
 /// GeoX URL 配置
@@ -132,6 +138,8 @@ impl Default for MihomoConfig {
             }],
             rule_providers: std::collections::HashMap::new(),
             rules: vec!["GEOIP,CN,DIRECT".to_string(), "MATCH,PROXY".to_string()],
+            ipv6: false,
+            tcp_concurrent: false,
         }
     }
 }

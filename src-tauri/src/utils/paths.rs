@@ -1,4 +1,6 @@
 use anyhow::Result;
+use std::fs::File;
+use std::io::Read;
 use std::path::PathBuf;
 
 // ============================================================================
@@ -151,6 +153,12 @@ pub fn get_mihomo_binary_path() -> Result<PathBuf> {
     let binary_name = get_mihomo_binary_name();
     log::debug!("Looking for MiHomo binary: {}", binary_name);
 
+    if let Ok(data_path) = ensure_mihomo_in_data_dir() {
+        if data_path.exists() {
+            return Ok(data_path);
+        }
+    }
+
     // ========================================================================
     // 优先级 1: 用户数据目录
     // 支持用户手动放置或更新 mihomo 二进制
@@ -159,6 +167,36 @@ pub fn get_mihomo_binary_path() -> Result<PathBuf> {
     let user_binary_path = data_dir.join(binary_name);
     log::debug!("Checking user data path: {:?}", user_binary_path);
     if user_binary_path.exists() {
+        let bundled_path = find_bundled_binary(binary_name)?;
+        let dev_path = find_dev_binary(binary_name)?;
+        let source_path = bundled_path.or(dev_path);
+
+        if let Some(source_path) = source_path {
+            match should_refresh_binary(&source_path, &user_binary_path) {
+                Ok(true) => {
+                    if let Err(err) = std::fs::copy(&source_path, &user_binary_path) {
+                        log::warn!(
+                            "Failed to refresh MiHomo in data dir from {:?}: {}",
+                            source_path,
+                            err
+                        );
+                    } else {
+                        log::info!(
+                            "Refreshed MiHomo in data dir from {:?}",
+                            source_path
+                        );
+                    }
+                }
+                Ok(false) => {}
+                Err(err) => {
+                    log::warn!(
+                        "Failed to compare MiHomo binaries for refresh: {}",
+                        err
+                    );
+                }
+            }
+        }
+
         log::info!("Found MiHomo at user data path: {:?}", user_binary_path);
         return Ok(user_binary_path);
     }
@@ -187,6 +225,43 @@ pub fn get_mihomo_binary_path() -> Result<PathBuf> {
     // 返回用户数据目录路径作为默认值（即使不存在）
     // 这样错误信息会指示用户将文件放到这个位置
     Ok(user_binary_path)
+}
+
+/// 确保 MiHomo 二进制在用户数据目录，并可用于权限设置
+pub fn ensure_mihomo_in_data_dir() -> Result<PathBuf> {
+    let binary_name = get_mihomo_binary_name();
+    let data_dir = get_app_data_dir()?;
+    let user_binary_path = data_dir.join(binary_name);
+
+    let bundled_path = find_bundled_binary(binary_name)?;
+    let dev_path = find_dev_binary(binary_name)?;
+    let source_path = bundled_path.or(dev_path);
+
+    if user_binary_path.exists() {
+        if let Some(source_path) = source_path {
+            if should_refresh_binary(&source_path, &user_binary_path)? {
+                std::fs::copy(&source_path, &user_binary_path)?;
+                log::info!(
+                    "Refreshed MiHomo in data dir from {:?}",
+                    source_path
+                );
+            }
+        }
+        return Ok(user_binary_path);
+    }
+
+    if let Some(source_path) = source_path {
+        std::fs::copy(&source_path, &user_binary_path)?;
+        log::info!(
+            "Copied MiHomo to data dir from {:?}",
+            source_path
+        );
+        return Ok(user_binary_path);
+    }
+
+    Err(anyhow::anyhow!(
+        "MiHomo binary not found for initialization"
+    ))
 }
 
 /// 查找打包后的二进制文件路径
@@ -321,6 +396,35 @@ fn find_dev_binary(binary_name: &str) -> Result<Option<PathBuf>> {
     }
 
     Ok(None)
+}
+
+fn should_refresh_binary(source: &PathBuf, dest: &PathBuf) -> Result<bool> {
+    let source_meta = std::fs::metadata(source)?;
+    let dest_meta = std::fs::metadata(dest)?;
+
+    if source_meta.len() != dest_meta.len() {
+        return Ok(true);
+    }
+
+    let source_hash = hash_file(source)?;
+    let dest_hash = hash_file(dest)?;
+    Ok(source_hash != dest_hash)
+}
+
+fn hash_file(path: &PathBuf) -> Result<u64> {
+    let mut file = File::open(path)?;
+    let mut buffer = [0u8; 8192];
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+
+    loop {
+        let read = file.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        std::hash::Hasher::write(&mut hasher, &buffer[..read]);
+    }
+
+    Ok(std::hash::Hasher::finish(&hasher))
 }
 
 /// 记录所有尝试过的路径（用于调试）

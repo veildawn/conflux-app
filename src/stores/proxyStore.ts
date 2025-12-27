@@ -42,6 +42,10 @@ interface ProxyState {
   closeAllConnections: () => Promise<void>;
   setSystemProxy: (enabled: boolean) => Promise<void>;
   setEnhancedMode: (enabled: boolean) => Promise<void>;
+  setAllowLan: (enabled: boolean) => Promise<void>;
+  setPorts: (port: number, socksPort: number) => Promise<void>;
+  setIpv6: (enabled: boolean) => Promise<void>;
+  setTcpConcurrent: (enabled: boolean) => Promise<void>;
 }
 
 const initialStatus: ProxyStatus = {
@@ -51,6 +55,9 @@ const initialStatus: ProxyStatus = {
   socks_port: 7891,
   system_proxy: false,
   enhanced_mode: false,
+  allow_lan: false,
+  ipv6: false,
+  tcp_concurrent: false,
 };
 
 const initialConnectionStats: ConnectionStats = {
@@ -75,7 +82,13 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
   fetchStatus: async () => {
     try {
       const status = await ipc.getProxyStatus();
-      set({ status, error: null });
+      if (!status) {
+        throw new Error('Empty proxy status');
+      }
+      set((state) => ({
+        status: { ...state.status, ...status },
+        error: null,
+      }));
     } catch (error) {
       console.error('Failed to fetch proxy status:', error);
       set({ error: String(error) });
@@ -290,6 +303,69 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
     } finally {
       set({ loading: false });
     }
+  },
+
+  setAllowLan: async (enabled: boolean) => {
+    set({ loading: true, error: null });
+    try {
+      await ipc.setAllowLan(enabled);
+      set((state) => ({
+        status: { ...state.status, allow_lan: enabled },
+      }));
+    } catch (error) {
+      console.error('Failed to set allow LAN:', error);
+      set({ error: String(error) });
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  setPorts: async (port: number, socksPort: number) => {
+    set({ loading: true, error: null });
+    try {
+      await ipc.setPorts(port, socksPort);
+      set((state) => ({
+        status: { ...state.status, port, socks_port: socksPort },
+      }));
+    } catch (error) {
+      console.error('Failed to set ports:', error);
+      set({ error: String(error) });
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  setIpv6: async (enabled: boolean) => {
+    set({ loading: true, error: null });
+    try {
+      await ipc.setIpv6(enabled);
+      set((state) => ({
+        status: { ...state.status, ipv6: enabled },
+      }));
+    } catch (error) {
+      console.error('Failed to set IPv6:', error);
+      set({ error: String(error) });
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  setTcpConcurrent: async (enabled: boolean) => {
+    set({ loading: true, error: null });
+    try {
+      await ipc.setTcpConcurrent(enabled);
+      set((state) => ({
+        status: { ...state.status, tcp_concurrent: enabled },
+      }));
+    } catch (error) {
+      console.error('Failed to set TCP concurrent:', error);
+      set({ error: String(error) });
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
   }
 }));
-

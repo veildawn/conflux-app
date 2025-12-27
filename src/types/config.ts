@@ -16,6 +16,8 @@ export interface MihomoConfig {
   'socks-port': number;
   'mixed-port'?: number;
   'allow-lan': boolean;
+  ipv6?: boolean;
+  'tcp-concurrent'?: boolean;
   mode: string;
   'log-level': string;
   'external-controller': string;

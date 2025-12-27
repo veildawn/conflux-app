@@ -76,7 +76,98 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
         socks_port: config.socks_port,
         mixed_port: config.mixed_port,
         system_proxy,
+        allow_lan: config.allow_lan,
+        ipv6: config.ipv6,
+        tcp_concurrent: config.tcp_concurrent,
     })
+}
+
+/// 设置 LAN 访问开关
+#[tauri::command]
+pub async fn set_allow_lan(enabled: bool) -> Result<(), String> {
+    let state = get_app_state();
+
+    state
+        .config_manager
+        .update_allow_lan(enabled)
+        .map_err(|e| e.to_string())?;
+
+    if state.mihomo_manager.is_running().await {
+        let config_path = state.config_manager.mihomo_config_path();
+        state
+            .mihomo_api
+            .reload_configs(config_path.to_str().unwrap_or(""), true)
+            .await
+            .map_err(|e| format!("Failed to reload config: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// 设置 HTTP/SOCKS 端口
+#[tauri::command]
+pub async fn set_ports(port: u16, socks_port: u16) -> Result<(), String> {
+    let state = get_app_state();
+
+    state
+        .config_manager
+        .update_ports(port, socks_port)
+        .map_err(|e| e.to_string())?;
+
+    if state.mihomo_manager.is_running().await {
+        let config_path = state.config_manager.mihomo_config_path();
+        state
+            .mihomo_api
+            .reload_configs(config_path.to_str().unwrap_or(""), true)
+            .await
+            .map_err(|e| format!("Failed to reload config: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// 设置 IPv6 开关
+#[tauri::command]
+pub async fn set_ipv6(enabled: bool) -> Result<(), String> {
+    let state = get_app_state();
+
+    state
+        .config_manager
+        .update_ipv6(enabled)
+        .map_err(|e| e.to_string())?;
+
+    if state.mihomo_manager.is_running().await {
+        let config_path = state.config_manager.mihomo_config_path();
+        state
+            .mihomo_api
+            .reload_configs(config_path.to_str().unwrap_or(""), true)
+            .await
+            .map_err(|e| format!("Failed to reload config: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// 设置 TCP 并发开关
+#[tauri::command]
+pub async fn set_tcp_concurrent(enabled: bool) -> Result<(), String> {
+    let state = get_app_state();
+
+    state
+        .config_manager
+        .update_tcp_concurrent(enabled)
+        .map_err(|e| e.to_string())?;
+
+    if state.mihomo_manager.is_running().await {
+        let config_path = state.config_manager.mihomo_config_path();
+        state
+            .mihomo_api
+            .reload_configs(config_path.to_str().unwrap_or(""), true)
+            .await
+            .map_err(|e| format!("Failed to reload config: {}", e))?;
+    }
+
+    Ok(())
 }
 
 /// 切换代理模式
@@ -285,6 +376,26 @@ pub async fn set_tun_mode(enabled: bool) -> Result<(), String> {
         return Err("Proxy is not running".to_string());
     }
 
+    // 如果要启用 TUN 模式，先检查权限
+    if enabled {
+        let has_permission = crate::system::TunPermission::check_permission()
+            .map_err(|e| e.to_string())?;
+
+        if !has_permission {
+            log::info!("TUN permission not set, requesting setup...");
+            crate::system::TunPermission::setup_permission()
+                .map_err(|e| format!("设置 TUN 权限失败: {}", e))?;
+            
+            // 权限设置成功后，需要重启 mihomo 进程
+            log::info!("Permission setup complete, restarting MiHomo...");
+            state
+                .mihomo_manager
+                .restart()
+                .await
+                .map_err(|e| format!("重启代理失败: {}", e))?;
+        }
+    }
+
     state
         .mihomo_api
         .set_tun(enabled)
@@ -293,6 +404,18 @@ pub async fn set_tun_mode(enabled: bool) -> Result<(), String> {
 
     log::info!("TUN mode set to: {}", enabled);
     Ok(())
+}
+
+/// 检查 TUN 权限状态
+#[tauri::command]
+pub async fn check_tun_permission() -> Result<bool, String> {
+    crate::system::TunPermission::check_permission().map_err(|e| e.to_string())
+}
+
+/// 手动设置 TUN 权限
+#[tauri::command]
+pub async fn setup_tun_permission() -> Result<(), String> {
+    crate::system::TunPermission::setup_permission().map_err(|e| e.to_string())
 }
 
 /// 从 API 获取运行时规则
