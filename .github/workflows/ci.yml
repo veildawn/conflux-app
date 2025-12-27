@@ -90,6 +90,8 @@ jobs:
 
       - name: Fetch MiHomo binaries
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
