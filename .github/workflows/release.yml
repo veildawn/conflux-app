@@ -44,9 +44,18 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: macos-rust
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
 
       - name: Fetch MiHomo binaries
         shell: bash
@@ -58,14 +67,26 @@ jobs:
 
       - name: Verify MiHomo binaries
         run: |
-          ls -la src-tauri/resources/
+          echo "Checking MiHomo binaries..."
+          ls -lh src-tauri/resources/
+          
+          # Check if file exists
           if [ ! -f "src-tauri/resources/mihomo-darwin-arm64" ]; then
             echo "ERROR: mihomo-darwin-arm64 not found!"
             exit 1
           fi
+          
+          # Check file size (should be > 10MB)
+          FILE_SIZE=$(stat -f%z "src-tauri/resources/mihomo-darwin-arm64" 2>/dev/null || stat -c%s "src-tauri/resources/mihomo-darwin-arm64")
+          MIN_SIZE=10000000  # 10MB
+          if [ "$FILE_SIZE" -lt "$MIN_SIZE" ]; then
+            echo "ERROR: mihomo-darwin-arm64 is too small ($FILE_SIZE bytes). Expected > 10MB"
+            exit 1
+          fi
+          echo "✅ mihomo-darwin-arm64 verified: $FILE_SIZE bytes"
 
       - name: Install frontend dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build Tauri app (macOS ARM64)
         uses: tauri-apps/tauri-action@v0
@@ -93,6 +114,26 @@ jobs:
           prerelease: false
           args: --target aarch64-apple-darwin -c src-tauri/tauri.macos.conf.json
           includeUpdaterJson: true
+
+      - name: Verify build artifacts
+        run: |
+          echo "=== Checking build artifacts ==="
+          APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Conflux.app"
+          if [ -d "$APP_PATH" ]; then
+            APP_SIZE=$(du -sm "$APP_PATH" | cut -f1)
+            echo "Conflux.app size: ${APP_SIZE}MB"
+            if [ "$APP_SIZE" -lt 50 ]; then
+              echo "⚠️ WARNING: .app is smaller than expected (${APP_SIZE}MB < 50MB)"
+              echo "Checking resources..."
+              ls -lh "$APP_PATH/Contents/Resources/resources/" || echo "No resources found!"
+            else
+              echo "✅ .app size verified: ${APP_SIZE}MB"
+            fi
+          fi
+          
+          echo ""
+          echo "=== DMG files ==="
+          find src-tauri/target -name "*.dmg" -exec ls -lh {} \; 2>/dev/null || echo "No DMG found"
 
   # Build for macOS x86_64 (Intel)
   build-macos-x86:
@@ -123,9 +164,18 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: macos-rust
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
 
       - name: Fetch MiHomo binaries
         shell: bash
@@ -137,14 +187,26 @@ jobs:
 
       - name: Verify MiHomo binaries
         run: |
-          ls -la src-tauri/resources/
+          echo "Checking MiHomo binaries..."
+          ls -lh src-tauri/resources/
+          
+          # Check if file exists
           if [ ! -f "src-tauri/resources/mihomo-darwin-amd64" ]; then
             echo "ERROR: mihomo-darwin-amd64 not found!"
             exit 1
           fi
+          
+          # Check file size (should be > 10MB)
+          FILE_SIZE=$(stat -f%z "src-tauri/resources/mihomo-darwin-amd64" 2>/dev/null || stat -c%s "src-tauri/resources/mihomo-darwin-amd64")
+          MIN_SIZE=10000000  # 10MB
+          if [ "$FILE_SIZE" -lt "$MIN_SIZE" ]; then
+            echo "ERROR: mihomo-darwin-amd64 is too small ($FILE_SIZE bytes). Expected > 10MB"
+            exit 1
+          fi
+          echo "✅ mihomo-darwin-amd64 verified: $FILE_SIZE bytes"
 
       - name: Install frontend dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build Tauri app (macOS x86_64)
         uses: tauri-apps/tauri-action@v0
@@ -167,6 +229,26 @@ jobs:
           prerelease: false
           args: --target x86_64-apple-darwin -c src-tauri/tauri.macos.conf.json
           includeUpdaterJson: true
+
+      - name: Verify build artifacts
+        run: |
+          echo "=== Checking build artifacts ==="
+          APP_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/Conflux.app"
+          if [ -d "$APP_PATH" ]; then
+            APP_SIZE=$(du -sm "$APP_PATH" | cut -f1)
+            echo "Conflux.app size: ${APP_SIZE}MB"
+            if [ "$APP_SIZE" -lt 50 ]; then
+              echo "⚠️ WARNING: .app is smaller than expected (${APP_SIZE}MB < 50MB)"
+              echo "Checking resources..."
+              ls -lh "$APP_PATH/Contents/Resources/resources/" || echo "No resources found!"
+            else
+              echo "✅ .app size verified: ${APP_SIZE}MB"
+            fi
+          fi
+          
+          echo ""
+          echo "=== DMG files ==="
+          find src-tauri/target -name "*.dmg" -exec ls -lh {} \; 2>/dev/null || echo "No DMG found"
 
   # Build for Windows x86_64
   build-windows-x86:
@@ -197,6 +279,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: windows-rust
 
       - name: Cache WIX and NSIS toolsets
         uses: actions/cache@v4
@@ -209,6 +292,14 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\pnpm\store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
       - name: Fetch MiHomo binaries
         shell: bash
         env:
@@ -220,14 +311,26 @@ jobs:
       - name: Verify MiHomo binaries
         shell: bash
         run: |
-          ls -la src-tauri/resources/
+          echo "Checking MiHomo binaries..."
+          ls -lh src-tauri/resources/
+          
+          # Check if file exists
           if [ ! -f "src-tauri/resources/mihomo-windows-amd64.exe" ]; then
             echo "ERROR: mihomo-windows-amd64.exe not found!"
             exit 1
           fi
+          
+          # Check file size (should be > 10MB)
+          FILE_SIZE=$(stat -c%s "src-tauri/resources/mihomo-windows-amd64.exe" 2>/dev/null || wc -c < "src-tauri/resources/mihomo-windows-amd64.exe")
+          MIN_SIZE=10000000  # 10MB
+          if [ "$FILE_SIZE" -lt "$MIN_SIZE" ]; then
+            echo "ERROR: mihomo-windows-amd64.exe is too small ($FILE_SIZE bytes). Expected > 10MB"
+            exit 1
+          fi
+          echo "✅ mihomo-windows-amd64.exe verified: $FILE_SIZE bytes"
 
       - name: Install frontend dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build Tauri app (Windows x86_64)
         uses: tauri-apps/tauri-action@v0
@@ -246,6 +349,16 @@ jobs:
           prerelease: false
           args: --target x86_64-pc-windows-msvc -c src-tauri/tauri.windows.conf.json
           includeUpdaterJson: true
+
+      - name: Verify build artifacts
+        shell: bash
+        run: |
+          echo "=== Checking build artifacts ==="
+          echo "MSI files:"
+          find src-tauri/target -name "*.msi" -exec ls -lh {} \; 2>/dev/null || echo "No MSI found"
+          echo ""
+          echo "NSIS installers:"
+          find src-tauri/target -name "*-setup.exe" -exec ls -lh {} \; 2>/dev/null || echo "No NSIS installer found"
 
   # Optional: Create a combined release after all builds complete
   finalize-release:
