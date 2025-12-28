@@ -1,13 +1,14 @@
-import { useState, useEffect, useMemo } from 'react';
-import { 
-  Plus, 
-  Globe, 
-  FileText, 
-  RefreshCw, 
-  Trash2, 
+import { useState, useEffect } from 'react';
+import {
+  Plus,
+  Globe,
+  FileText,
+  RefreshCw,
+  Trash2,
   Clock,
   Loader2,
-  Pencil
+  Pencil,
+  File
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,11 +28,9 @@ import {
 } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Subscription } from '@/types/config';
+import type { ProfileMetadata, ProfileType } from '@/types/config';
 import { cn } from '@/utils/cn';
 import { open } from '@tauri-apps/plugin-dialog';
-import { invoke } from '@tauri-apps/api/core';
-import { useAppStore } from '@/stores/appStore';
 import { useProxyStore } from '@/stores/proxyStore';
 import { ipc } from '@/services/ipc';
 import { useToast } from '@/hooks/useToast';
@@ -40,17 +39,17 @@ import { useToast } from '@/hooks/useToast';
 // UI Components
 // -----------------------------------------------------------------------------
 
-function BentoCard({ 
-  className, 
-  children, 
-  title, 
+function BentoCard({
+  className,
+  children,
+  title,
   icon: Icon,
   iconColor = "text-gray-500",
   action,
   onClick
-}: { 
-  className?: string; 
-  children: React.ReactNode; 
+}: {
+  className?: string;
+  children: React.ReactNode;
   title?: string;
   icon?: React.ElementType;
   iconColor?: string;
@@ -58,7 +57,7 @@ function BentoCard({
   onClick?: () => void;
 }) {
   return (
-    <div 
+    <div
       className={cn(
         "bg-white dark:bg-zinc-900 rounded-[20px] p-5 shadow-xs border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden transition-all",
         onClick && "cursor-pointer hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800",
@@ -84,34 +83,77 @@ function BentoCard({
   );
 }
 
+// 获取 Profile 类型的显示文本和图标
+function getProfileTypeInfo(type: ProfileType) {
+  switch (type) {
+    case 'remote':
+      return { label: '远程订阅', icon: Globe, color: 'text-blue-500' };
+    case 'local':
+      return { label: '本地配置', icon: FileText, color: 'text-orange-500' };
+    case 'blank':
+      return { label: '空白配置', icon: File, color: 'text-green-500' };
+  }
+}
+
+// 格式化日期
+function formatDate(isoString: string): string {
+  try {
+    const date = new Date(isoString);
+    return date.toLocaleString('zh-CN', {
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return isoString;
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Main Component
 // -----------------------------------------------------------------------------
 
 export default function SubscriptionPage() {
   const { toast } = useToast();
-  const { settings, addSubscription, removeSubscription, updateSubscription } = useAppStore();
   const { fetchGroups, status } = useProxyStore();
-  const subscriptions = useMemo(() => settings.subscriptions || [], [settings.subscriptions]);
+
+  // Profile 列表
+  const [profiles, setProfiles] = useState<ProfileMetadata[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 对话框状态
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('remote');
+  const [activeTab, setActiveTab] = useState<ProfileType>('remote');
   const [applyingId, setApplyingId] = useState<string | null>(null);
-  const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
-  
-  // Form State
+  const [editingProfile, setEditingProfile] = useState<ProfileMetadata | null>(null);
+
+  // 表单状态
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [filePath, setFilePath] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  // 自动选择第一个订阅
+  // 加载 Profile 列表
+  const loadProfiles = async () => {
+    try {
+      const list = await ipc.listProfiles();
+      setProfiles(list);
+    } catch (error) {
+      console.error('Failed to load profiles:', error);
+      toast({
+        title: '加载失败',
+        description: String(error),
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (subscriptions.length === 1 && !subscriptions[0].selected) {
-       updateSubscription(subscriptions[0].id, { selected: true });
-    }
-    else if (subscriptions.length > 0 && !subscriptions.some(s => s.selected)) {
-       updateSubscription(subscriptions[0].id, { selected: true });
-    }
-  }, [subscriptions.length, subscriptions, updateSubscription]);
+    loadProfiles();
+  }, []);
 
   const handleBrowse = async () => {
     try {
@@ -123,7 +165,7 @@ export default function SubscriptionPage() {
           extensions: ['yaml', 'yml', 'json', 'conf']
         }]
       });
-      
+
       if (selected) {
         setFilePath(selected as string);
       }
@@ -133,91 +175,75 @@ export default function SubscriptionPage() {
   };
 
   const handleSave = async () => {
-    let count = 0;
-    
-    if (activeTab === 'local' && filePath) {
-      try {
-        count = await invoke('parse_config_file', { path: filePath });
-      } catch (err) {
-        console.error('Failed to parse config file:', err);
+    setSaving(true);
+
+    try {
+      if (editingProfile) {
+        // 编辑模式：只支持重命名
+        const newName = name || editingProfile.name;
+        await ipc.renameProfile(editingProfile.id, newName);
+
+        toast({
+          title: '配置已更新',
+          description: `配置 "${newName}" 已保存`,
+        });
+      } else {
+        // 新增模式
+        let profile: ProfileMetadata;
+        const profileName = name || (activeTab === 'remote' ? '新远程订阅' : activeTab === 'local' ? '新本地配置' : '新空白配置');
+
+        if (activeTab === 'remote') {
+          profile = await ipc.createRemoteProfile(profileName, url);
+        } else if (activeTab === 'local') {
+          profile = await ipc.createLocalProfile(profileName, filePath);
+        } else {
+          profile = await ipc.createBlankProfile(profileName);
+        }
+
+        toast({
+          title: '配置已创建',
+          description: `配置 "${profile.name}" 已添加，包含 ${profile.proxyCount} 个节点`,
+        });
       }
-    }
 
-    if (editingSubscription) {
-      // 编辑模式
-      const updates: Partial<Subscription> = {
-        name: name || (activeTab === 'remote' ? '新远程订阅' : '新本地订阅'),
-        type: activeTab as 'remote' | 'local',
-        url: activeTab === 'remote' ? url : filePath,
-      };
-      
-      if (updates.url !== editingSubscription.url) {
-        updates.count = activeTab === 'local' ? count : 0;
-      }
-
-      await updateSubscription(editingSubscription.id, updates);
-      
+      await loadProfiles();
+      setIsDialogOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Failed to save profile:', error);
       toast({
-        title: '订阅已更新',
-        description: `订阅 "${updates.name}" 已保存`,
+        title: '保存失败',
+        description: String(error),
+        variant: 'destructive',
       });
-    } else {
-      // 新增模式
-      const newSub: Subscription = {
-        id: crypto.randomUUID(),
-        name: name || (activeTab === 'remote' ? '新远程订阅' : '新本地订阅'),
-        type: activeTab as 'remote' | 'local',
-        url: activeTab === 'remote' ? url : filePath,
-        updatedAt: new Date().toLocaleString(),
-        count: count,
-        selected: subscriptions.length === 0
-      };
-
-      await addSubscription(newSub);
-      
-      toast({
-        title: '订阅已添加',
-        description: `订阅 "${newSub.name}" 已创建`,
-      });
+    } finally {
+      setSaving(false);
     }
-
-    setIsDialogOpen(false);
-    resetForm();
   };
 
-  const handleSelect = async (id: string) => {
-    const sub = subscriptions.find(s => s.id === id);
-    if (!sub) return;
-    if (sub.selected) return;
-    
+  const handleActivate = async (id: string) => {
+    const profile = profiles.find(p => p.id === id);
+    if (!profile) return;
+    if (profile.active) return;
+
     setApplyingId(id);
-    
+
     try {
-      const result = await ipc.applySubscription(sub.url, sub.type);
-      
-      const currentSelected = subscriptions.find(s => s.selected);
-      if (currentSelected && currentSelected.id !== id) {
-        await updateSubscription(currentSelected.id, { selected: false });
-      }
-      
-      await updateSubscription(id, { 
-        selected: true,
-        count: result.proxies_count,
-        updatedAt: new Date().toLocaleString(),
-      });
+      await ipc.activateProfile(id);
+      await loadProfiles();
 
       if (status.running) {
         await fetchGroups();
       }
-      
+
       toast({
-        title: '订阅已应用',
-        description: `已加载 ${result.proxies_count} 个节点`,
+        title: '配置已激活',
+        description: `已加载 ${profile.proxyCount} 个节点`,
       });
     } catch (error) {
-      console.error('Failed to apply subscription:', error);
+      console.error('Failed to activate profile:', error);
       toast({
-        title: '应用订阅失败',
+        title: '激活失败',
         description: String(error),
         variant: 'destructive',
       });
@@ -231,50 +257,68 @@ export default function SubscriptionPage() {
     setUrl('');
     setFilePath('');
     setActiveTab('remote');
-    setEditingSubscription(null);
+    setEditingProfile(null);
   };
 
-  const handleEdit = (sub: Subscription) => {
-    setEditingSubscription(sub);
-    setName(sub.name);
-    setActiveTab(sub.type);
-    if (sub.type === 'remote') {
-      setUrl(sub.url);
+  const handleEdit = (profile: ProfileMetadata) => {
+    setEditingProfile(profile);
+    setName(profile.name);
+    setActiveTab(profile.profileType);
+    if (profile.profileType === 'remote') {
+      setUrl(profile.url || '');
       setFilePath('');
-    } else {
-      setFilePath(sub.url);
+    } else if (profile.profileType === 'local') {
+      setFilePath(profile.originalPath || '');
       setUrl('');
     }
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    removeSubscription(id);
-  };
-
-  const handleRefresh = async (sub: Subscription) => {
-    setApplyingId(sub.id);
-    
+  const handleDelete = async (id: string) => {
     try {
-      const result = await ipc.applySubscription(sub.url, sub.type);
-      
-      await updateSubscription(sub.id, { 
-        count: result.proxies_count,
-        updatedAt: new Date().toLocaleString(),
-      });
-
-      if (status.running && sub.selected) {
-        await fetchGroups();
-      }
-      
+      await ipc.deleteProfile(id);
+      await loadProfiles();
       toast({
-        title: '订阅已更新',
-        description: `已加载 ${result.proxies_count} 个节点`,
+        title: '配置已删除',
       });
     } catch (error) {
-      console.error('Failed to refresh subscription:', error);
+      console.error('Failed to delete profile:', error);
       toast({
-        title: '更新订阅失败',
+        title: '删除失败',
+        description: String(error),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleRefresh = async (profile: ProfileMetadata) => {
+    if (profile.profileType !== 'remote') {
+      toast({
+        title: '无法刷新',
+        description: '只有远程订阅可以刷新',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setApplyingId(profile.id);
+
+    try {
+      const updated = await ipc.refreshProfile(profile.id);
+      await loadProfiles();
+
+      if (status.running && profile.active) {
+        await fetchGroups();
+      }
+
+      toast({
+        title: '订阅已更新',
+        description: `已加载 ${updated.proxyCount} 个节点`,
+      });
+    } catch (error) {
+      console.error('Failed to refresh profile:', error);
+      toast({
+        title: '更新失败',
         description: String(error),
         variant: 'destructive',
       });
@@ -283,93 +327,142 @@ export default function SubscriptionPage() {
     }
   };
 
+  // 判断保存按钮是否可用
+  const canSave = () => {
+    if (editingProfile) return !!name;
+    if (activeTab === 'remote') return !!url;
+    if (activeTab === 'local') return !!filePath;
+    return true; // blank
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">订阅配置</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">配置管理</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            管理代理订阅链接。应用订阅后,可在"数据源"页面查看运行时状态
+            管理代理配置。支持远程订阅、本地文件导入和手动创建
           </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={resetForm} className="rounded-full bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm">
               <Plus className="w-4 h-4" />
-              添加订阅
+              添加配置
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px] rounded-[24px]">
             <DialogHeader>
-              <DialogTitle>{editingSubscription ? '编辑订阅' : '添加新订阅'}</DialogTitle>
+              <DialogTitle>{editingProfile ? '编辑配置' : '添加新配置'}</DialogTitle>
               <DialogDescription>
-                {editingSubscription 
-                  ? '修改订阅的名称和链接地址。'
-                  : '支持 HTTP/HTTPS 远程链接或本地文件路径。'}
+                {editingProfile
+                  ? '修改配置的名称。'
+                  : '选择配置来源：远程订阅、本地文件或空白配置。'}
               </DialogDescription>
             </DialogHeader>
-            
-            <Tabs defaultValue="remote" value={activeTab} onValueChange={setActiveTab} className="w-full mt-2">
-              <TabsList className="grid w-full grid-cols-2 mb-4 bg-gray-100 dark:bg-zinc-800 rounded-full p-1 h-10">
-                <TabsTrigger value="remote" className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm">
-                  <Globe className="w-4 h-4" />
-                  远程链接
-                </TabsTrigger>
-                <TabsTrigger value="local" className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm">
-                  <FileText className="w-4 h-4" />
-                  本地文件
-                </TabsTrigger>
-              </TabsList>
-              
+
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => setActiveTab(v as ProfileType)}
+              className="w-full mt-2"
+            >
+              {!editingProfile && (
+                <TabsList className="grid w-full grid-cols-3 mb-4 bg-gray-100 dark:bg-zinc-800 rounded-full p-1 h-10">
+                  <TabsTrigger value="remote" className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm text-xs">
+                    <Globe className="w-3.5 h-3.5" />
+                    远程订阅
+                  </TabsTrigger>
+                  <TabsTrigger value="local" className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm text-xs">
+                    <FileText className="w-3.5 h-3.5" />
+                    本地文件
+                  </TabsTrigger>
+                  <TabsTrigger value="blank" className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm text-xs">
+                    <File className="w-3.5 h-3.5" />
+                    空白配置
+                  </TabsTrigger>
+                </TabsList>
+              )}
+
               <div className="space-y-4 py-2">
                 <div className="space-y-2">
-                  <Label htmlFor="name">名称 (可选)</Label>
-                  <Input 
-                    id="name" 
-                    placeholder="例如：公司节点" 
+                  <Label htmlFor="name">名称 {!editingProfile && '(可选)'}</Label>
+                  <Input
+                    id="name"
+                    placeholder="例如：公司节点"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="rounded-xl"
                   />
                 </div>
 
-                <TabsContent value="remote" className="space-y-4 mt-0">
-                  <div className="space-y-2">
-                    <Label htmlFor="url">订阅链接</Label>
-                    <Input 
-                      id="url" 
-                      placeholder="https://example.com/subscribe/..." 
-                      value={url}
-                      onChange={(e) => setUrl(e.target.value)}
-                      className="rounded-xl font-mono text-sm"
-                    />
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="local" className="space-y-4 mt-0">
-                  <div className="space-y-2">
-                    <Label htmlFor="filepath">文件路径</Label>
-                    <div className="flex gap-2">
-                      <Input 
-                        id="filepath" 
-                        placeholder="/path/to/config.yaml" 
-                        value={filePath}
-                        onChange={(e) => setFilePath(e.target.value)}
-                        className="rounded-xl font-mono text-sm"
-                      />
-                      <Button variant="outline" className="shrink-0 rounded-xl" onClick={handleBrowse}>
-                        浏览...
-                      </Button>
-                    </div>
-                  </div>
-                </TabsContent>
+                {!editingProfile && (
+                  <>
+                    <TabsContent value="remote" className="space-y-4 mt-0">
+                      <div className="space-y-2">
+                        <Label htmlFor="url">订阅链接</Label>
+                        <Input
+                          id="url"
+                          placeholder="https://example.com/subscribe/..."
+                          value={url}
+                          onChange={(e) => setUrl(e.target.value)}
+                          className="rounded-xl font-mono text-sm"
+                        />
+                        <p className="text-xs text-gray-500">
+                          支持 MiHomo/Clash 格式的订阅链接
+                        </p>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="local" className="space-y-4 mt-0">
+                      <div className="space-y-2">
+                        <Label htmlFor="filepath">文件路径</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="filepath"
+                            placeholder="/path/to/config.yaml"
+                            value={filePath}
+                            onChange={(e) => setFilePath(e.target.value)}
+                            className="rounded-xl font-mono text-sm"
+                          />
+                          <Button variant="outline" className="shrink-0 rounded-xl" onClick={handleBrowse}>
+                            浏览...
+                          </Button>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          导入后配置内容将独立保存，不会同步源文件的修改
+                        </p>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="blank" className="space-y-4 mt-0">
+                      <div className="p-4 bg-gray-50 dark:bg-zinc-800 rounded-xl">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          创建一个空白配置，您可以之后在代理页面手动添加节点，或在规则页面添加规则。
+                        </p>
+                      </div>
+                    </TabsContent>
+                  </>
+                )}
               </div>
             </Tabs>
 
             <DialogFooter>
               <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="rounded-xl">取消</Button>
-              <Button onClick={handleSave} disabled={activeTab === 'remote' ? !url : !filePath} className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white">
-                {editingSubscription ? '保存更改' : '保存订阅'}
+              <Button
+                onClick={handleSave}
+                disabled={!canSave() || saving}
+                className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {editingProfile ? '保存更改' : '创建配置'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -377,50 +470,55 @@ export default function SubscriptionPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {subscriptions.map((sub) => {
-          const isApplying = applyingId === sub.id;
+        {profiles.map((profile) => {
+          const isApplying = applyingId === profile.id;
+          const typeInfo = getProfileTypeInfo(profile.profileType);
+
           return (
-          <BentoCard 
-            key={sub.id} 
+          <BentoCard
+            key={profile.id}
             className={cn(
               "group relative",
-              sub.selected 
-                ? "border-blue-500 dark:border-blue-500 bg-blue-50/20 dark:bg-blue-900/10" 
+              profile.active
+                ? "border-blue-500 dark:border-blue-500 bg-blue-50/20 dark:bg-blue-900/10"
                 : "border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900",
               isApplying && "opacity-70 pointer-events-none"
             )}
-            onClick={() => handleSelect(sub.id)}
-            title={sub.type === 'remote' ? '远程订阅' : '本地配置'}
-            icon={sub.type === 'remote' ? Globe : FileText}
-            iconColor={sub.type === 'remote' ? "text-blue-500" : "text-orange-500"}
+            onClick={() => handleActivate(profile.id)}
+            title={typeInfo.label}
+            icon={typeInfo.icon}
+            iconColor={typeInfo.color}
             action={
               <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                <Button 
-                  size="icon" 
-                  variant="ghost" 
-                  className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg" 
-                  title="更新订阅"
-                  onClick={() => handleRefresh(sub)}
-                  disabled={isApplying}
-                >
-                  <RefreshCw className={cn("w-3.5 h-3.5", isApplying && "animate-spin")} />
-                </Button>
-                <Button 
-                  size="icon" 
-                  variant="ghost" 
-                  className="h-7 w-7 text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg" 
-                  title="编辑订阅"
-                  onClick={() => handleEdit(sub)}
+                {profile.profileType === 'remote' && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                    title="更新订阅"
+                    onClick={() => handleRefresh(profile)}
+                    disabled={isApplying}
+                  >
+                    <RefreshCw className={cn("w-3.5 h-3.5", isApplying && "animate-spin")} />
+                  </Button>
+                )}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg"
+                  title="编辑"
+                  onClick={() => handleEdit(profile)}
                   disabled={isApplying}
                 >
                   <Pencil className="w-3.5 h-3.5" />
                 </Button>
-                <Button 
-                  size="icon" 
-                  variant="ghost" 
-                  className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg" 
-                  title="删除" 
-                  onClick={() => handleDelete(sub.id)}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                  title="删除"
+                  onClick={() => handleDelete(profile.id)}
+                  disabled={isApplying}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
@@ -435,8 +533,8 @@ export default function SubscriptionPage() {
                  </div>
                </div>
              )}
-             
-             {sub.selected && !isApplying && (
+
+             {profile.active && !isApplying && (
                <div className="absolute top-4 right-4 z-0">
                  <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
                </div>
@@ -444,25 +542,30 @@ export default function SubscriptionPage() {
 
              <div className="flex flex-col h-full justify-between gap-4">
                 <div>
-                   <h3 className="font-bold text-lg text-gray-900 dark:text-white line-clamp-1 mb-1">{sub.name}</h3>
+                   <h3 className="font-bold text-lg text-gray-900 dark:text-white line-clamp-1 mb-1">{profile.name}</h3>
                    <div className="text-xs text-gray-500 dark:text-gray-400 font-mono break-all line-clamp-2 leading-relaxed opacity-70">
-                     {sub.url}
+                     {profile.profileType === 'remote' && profile.url}
+                     {profile.profileType === 'local' && profile.originalPath}
+                     {profile.profileType === 'blank' && '手动创建的空白配置'}
                    </div>
                 </div>
 
                 <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-zinc-800/50">
                    <div className="flex items-center gap-1.5 text-xs text-gray-400">
                       <Clock className="w-3.5 h-3.5" />
-                      <span>{sub.updatedAt}</span>
+                      <span>{formatDate(profile.updatedAt)}</span>
                    </div>
-                   <div className="flex items-center gap-1.5">
+                   <div className="flex items-center gap-2">
                       <span className={cn(
-                        "text-xs font-bold px-2 py-0.5 rounded-md",
-                        sub.selected 
-                          ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" 
+                        "text-xs font-medium px-2 py-0.5 rounded-md",
+                        profile.active
+                          ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
                           : "bg-gray-100 text-gray-500 dark:bg-zinc-800 dark:text-gray-400"
                       )}>
-                        {sub.count || 0} 节点
+                        {profile.proxyCount} 节点
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {profile.ruleCount} 规则
                       </span>
                    </div>
                 </div>
@@ -470,12 +573,12 @@ export default function SubscriptionPage() {
           </BentoCard>
           );
         })}
-        
-        {subscriptions.length === 0 && (
+
+        {profiles.length === 0 && (
           <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px] bg-gray-50/50 dark:bg-zinc-900/50">
             <Globe className="w-12 h-12 mb-4 opacity-30" />
-            <p className="font-medium text-gray-600 dark:text-gray-300">暂无订阅</p>
-            <p className="text-sm mt-1 mb-6">点击右上角添加您的第一个订阅</p>
+            <p className="font-medium text-gray-600 dark:text-gray-300">暂无配置</p>
+            <p className="text-sm mt-1 mb-6">点击右上角添加您的第一个配置</p>
           </div>
         )}
       </div>

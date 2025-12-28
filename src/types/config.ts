@@ -148,17 +148,85 @@ export function buildRule(type: RuleType, payload: string, policy: string): stri
   return `${type},${payload},${policy}`;
 }
 
+// ==================== Profile 系统 ====================
+
 /**
- * 订阅配置
+ * Profile 类型
  */
-export interface Subscription {
+export type ProfileType = 'remote' | 'local' | 'blank';
+
+/**
+ * Profile 元数据
+ */
+export interface ProfileMetadata {
   id: string;
   name: string;
-  type: 'remote' | 'local';
-  url: string; // URL or File Path
+  profileType: ProfileType;
+  /** 远程订阅 URL（仅 remote 类型） */
+  url?: string;
+  /** 原始文件路径（仅 local 类型，用于记录来源） */
+  originalPath?: string;
+  createdAt: string;
   updatedAt: string;
-  count?: number; // Number of proxies
-  selected?: boolean;
+  proxyCount: number;
+  groupCount: number;
+  ruleCount: number;
+  active: boolean;
+  /** 自动更新（仅 remote 类型） */
+  autoUpdate?: boolean;
+  /** 更新间隔（小时，仅 remote 类型） */
+  updateInterval?: number;
+}
+
+/**
+ * 健康检查配置
+ */
+export interface HealthCheck {
+  enable: boolean;
+  url?: string;
+  interval?: number;
+}
+
+/**
+ * Proxy Provider 配置
+ */
+export interface ProxyProvider {
+  type: string;
+  url?: string;
+  path?: string;
+  interval?: number;
+  'health-check'?: HealthCheck;
+}
+
+/**
+ * Rule Provider 配置
+ */
+export interface RuleProvider {
+  type: string;
+  behavior: string;
+  format?: string;
+  url?: string;
+  path?: string;
+  interval?: number;
+}
+
+/**
+ * Profile 配置内容
+ */
+export interface ProfileConfig {
+  proxies: ProxyConfig[];
+  'proxy-groups': ProxyGroupConfig[];
+  'proxy-providers': Record<string, ProxyProvider>;
+  'rule-providers': Record<string, RuleProvider>;
+  rules: string[];
+}
+
+/**
+ * 完整的 Profile（元数据 + 配置）
+ */
+export interface Profile {
+  metadata: ProfileMetadata;
+  config: ProfileConfig;
 }
 
 /**
@@ -169,7 +237,6 @@ export interface AppSettings {
   autoStart: boolean;
   systemProxy: boolean;
   closeToTray: boolean;
-  subscriptions: Subscription[];
   ruleDatabases: RuleDatabaseItem[];
 }
 
@@ -281,7 +348,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   autoStart: false,
   systemProxy: false,
   closeToTray: true,
-  subscriptions: [],
   ruleDatabases: DEFAULT_RULE_DATABASES,
 };
 

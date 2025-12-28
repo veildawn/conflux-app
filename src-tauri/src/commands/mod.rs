@@ -1,5 +1,6 @@
 pub mod config;
 pub mod logs;
+pub mod profile;
 pub mod proxy;
 pub mod substore;
 pub mod system;

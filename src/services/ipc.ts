@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { ProxyStatus, ProxyGroup, TrafficData, ConnectionsResponse, RuleItem, VersionInfo, ProxyServerInfo } from '@/types/proxy';
-import type { MihomoConfig, AppSettings, DownloadResourceResult, ResourceUpdateCheckRequest, ResourceUpdateCheckResult } from '@/types/config';
+import type { MihomoConfig, AppSettings, DownloadResourceResult, ResourceUpdateCheckRequest, ResourceUpdateCheckResult, ProfileMetadata, ProfileConfig, ProxyConfig, ProxyProvider, RuleProvider } from '@/types/config';
 
 /**
  * IPC 服务 - 与 Tauri 后端通信
@@ -423,6 +423,182 @@ export const ipc = {
    */
   async getSubStoreStatus(): Promise<{ running: boolean; api_url: string; api_port: number }> {
     return invoke('get_substore_status');
+  },
+
+  // ============= Profile 命令 =============
+
+  /**
+   * 获取所有 Profile 列表
+   */
+  async listProfiles(): Promise<ProfileMetadata[]> {
+    return invoke('list_profiles');
+  },
+
+  /**
+   * 获取单个 Profile 详情
+   */
+  async getProfile(id: string): Promise<[ProfileMetadata, ProfileConfig]> {
+    return invoke('get_profile', { id });
+  },
+
+  /**
+   * 获取当前活跃的 Profile ID
+   */
+  async getActiveProfileId(): Promise<string | null> {
+    return invoke('get_active_profile_id');
+  },
+
+  /**
+   * 创建远程订阅 Profile
+   */
+  async createRemoteProfile(name: string, url: string): Promise<ProfileMetadata> {
+    return invoke('create_remote_profile', { name, url });
+  },
+
+  /**
+   * 创建本地文件 Profile
+   */
+  async createLocalProfile(name: string, filePath: string): Promise<ProfileMetadata> {
+    return invoke('create_local_profile', { name, filePath });
+  },
+
+  /**
+   * 创建空白 Profile
+   */
+  async createBlankProfile(name: string): Promise<ProfileMetadata> {
+    return invoke('create_blank_profile', { name });
+  },
+
+  /**
+   * 删除 Profile
+   */
+  async deleteProfile(id: string): Promise<void> {
+    return invoke('delete_profile', { id });
+  },
+
+  /**
+   * 重命名 Profile
+   */
+  async renameProfile(id: string, newName: string): Promise<ProfileMetadata> {
+    return invoke('rename_profile', { id, newName });
+  },
+
+  /**
+   * 激活 Profile
+   */
+  async activateProfile(id: string): Promise<void> {
+    return invoke('activate_profile', { id });
+  },
+
+  /**
+   * 刷新远程 Profile
+   */
+  async refreshProfile(id: string): Promise<ProfileMetadata> {
+    return invoke('refresh_profile', { id });
+  },
+
+  /**
+   * 解析配置文件（预览，不保存）
+   */
+  async parseConfigFile(path: string): Promise<ProfileConfig> {
+    return invoke('parse_config_file', { path });
+  },
+
+  /**
+   * 预览远程配置（不保存）
+   */
+  async previewRemoteConfig(url: string): Promise<ProfileConfig> {
+    return invoke('preview_remote_config', { url });
+  },
+
+  // ============= Profile 代理 CRUD =============
+
+  /**
+   * 添加代理节点到 Profile
+   */
+  async addProxy(profileId: string, proxy: ProxyConfig): Promise<void> {
+    return invoke('add_proxy', { profileId, proxy });
+  },
+
+  /**
+   * 更新代理节点
+   */
+  async updateProxy(profileId: string, proxyName: string, proxy: ProxyConfig): Promise<void> {
+    return invoke('update_proxy', { profileId, proxyName, proxy });
+  },
+
+  /**
+   * 删除代理节点
+   */
+  async deleteProxy(profileId: string, proxyName: string): Promise<void> {
+    return invoke('delete_proxy', { profileId, proxyName });
+  },
+
+  // ============= Profile 规则命令 =============
+
+  /**
+   * 添加规则到 Profile
+   */
+  async addRuleToProfile(profileId: string, rule: string, position?: number): Promise<void> {
+    return invoke('add_rule_to_profile', { profileId, rule, position });
+  },
+
+  /**
+   * 删除 Profile 中的规则
+   */
+  async deleteRuleFromProfile(profileId: string, index: number): Promise<void> {
+    return invoke('delete_rule_from_profile', { profileId, index });
+  },
+
+  /**
+   * 添加 rule-provider 到 Profile
+   */
+  async addRuleProviderToProfile(profileId: string, name: string, provider: RuleProvider): Promise<void> {
+    return invoke('add_rule_provider_to_profile', { profileId, name, provider });
+  },
+
+  /**
+   * 删除 Profile 中的 rule-provider
+   */
+  async deleteRuleProviderFromProfile(profileId: string, name: string): Promise<void> {
+    return invoke('delete_rule_provider_from_profile', { profileId, name });
+  },
+
+  /**
+   * 更新 Profile 中的 rule-provider
+   */
+  async updateRuleProviderInProfile(profileId: string, name: string, provider: RuleProvider): Promise<void> {
+    return invoke('update_rule_provider_in_profile', { profileId, name, provider });
+  },
+
+  /**
+   * 更新 Profile 配置
+   */
+  async updateProfileConfig(profileId: string, config: ProfileConfig): Promise<ProfileMetadata> {
+    return invoke('update_profile_config', { profileId, config });
+  },
+
+  // ============= Proxy Provider CRUD =============
+
+  /**
+   * 添加 proxy-provider 到 Profile
+   */
+  async addProxyProviderToProfile(profileId: string, name: string, provider: ProxyProvider): Promise<void> {
+    return invoke('add_proxy_provider_to_profile', { profileId, name, provider });
+  },
+
+  /**
+   * 更新 Profile 中的 proxy-provider
+   */
+  async updateProxyProviderInProfile(profileId: string, name: string, provider: ProxyProvider): Promise<void> {
+    return invoke('update_proxy_provider_in_profile', { profileId, name, provider });
+  },
+
+  /**
+   * 删除 Profile 中的 proxy-provider
+   */
+  async deleteProxyProviderFromProfile(profileId: string, name: string): Promise<void> {
+    return invoke('delete_proxy_provider_from_profile', { profileId, name });
   },
 };
 

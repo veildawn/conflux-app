@@ -7,6 +7,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
 
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+
 use crate::utils::{get_app_data_dir, get_mihomo_binary_path, get_mihomo_config_path};
 
 /// MiHomo 进程管理器
@@ -182,20 +185,30 @@ impl MihomoManager {
         // 在 GUI 应用中，不能使用 Stdio::inherit()，因为 GUI 应用没有标准的
         // stdout/stderr 可以继承，这会导致进程卡死（UE 状态）
         // 使用 Stdio::null() 让进程独立运行
-        let mut child = Command::new(&mihomo_path)
-            .current_dir(config_dir)
+        let mut cmd = Command::new(&mihomo_path);
+        cmd.current_dir(config_dir)
             .arg("-d")
             .arg(config_dir)
             .arg("-f")
             .arg(&self.config_path)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| {
-                log::error!("Failed to spawn mihomo process: {}", e);
-                e
-            })?;
+            .stderr(Stdio::null());
+
+        // macOS/Unix: 在新的进程组中启动，避免终端弹窗
+        #[cfg(unix)]
+        unsafe {
+            cmd.pre_exec(|| {
+                // 创建新的进程组，与父进程分离
+                libc::setsid();
+                Ok(())
+            });
+        }
+
+        let mut child = cmd.spawn().map_err(|e| {
+            log::error!("Failed to spawn mihomo process: {}", e);
+            e
+        })?;
 
         let pid = child.id();
         log::info!("MiHomo process spawned with PID: {}", pid);
@@ -326,21 +339,26 @@ impl MihomoManager {
 
         // 尝试获取锁并停止进程
         if let Ok(mut guard) = self.process.try_lock() {
-            if let Some(mut child) = guard.take() {
+            if let Some(child) = guard.take() {
                 let pid = child.id();
                 log::info!("Stopping MiHomo process (PID: {})", pid);
 
                 #[cfg(unix)]
                 {
+                    // 直接发送 SIGKILL，不等待
                     unsafe {
-                        libc::kill(pid as i32, libc::SIGTERM);
+                        libc::kill(pid as i32, libc::SIGKILL);
                     }
-                    std::thread::sleep(std::time::Duration::from_millis(300));
                 }
 
-                let _ = child.kill();
-                let _ = child.wait();
-                log::info!("MiHomo process stopped");
+                #[cfg(windows)]
+                {
+                    let _ = child.kill();
+                }
+
+                // 不调用 wait()，避免阻塞
+                // 进程会被系统回收
+                log::info!("MiHomo process killed (PID: {})", pid);
             }
         } else {
             // 如果拿不到锁，通过 PID 文件清理
