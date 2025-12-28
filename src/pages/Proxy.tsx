@@ -503,13 +503,6 @@ export default function Proxy() {
           </div>
         )}
 
-         {/* 代理服务器列表 */}
-        {proxyServers.length > 0 && (
-          <div className="space-y-3">
-            <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 px-1 uppercase tracking-wider">所有策略</h2>
-            {renderProxyServersCard()}
-          </div>
-        )}
       </div>
     );
   };

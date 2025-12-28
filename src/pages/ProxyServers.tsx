@@ -4,6 +4,7 @@ import { AlertCircle, Loader2, Pencil, Plus, RefreshCw, Trash2, Wifi, Zap } from
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -328,6 +329,7 @@ function ProxyServerDialog({
   statusRunning: boolean;
 }) {
   const { toast } = useToast();
+  const [activeSection, setActiveSection] = useState<'link' | 'manual'>('link');
   const [linkInput, setLinkInput] = useState('');
   const [formData, setFormData] = useState<ProxyFormData>({
     name: '',
@@ -363,6 +365,7 @@ function ProxyServerDialog({
         network: editData.network || '',
         sni: editData.sni || '',
       });
+      setActiveSection('manual');
       setLinkInput('');
     } else {
       setFormData({
@@ -380,6 +383,7 @@ function ProxyServerDialog({
         network: '',
         sni: '',
       });
+      setActiveSection('link');
       setLinkInput('');
     }
   }, [editData, open]);
@@ -402,18 +406,19 @@ function ProxyServerDialog({
         name: parsed.name || prev.name,
         type: parsed.type || prev.type,
         server: parsed.server || prev.server,
-        port: parsed.port ? String(parsed.port) : prev.port,
+        port: Number.isFinite(parsed.port) ? String(parsed.port) : prev.port,
         udp: parsed.udp ?? prev.udp,
         tls: parsed.tls ?? prev.tls,
         skipCertVerify: parsed['skip-cert-verify'] ?? prev.skipCertVerify,
         cipher: parsed.cipher || prev.cipher,
         password: parsed.password || prev.password,
         uuid: parsed.uuid || prev.uuid,
-        alterId: parsed.alterId ? String(parsed.alterId) : prev.alterId,
+        alterId: parsed.alterId !== undefined ? String(parsed.alterId) : prev.alterId,
         network: parsed.network || prev.network,
         sni: parsed.sni || prev.sni,
       }));
-      toast({ title: '解析成功', description: '已自动填充链接信息' });
+      setActiveSection('manual');
+      toast({ title: '解析成功', description: '已填充到手动配置' });
     } catch (error) {
       toast({
         title: '解析失败',
@@ -469,158 +474,172 @@ function ProxyServerDialog({
         <DialogHeader>
           <DialogTitle>{editData ? '编辑服务器' : '添加服务器'}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">链接</label>
-            <div className="flex gap-2">
-              <Input
-                value={linkInput}
-                onChange={(e) => setLinkInput(e.target.value)}
-                placeholder="ss:// / vmess:// / vless:// / trojan:// / tuic:// / hy2://"
-                className="font-mono text-xs"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleParseLink}
-                disabled={!linkInput.trim()}
-              >
-                解析
-              </Button>
-            </div>
-            <p className="text-xs text-gray-400">
-              支持 ss/vmess/vless/trojan/tuic/hysteria2 链接，解析后会自动填充表单。
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 space-y-2">
-              <label className="text-sm font-medium">名称</label>
-              <Input
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="my-server"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">类型</label>
-              <Input
-                value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                placeholder="ss / vmess / trojan"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">端口</label>
-              <Input
-                type="number"
-                value={formData.port}
-                onChange={(e) => setFormData({ ...formData, port: e.target.value })}
-                placeholder="443"
-                min={1}
-                max={65535}
-              />
-            </div>
-            <div className="col-span-2 space-y-2">
-              <label className="text-sm font-medium">服务器地址</label>
-              <Input
-                value={formData.server}
-                onChange={(e) => setFormData({ ...formData, server: e.target.value })}
-                placeholder="example.com"
-              />
-            </div>
-          </div>
+        <Tabs value={activeSection} onValueChange={(value) => setActiveSection(value as 'link' | 'manual')} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4 bg-gray-100 dark:bg-zinc-800 rounded-full p-1 h-9">
+            <TabsTrigger value="link" className="rounded-full text-xs">
+              链接解析
+            </TabsTrigger>
+            <TabsTrigger value="manual" className="rounded-full text-xs">
+              手动配置
+            </TabsTrigger>
+          </TabsList>
 
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={formData.udp}
-                onCheckedChange={(checked) => setFormData({ ...formData, udp: checked })}
-                className="data-[state=checked]:bg-blue-500"
-              />
-              <span className="text-sm text-gray-600 dark:text-gray-300">UDP</span>
+          <TabsContent value="link" className="space-y-3 mt-0">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">订阅/分享链接</label>
+              <div className="flex gap-2">
+                <Input
+                  value={linkInput}
+                  onChange={(e) => setLinkInput(e.target.value)}
+                  placeholder="ss:// / vmess:// / vless:// / trojan:// / tuic:// / hy2://"
+                  className="font-mono text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleParseLink}
+                  disabled={!linkInput.trim()}
+                >
+                  解析
+                </Button>
+              </div>
+              <p className="text-xs text-gray-400">
+                解析后会自动切换到手动配置，方便继续补充信息。
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={formData.tls}
-                onCheckedChange={(checked) => setFormData({ ...formData, tls: checked })}
-                className="data-[state=checked]:bg-emerald-500"
-              />
-              <span className="text-sm text-gray-600 dark:text-gray-300">TLS</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={formData.skipCertVerify}
-                onCheckedChange={(checked) => setFormData({ ...formData, skipCertVerify: checked })}
-                className="data-[state=checked]:bg-amber-500"
-              />
-              <span className="text-sm text-gray-600 dark:text-gray-300">跳过证书验证</span>
-            </div>
-          </div>
+          </TabsContent>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Cipher</label>
-              <Input
-                value={formData.cipher}
-                onChange={(e) => setFormData({ ...formData, cipher: e.target.value })}
-                placeholder="aes-128-gcm"
-              />
+          <TabsContent value="manual" className="space-y-4 mt-0">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-2">
+                <label className="text-sm font-medium">名称</label>
+                <Input
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="my-server"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">类型</label>
+                <Input
+                  value={formData.type}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                  placeholder="ss / vmess / trojan"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">端口</label>
+                <Input
+                  type="number"
+                  value={formData.port}
+                  onChange={(e) => setFormData({ ...formData, port: e.target.value })}
+                  placeholder="443"
+                  min={1}
+                  max={65535}
+                />
+              </div>
+              <div className="col-span-2 space-y-2">
+                <label className="text-sm font-medium">服务器地址</label>
+                <Input
+                  value={formData.server}
+                  onChange={(e) => setFormData({ ...formData, server: e.target.value })}
+                  placeholder="example.com"
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Password</label>
-              <Input
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                placeholder="password"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">UUID</label>
-              <Input
-                value={formData.uuid}
-                onChange={(e) => setFormData({ ...formData, uuid: e.target.value })}
-                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Alter ID</label>
-              <Input
-                value={formData.alterId}
-                onChange={(e) => setFormData({ ...formData, alterId: e.target.value })}
-                placeholder="0"
-                type="number"
-                min={0}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Network</label>
-              <Input
-                value={formData.network}
-                onChange={(e) => setFormData({ ...formData, network: e.target.value })}
-                placeholder="ws / grpc"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">SNI</label>
-              <Input
-                value={formData.sni}
-                onChange={(e) => setFormData({ ...formData, sni: e.target.value })}
-                placeholder="sni.example.com"
-              />
-            </div>
-          </div>
 
-          {statusRunning && (
-            <div className="text-xs text-gray-400 dark:text-gray-500">
-              保存时会自动进行一次测速，失败会回滚修改。
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={formData.udp}
+                  onCheckedChange={(checked) => setFormData({ ...formData, udp: checked })}
+                  className="data-[state=checked]:bg-blue-500"
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-300">UDP</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={formData.tls}
+                  onCheckedChange={(checked) => setFormData({ ...formData, tls: checked })}
+                  className="data-[state=checked]:bg-emerald-500"
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-300">TLS</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={formData.skipCertVerify}
+                  onCheckedChange={(checked) => setFormData({ ...formData, skipCertVerify: checked })}
+                  className="data-[state=checked]:bg-amber-500"
+                />
+                <span className="text-sm text-gray-600 dark:text-gray-300">跳过证书验证</span>
+              </div>
             </div>
-          )}
-          {!statusRunning && (
-            <div className="text-xs text-amber-600 dark:text-amber-400">
-              核心未启动，无法进行保存前测速，请先启动核心服务。
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Cipher</label>
+                <Input
+                  value={formData.cipher}
+                  onChange={(e) => setFormData({ ...formData, cipher: e.target.value })}
+                  placeholder="aes-128-gcm"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Password</label>
+                <Input
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder="password"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">UUID</label>
+                <Input
+                  value={formData.uuid}
+                  onChange={(e) => setFormData({ ...formData, uuid: e.target.value })}
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Alter ID</label>
+                <Input
+                  value={formData.alterId}
+                  onChange={(e) => setFormData({ ...formData, alterId: e.target.value })}
+                  placeholder="0"
+                  type="number"
+                  min={0}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Network</label>
+                <Input
+                  value={formData.network}
+                  onChange={(e) => setFormData({ ...formData, network: e.target.value })}
+                  placeholder="ws / grpc"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">SNI</label>
+                <Input
+                  value={formData.sni}
+                  onChange={(e) => setFormData({ ...formData, sni: e.target.value })}
+                  placeholder="sni.example.com"
+                />
+              </div>
             </div>
-          )}
-        </div>
+
+            {statusRunning && (
+              <div className="text-xs text-gray-400 dark:text-gray-500">
+                保存时会自动进行一次测速，失败会回滚修改。
+              </div>
+            )}
+            {!statusRunning && (
+              <div className="text-xs text-amber-600 dark:text-amber-400">
+                核心未启动，无法进行保存前测速，请先启动核心服务。
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={submitting}>
             取消
