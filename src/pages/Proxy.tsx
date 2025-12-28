@@ -7,8 +7,7 @@ import {
   Globe, 
   Shield, 
   Activity, 
-  BookOpen, 
-  Plus, 
+  AlertCircle, 
   ExternalLink, 
   Wifi
 } from 'lucide-react';
@@ -456,21 +455,12 @@ export default function Proxy() {
 
     if (hasActiveProfile === false) {
       return (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400 border border-dashed border-gray-200 dark:border-zinc-800 rounded-[20px] bg-gray-50/50 dark:bg-zinc-900/50">
-          <div className="w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center mb-4">
-            <BookOpen className="w-8 h-8 text-blue-500 opacity-60" />
-          </div>
-          <p className="font-semibold text-gray-900 dark:text-white">还没有添加订阅</p>
-          <p className="text-sm mt-1 text-center max-w-xs mb-6">
-            订阅是获取代理节点的来源，请先添加订阅以使用代理功能
+        <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px] bg-gray-50/50 dark:bg-zinc-900/50">
+          <AlertCircle className="w-12 h-12 mb-4 opacity-30" />
+          <p className="font-medium text-gray-600 dark:text-gray-300">没有活跃的配置</p>
+          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400 max-w-xs">
+            请先在"配置"页面创建或激活一个配置文件
           </p>
-          <Button 
-            onClick={() => navigate('/subscription')} 
-            className="rounded-full px-6 bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            添加订阅
-          </Button>
         </div>
       );
     }
@@ -525,10 +515,10 @@ export default function Proxy() {
   };
 
   return (
-    <div className="space-y-6 pb-6">
+    <div className="space-y-6 pb-6 min-h-full flex flex-col">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">代理</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">节点</h1>
         </div>
 
         {/* 模式切换 */}
