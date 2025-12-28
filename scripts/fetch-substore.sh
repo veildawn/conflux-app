@@ -86,7 +86,7 @@ curl -fsSL ${CURL_AUTH_ARGS[@]+"${CURL_AUTH_ARGS[@]}"} "$API_URL" > "$tmp_json"
 
 release_tag="$("$PYTHON_BIN" -c "
 import json
-with open(r'$(python_path "$tmp_json")') as f:
+with open(r'$(python_path "$tmp_json")', encoding='utf-8') as f:
     data = json.load(f)
 print(data.get('tag_name', 'unknown'))
 ")"
@@ -104,7 +104,7 @@ download_asset() {
   tmp_json_path="$(python_path "$tmp_json")"
   url="$("$PYTHON_BIN" -c "
 import json
-with open(r'$tmp_json_path') as f:
+with open(r'$tmp_json_path', encoding='utf-8') as f:
     data = json.load(f)
 for asset in data.get('assets', []):
     if asset.get('name', '') == '$asset_pattern':
@@ -139,7 +139,7 @@ download_and_extract_zip() {
   tmp_json_path="$(python_path "$tmp_json")"
   url="$("$PYTHON_BIN" -c "
 import json
-with open(r'$tmp_json_path') as f:
+with open(r'$tmp_json_path', encoding='utf-8') as f:
     data = json.load(f)
 for asset in data.get('assets', []):
     if asset.get('name', '') == '$asset_pattern':
