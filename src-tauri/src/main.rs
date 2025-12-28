@@ -555,6 +555,34 @@ fn main() {
             commands::substore::start_substore,
             commands::substore::stop_substore,
             commands::substore::get_substore_status,
+            // Profile 命令
+            commands::profile::list_profiles,
+            commands::profile::get_profile,
+            commands::profile::get_active_profile_id,
+            commands::profile::create_remote_profile,
+            commands::profile::create_local_profile,
+            commands::profile::create_blank_profile,
+            commands::profile::delete_profile,
+            commands::profile::rename_profile,
+            commands::profile::activate_profile,
+            commands::profile::refresh_profile,
+            commands::profile::parse_config_file,
+            commands::profile::preview_remote_config,
+            // Profile 代理 CRUD 命令
+            commands::profile::add_proxy,
+            commands::profile::update_proxy,
+            commands::profile::delete_proxy,
+            // Profile 规则命令
+            commands::profile::add_rule_to_profile,
+            commands::profile::delete_rule_from_profile,
+            commands::profile::add_rule_provider_to_profile,
+            commands::profile::delete_rule_provider_from_profile,
+            commands::profile::update_rule_provider_in_profile,
+            commands::profile::update_profile_config,
+            // Profile Proxy Provider 命令
+            commands::profile::add_proxy_provider_to_profile,
+            commands::profile::update_proxy_provider_in_profile,
+            commands::profile::delete_proxy_provider_from_profile,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -562,30 +590,32 @@ fn main() {
             if let RunEvent::Exit = event {
                 log::info!("Application is exiting, cleaning up...");
 
-                // 清理 Sub-Store 进程
+                // 清理子进程 - 使用同步方式，避免异步锁导致卡死
                 if let Some(app_state) = app_handle.try_state::<commands::AppState>() {
+                    // 清理 Sub-Store 进程
                     log::info!("Stopping Sub-Store service...");
-                    let substore_manager = app_state.substore_manager.clone();
-
-                    // 使用 block_on 来等待异步清理完成
-                    if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                        handle.block_on(async move {
-                            if let Err(e) = substore_manager.lock().await.stop().await {
-                                log::error!("Failed to stop Sub-Store: {}", e);
-                            } else {
-                                log::info!("Sub-Store stopped successfully");
-                            }
-                        });
-                    } else if let Ok(manager) = substore_manager.try_lock() {
+                    if let Ok(manager) = app_state.substore_manager.try_lock() {
                         manager.stop_sync();
+                        log::info!("Sub-Store stopped successfully");
                     } else {
-                        log::warn!("No tokio runtime available for Sub-Store cleanup");
+                        log::warn!("Could not acquire Sub-Store lock, using pkill fallback");
+                        // 使用 pkill 作为后备方案
+                        #[cfg(unix)]
+                        {
+                            let _ = std::process::Command::new("pkill")
+                                .args(["-9", "-f", "run-substore.js"])
+                                .output();
+                        }
                     }
-                }
 
-                // 应用退出时清理 MiHomo 进程
-                // 使用同步方式清理，因为此时异步运行时可能已不可用
-                mihomo::MihomoManager::cleanup_stale_processes();
+                    // 清理 MiHomo 进程
+                    log::info!("Stopping MiHomo service...");
+                    app_state.mihomo_manager.stop_sync();
+                    log::info!("MiHomo stopped successfully");
+                } else {
+                    // 如果没有 app_state，直接使用 cleanup 方法
+                    mihomo::MihomoManager::cleanup_stale_processes();
+                }
 
                 log::info!("Cleanup completed on exit");
             }

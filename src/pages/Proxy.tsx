@@ -16,7 +16,6 @@ import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProxyStore } from '@/stores/proxyStore';
-import { useAppStore } from '@/stores/appStore';
 import { useToast } from '@/hooks/useToast';
 import { formatDelay, getDelayColorClass } from '@/utils/format';
 import { cn } from '@/utils/cn';
@@ -108,20 +107,30 @@ export default function Proxy() {
       loading: state.loading,
     }))
   );
-  const { hasSubscription } = useAppStore(
-    useShallow((state) => ({
-      hasSubscription: state.hasSubscription,
-    }))
-  );
   const { toast } = useToast();
   const [testingNodes, setTestingNodes] = useState<Set<string>>(new Set());
   const [delays, setDelays] = useState<Record<string, number>>({});
-  
+
   // 代理服务器列表
   const [proxyServers, setProxyServers] = useState<ProxyServerInfo[]>([]);
   const [loadingServers, setLoadingServers] = useState(false);
 
-  const hasAnySub = hasSubscription();
+  // 是否有活跃的 Profile
+  const [hasActiveProfile, setHasActiveProfile] = useState<boolean | null>(null);
+
+  // 检查是否有活跃的 Profile
+  useEffect(() => {
+    const checkActiveProfile = async () => {
+      try {
+        const activeId = await ipc.getActiveProfileId();
+        setHasActiveProfile(activeId !== null);
+      } catch (error) {
+        console.error('Failed to check active profile:', error);
+        setHasActiveProfile(false);
+      }
+    };
+    checkActiveProfile();
+  }, []);
 
   // 加载代理服务器列表
   const loadProxyServers = async () => {
@@ -445,7 +454,7 @@ export default function Proxy() {
       );
     }
 
-    if (!hasAnySub) {
+    if (hasActiveProfile === false) {
       return (
         <div className="flex flex-col items-center justify-center py-20 text-gray-400 border border-dashed border-gray-200 dark:border-zinc-800 rounded-[20px] bg-gray-50/50 dark:bg-zinc-900/50">
           <div className="w-16 h-16 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center mb-4">

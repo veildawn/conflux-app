@@ -5,6 +5,9 @@ use tauri::Manager;
 use std::process::{Child, Command, Stdio};
 use std::path::PathBuf;
 
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+
 /// Sub-Store 进程管理器
 pub struct SubStoreManager {
     process: Arc<Mutex<Option<Child>>>,
@@ -236,6 +239,16 @@ impl SubStoreManager {
             .stdout(Stdio::null())
             .stderr(Stdio::null());
 
+        // macOS/Unix: 在新的进程组中启动，避免终端弹窗
+        #[cfg(unix)]
+        unsafe {
+            cmd.pre_exec(|| {
+                // 创建新的进程组，与父进程分离
+                libc::setsid();
+                Ok(())
+            });
+        }
+
         // Windows 特殊处理：防止创建控制台窗口
         #[cfg(target_os = "windows")]
         {
@@ -333,19 +346,26 @@ impl SubStoreManager {
     /// 同步停止进程（用于应用退出时）
     pub fn stop_sync(&self) {
         if let Ok(mut process_guard) = self.process.try_lock() {
-            if let Some(mut child) = process_guard.take() {
-                log::info!("Synchronously stopping Sub-Store process (PID: {:?})...", child.id());
+            if let Some(child) = process_guard.take() {
+                let pid = child.id();
+                log::info!("Synchronously stopping Sub-Store process (PID: {})...", pid);
 
                 #[cfg(unix)]
                 {
+                    // 直接发送 SIGKILL，不等待
                     unsafe {
-                        libc::kill(child.id() as i32, libc::SIGTERM);
+                        libc::kill(pid as i32, libc::SIGKILL);
                     }
-                    std::thread::sleep(std::time::Duration::from_millis(300));
                 }
 
-                let _ = child.kill();
-                let _ = child.wait();
+                #[cfg(windows)]
+                {
+                    let _ = child.kill();
+                }
+
+                // 不调用 wait()，避免阻塞
+                // 进程会被系统回收
+                log::info!("Sub-Store process killed (PID: {})", pid);
             }
         } else {
             log::warn!("Could not acquire Sub-Store process lock for sync shutdown");

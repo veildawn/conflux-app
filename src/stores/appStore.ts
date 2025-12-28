@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { ipc } from '@/services/ipc';
-import type { AppSettings, Subscription, RuleDatabaseItem } from '@/types/config';
+import type { AppSettings, RuleDatabaseItem } from '@/types/config';
 import { DEFAULT_APP_SETTINGS, DEFAULT_RULE_DATABASES } from '@/types/config';
 
 interface RuleDatabaseUpdateStatus {
@@ -13,24 +13,15 @@ interface AppState {
   // 状态
   settings: AppSettings;
   initialized: boolean;
-  
+
   // 规则数据库更新状态（应用启动时检查一次）
   ruleDatabaseUpdateStatus: Record<string, RuleDatabaseUpdateStatus>;
   ruleDatabaseUpdateChecked: boolean;
-  
-  // 计算属性
-  getSelectedSubscription: () => Subscription | undefined;
-  hasSubscription: () => boolean;
-  
+
   // 动作
   fetchSettings: () => Promise<void>;
   updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
-  
-  // 订阅管理
-  addSubscription: (subscription: Subscription) => Promise<void>;
-  updateSubscription: (id: string, subscription: Partial<Subscription>) => Promise<void>;
-  removeSubscription: (id: string) => Promise<void>;
 
   // 规则数据库管理
   updateRuleDatabase: (id: string, updates: Partial<RuleDatabaseItem>) => Promise<void>;
@@ -44,26 +35,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   ruleDatabaseUpdateStatus: {},
   ruleDatabaseUpdateChecked: false,
 
-  // 获取当前选中的订阅
-  getSelectedSubscription: () => {
-    const { settings } = get();
-    return settings.subscriptions?.find(sub => sub.selected);
-  },
-
-  // 是否有订阅
-  hasSubscription: () => {
-    const { settings } = get();
-    return (settings.subscriptions?.length ?? 0) > 0;
-  },
-
   fetchSettings: async () => {
     try {
       const settings = await ipc.getAppSettings();
-      // 确保 subscriptions 存在，如果是旧的配置文件可能没有这个字段
-      if (!settings.subscriptions) {
-        settings.subscriptions = [];
-      }
-      
+
       // 初始化规则数据库
       if (!settings.ruleDatabases || settings.ruleDatabases.length === 0) {
         settings.ruleDatabases = DEFAULT_RULE_DATABASES;
@@ -77,7 +52,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       set({ settings, initialized: true });
-      
+
       // 应用主题 - 始终使用 system
       get().setTheme('system');
     } catch (error) {
@@ -101,33 +76,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setTheme: (theme: 'light' | 'dark' | 'system') => {
     const root = document.documentElement;
-    
+
     if (theme === 'system') {
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       root.classList.toggle('dark', prefersDark);
     } else {
       root.classList.toggle('dark', theme === 'dark');
     }
-  },
-
-  addSubscription: async (subscription: Subscription) => {
-    const { settings, updateSettings } = get();
-    const newSubscriptions = [...settings.subscriptions, subscription];
-    await updateSettings({ subscriptions: newSubscriptions });
-  },
-
-  updateSubscription: async (id: string, updates: Partial<Subscription>) => {
-    const { settings, updateSettings } = get();
-    const newSubscriptions = settings.subscriptions.map(sub => 
-      sub.id === id ? { ...sub, ...updates } : sub
-    );
-    await updateSettings({ subscriptions: newSubscriptions });
-  },
-
-  removeSubscription: async (id: string) => {
-    const { settings, updateSettings } = get();
-    const newSubscriptions = settings.subscriptions.filter(sub => sub.id !== id);
-    await updateSettings({ subscriptions: newSubscriptions });
   },
 
   updateRuleDatabase: async (id: string, updates: Partial<RuleDatabaseItem>) => {

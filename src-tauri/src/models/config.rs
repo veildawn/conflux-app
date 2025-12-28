@@ -60,6 +60,13 @@ pub struct MihomoConfig {
     pub proxy_groups: Vec<ProxyGroupConfig>,
 
     #[serde(
+        rename = "proxy-providers",
+        default,
+        skip_serializing_if = "std::collections::HashMap::is_empty"
+    )]
+    pub proxy_providers: std::collections::HashMap<String, ProxyProvider>,
+
+    #[serde(
         rename = "rule-providers",
         default,
         skip_serializing_if = "std::collections::HashMap::is_empty"
@@ -136,6 +143,7 @@ impl Default for MihomoConfig {
                 url: None,
                 interval: None,
             }],
+            proxy_providers: std::collections::HashMap::new(),
             rule_providers: std::collections::HashMap::new(),
             rules: vec!["GEOIP,CN,DIRECT".to_string(), "MATCH,PROXY".to_string()],
             ipv6: false,
@@ -197,6 +205,37 @@ pub struct ProxyGroupConfig {
     pub interval: Option<u32>,
 }
 
+/// 代理提供者配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyProvider {
+    #[serde(rename = "type")]
+    pub provider_type: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interval: Option<u32>,
+
+    #[serde(rename = "health-check", skip_serializing_if = "Option::is_none")]
+    pub health_check: Option<HealthCheck>,
+}
+
+/// 健康检查配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthCheck {
+    pub enable: bool,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interval: Option<u32>,
+}
+
 /// 规则提供者配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuleProvider {
@@ -222,22 +261,6 @@ pub struct RuleProvider {
 
 fn default_behavior() -> String {
     "classical".to_string()
-}
-
-/// 订阅配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Subscription {
-    pub id: String,
-    pub name: String,
-    #[serde(rename = "type")]
-    pub sub_type: String, // "remote" | "local"
-    pub url: String, // URL or File Path
-    #[serde(rename = "updatedAt")]
-    pub updated_at: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub count: Option<u32>,
-    #[serde(default)]
-    pub selected: bool,
 }
 
 /// 规则数据库配置
@@ -285,9 +308,6 @@ pub struct AppSettings {
     #[serde(rename = "closeToTray", default = "default_close_to_tray")]
     pub close_to_tray: bool,
 
-    #[serde(default)]
-    pub subscriptions: Vec<Subscription>,
-
     #[serde(rename = "ruleDatabases", default)]
     pub rule_databases: Vec<RuleDatabaseItem>,
 }
@@ -306,7 +326,6 @@ impl Default for AppSettings {
             auto_start: false,
             system_proxy: false,
             close_to_tray: default_close_to_tray(),
-            subscriptions: vec![],
             rule_databases: vec![],
         }
     }

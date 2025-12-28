@@ -1,18 +1,18 @@
 import { Link, useLocation } from 'react-router-dom';
-import {
-  Activity,
-  LayoutDashboard,
-  Globe,
-  Shield,
-  BookOpen,
-  Database,
-  Settings,
-  ScrollText,
-  Box,
-  Store,
-} from 'lucide-react';
 import { cn } from '@/utils/cn';
 import appIconUrl from '../../../src-tauri/icons/icon.png';
+import {
+  ConnectionIcon,
+  OverviewIcon,
+  ProfileIcon,
+  ConvertIcon,
+  NodesIcon,
+  RulesIcon,
+  ResourceIcon,
+  GeoDataIcon,
+  LogsIcon,
+  SettingsIcon,
+} from '@/components/icons/NavIcons';
 
 interface NavItem {
   path: string;
@@ -28,26 +28,31 @@ interface NavGroup {
 const navGroups: NavGroup[] = [
   {
     items: [
-      { path: '/', icon: Activity, label: '活动' },
-      { path: '/overview', icon: LayoutDashboard, label: '概览' },
+      { path: '/', icon: ConnectionIcon, label: '连接' },
+      { path: '/overview', icon: OverviewIcon, label: '概览' },
+    ]
+  },
+  {
+    title: '配置',
+    items: [
+      { path: '/subscription', icon: ProfileIcon, label: '配置' },
+      { path: '/sub-store', icon: ConvertIcon, label: '转换' },
     ]
   },
   {
     title: '代理',
     items: [
-      { path: '/subscription', icon: BookOpen, label: '订阅' },
-      { path: '/sub-store', icon: Store, label: '订阅转换' },
-      { path: '/proxy', icon: Globe, label: '代理' },
-      { path: '/rules', icon: Shield, label: '规则' },
-      { path: '/providers', icon: Box, label: '数据源' },
-      { path: '/rule-database', icon: Database, label: '规则数据库' },
+      { path: '/proxy', icon: NodesIcon, label: '节点' },
+      { path: '/rules', icon: RulesIcon, label: '规则' },
+      { path: '/providers', icon: ResourceIcon, label: '资源' },
+      { path: '/rule-database', icon: GeoDataIcon, label: '数据库' },
     ]
   },
   {
-    title: '更多',
+    title: '系统',
     items: [
-      { path: '/logs', icon: ScrollText, label: '日志' },
-      { path: '/settings', icon: Settings, label: '设置' },
+      { path: '/logs', icon: LogsIcon, label: '日志' },
+      { path: '/settings', icon: SettingsIcon, label: '设置' },
     ]
   }
 ];
