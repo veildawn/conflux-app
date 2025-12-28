@@ -10,7 +10,17 @@ build/
 # Tauri
 src-tauri/target/
 src-tauri/WixTools/
+
+# Downloaded binaries and resources
+src-tauri/binaries/node-*
 src-tauri/resources/mihomo-*
+src-tauri/resources/sub-store/
+
+# Sub-Store data files
+sub-store.json
+root.json
+src-tauri/sub-store.json
+src-tauri/root.json
 
 # IDE
 .vscode/*

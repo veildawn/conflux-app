@@ -210,8 +210,4 @@ impl LogStreamer {
         *current = level;
     }
 
-    /// 检查是否正在运行
-    pub fn is_running(&self) -> bool {
-        self.running.load(Ordering::SeqCst)
-    }
 }

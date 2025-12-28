@@ -9,6 +9,7 @@ import {
   Settings,
   ScrollText,
   Box,
+  Store,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
@@ -34,6 +35,7 @@ const navGroups: NavGroup[] = [
     title: '代理',
     items: [
       { path: '/subscription', icon: BookOpen, label: '订阅' },
+      { path: '/sub-store', icon: Store, label: '订阅转换' },
       { path: '/proxy', icon: Globe, label: '代理' },
       { path: '/rules', icon: Shield, label: '规则' },
       { path: '/providers', icon: Box, label: '数据源' },

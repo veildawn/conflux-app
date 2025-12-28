@@ -5,6 +5,7 @@ mod commands;
 mod config;
 mod mihomo;
 mod models;
+mod substore;
 mod system;
 mod tray_menu;
 mod utils;
@@ -470,16 +471,22 @@ fn main() {
             // 初始化应用状态
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = commands::init_app_state(&app_handle).await {
-                    log::error!("Failed to initialize app state: {}", e);
-                    return;
+                match commands::init_app_state(&app_handle).await {
+                    Ok(app_state) => {
+                        // 将状态注册到 Tauri
+                        app_handle.manage(app_state);
+
+                        if let Ok(status) = commands::proxy::get_proxy_status().await {
+                            app_handle
+                                .state::<TrayMenuState>()
+                                .sync_from_status(&status);
+                        }
+                        run_tray_traffic_loop(app_handle).await;
+                    }
+                    Err(e) => {
+                        log::error!("Failed to initialize app state: {}", e);
+                    }
                 }
-                if let Ok(status) = commands::proxy::get_proxy_status().await {
-                    app_handle
-                        .state::<TrayMenuState>()
-                        .sync_from_status(&status);
-                }
-                run_tray_traffic_loop(app_handle).await;
             });
 
             Ok(())
@@ -544,15 +551,40 @@ fn main() {
             commands::logs::start_log_stream,
             commands::logs::stop_log_stream,
             commands::logs::set_log_level,
+            // Sub-Store 命令
+            commands::substore::start_substore,
+            commands::substore::stop_substore,
+            commands::substore::get_substore_status,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app_handle, event| {
+        .run(|app_handle, event| {
             if let RunEvent::Exit = event {
                 log::info!("Application is exiting, cleaning up...");
+
+                // 清理 Sub-Store 进程
+                if let Some(app_state) = app_handle.try_state::<commands::AppState>() {
+                    log::info!("Stopping Sub-Store service...");
+                    let substore_manager = app_state.substore_manager.clone();
+
+                    // 使用 block_on 来等待异步清理完成
+                    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                        handle.block_on(async move {
+                            if let Err(e) = substore_manager.lock().await.stop().await {
+                                log::error!("Failed to stop Sub-Store: {}", e);
+                            } else {
+                                log::info!("Sub-Store stopped successfully");
+                            }
+                        });
+                    } else {
+                        log::warn!("No tokio runtime available for Sub-Store cleanup");
+                    }
+                }
+
                 // 应用退出时清理 MiHomo 进程
                 // 使用同步方式清理，因为此时异步运行时可能已不可用
                 mihomo::MihomoManager::cleanup_stale_processes();
+
                 log::info!("Cleanup completed on exit");
             }
         });

@@ -1,6 +1,7 @@
 pub mod config;
 pub mod logs;
 pub mod proxy;
+pub mod substore;
 pub mod system;
 
 use anyhow::Result;
@@ -11,19 +12,22 @@ use tokio::sync::Mutex;
 
 use crate::config::ConfigManager;
 use crate::mihomo::{LogStreamer, MihomoApi, MihomoManager};
+use crate::substore::SubStoreManager;
 use crate::utils::generate_api_secret;
 
 /// 应用状态
+#[derive(Clone)]
 pub struct AppState {
     pub mihomo_manager: Arc<MihomoManager>,
     pub mihomo_api: Arc<MihomoApi>,
     pub config_manager: Arc<ConfigManager>,
     pub log_streamer: Arc<LogStreamer>,
+    pub substore_manager: Arc<Mutex<SubStoreManager>>,
     pub system_proxy_enabled: Arc<Mutex<bool>>,
     pub enhanced_mode: Arc<Mutex<bool>>,
 }
 
-/// 全局应用状态
+/// 全局应用状态（用于非命令的地方访问）
 static APP_STATE: OnceCell<AppState> = OnceCell::new();
 
 /// 获取应用状态
@@ -32,7 +36,7 @@ pub fn get_app_state() -> &'static AppState {
 }
 
 /// 初始化应用状态
-pub async fn init_app_state(_app: &AppHandle) -> Result<()> {
+pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     let config_manager = Arc::new(ConfigManager::new()?);
 
     // 加载或生成 API secret
@@ -69,19 +73,39 @@ pub async fn init_app_state(_app: &AppHandle) -> Result<()> {
         false
     };
 
+    // 初始化 Sub-Store 管理器
+    let substore_manager = Arc::new(Mutex::new(
+        SubStoreManager::new(Some(3001)).map_err(|e| anyhow::anyhow!("Failed to create SubStore manager: {}", e))?
+    ));
+
+    // 自动启动 Sub-Store 服务
+    log::info!("Starting Sub-Store service...");
+    let app_handle_clone = app.clone();
+    let substore_manager_clone = substore_manager.clone();
+    tokio::spawn(async move {
+        match substore_manager_clone.lock().await.start(app_handle_clone).await {
+            Ok(_) => {
+                log::info!("Sub-Store service started successfully");
+            }
+            Err(e) => {
+                log::error!("Failed to start Sub-Store service: {}", e);
+            }
+        }
+    });
+
     let state = AppState {
         mihomo_manager,
         mihomo_api,
         config_manager,
         log_streamer,
+        substore_manager,
         system_proxy_enabled: Arc::new(Mutex::new(current_system_proxy)),
         enhanced_mode: Arc::new(Mutex::new(enhanced_mode)),
     };
 
-    APP_STATE
-        .set(state)
-        .map_err(|_| anyhow::anyhow!("State already initialized"))?;
+    // 也保存到全局状态，用于非命令的地方访问
+    let _ = APP_STATE.set(state.clone());
 
     log::info!("App state initialized");
-    Ok(())
+    Ok(state)
 }

@@ -96,6 +96,20 @@ jobs:
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
 
+      - name: Fetch Node.js binaries
+        shell: bash
+        run: |
+          chmod +x scripts/fetch-node.sh
+          ./scripts/fetch-node.sh
+
+      - name: Fetch Sub-Store
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x scripts/fetch-substore.sh
+          ./scripts/fetch-substore.sh
+
       - name: Check formatting
         working-directory: src-tauri
         run: cargo fmt --all -- --check
