@@ -63,6 +63,7 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          MIHOMO_PLATFORM: darwin-arm64
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
@@ -149,6 +150,7 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          MIHOMO_PLATFORM: darwin-amd64
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
@@ -235,6 +237,7 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          MIHOMO_PLATFORM: windows-amd64
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh

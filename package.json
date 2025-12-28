@@ -20,8 +20,7 @@
     "fetch:mihomo": "bash scripts/fetch-mihomo.sh",
     "fetch:node": "bash scripts/fetch-node.sh",
     "fetch:substore": "bash scripts/fetch-substore.sh",
-    "fetch:all": "pnpm run fetch:mihomo && pnpm run fetch:node && pnpm run fetch:substore",
-    "prebuild": "pnpm run fetch:all"
+    "fetch:all": "pnpm run fetch:mihomo && pnpm run fetch:node && pnpm run fetch:substore"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

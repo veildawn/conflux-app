@@ -67,16 +67,19 @@ jobs:
             target: aarch64-apple-darwin
             node_platform: darwin-arm64
             node_binary: node-aarch64-apple-darwin
+            mihomo_platform: darwin-arm64
           - platform: macOS-x86_64
             os: macos-latest
             target: x86_64-apple-darwin
             node_platform: darwin-x64
             node_binary: node-x86_64-apple-darwin
+            mihomo_platform: darwin-amd64
           - platform: Windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             node_platform: win-x64
             node_binary: node-x86_64-pc-windows-msvc.exe
+            mihomo_platform: windows-amd64
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -108,6 +111,7 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          MIHOMO_PLATFORM: ${{ matrix.mihomo_platform }}
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
