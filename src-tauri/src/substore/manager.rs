@@ -84,7 +84,6 @@ impl SubStoreManager {
                 .path()
                 .resource_dir()
                 .map_err(|e| anyhow!("Failed to get resource dir: {}", e))?
-                .join("binaries")
                 .join(&node_name)
         };
 
@@ -118,6 +117,7 @@ impl SubStoreManager {
                 .path()
                 .resource_dir()
                 .map_err(|e| anyhow!("Failed to get resource dir: {}", e))?
+                .join("resources")
                 .join("sub-store")
                 .join("run-substore.js")
         };
@@ -152,6 +152,7 @@ impl SubStoreManager {
                 .path()
                 .resource_dir()
                 .map_err(|e| anyhow!("Failed to get resource dir: {}", e))?
+                .join("resources")
                 .join("sub-store")
                 .join("frontend")
         };

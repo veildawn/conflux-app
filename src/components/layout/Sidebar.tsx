@@ -12,6 +12,7 @@ import {
   Store,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import appIconUrl from '../../../src-tauri/icons/icon.png';
 
 interface NavItem {
   path: string;
@@ -104,10 +105,13 @@ export default function Sidebar() {
 
       {/* 底部 Logo/信息 */}
       <div className="px-5 py-4 bg-transparent">
-        <div className="flex items-center gap-3 opacity-60 hover:opacity-100 transition-opacity group cursor-default">
-           <div className="w-8 h-8 rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center shadow-sm ring-1 ring-gray-200 dark:ring-zinc-700">
-              <div className="w-4 h-4 rounded-full bg-linear-to-tr from-blue-400 to-cyan-300 shadow-sm group-hover:scale-110 transition-transform"></div>
-           </div>
+        <div className="flex items-center opacity-60 hover:opacity-100 transition-opacity group cursor-default">
+           <img
+             src={appIconUrl}
+             alt="Conflux"
+             className="w-10 h-10"
+             draggable={false}
+           />
            <div>
               <div className="text-xs font-bold text-gray-800 dark:text-gray-200">Conflux</div>
               <div className="text-[10px] font-medium text-gray-400">v0.1.0</div>
