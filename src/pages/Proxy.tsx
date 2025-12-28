@@ -107,7 +107,7 @@ export default function Proxy() {
     }))
   );
   const { toast } = useToast();
-  const [testingNodes, setTestingNodes] = useState<Set<string>>(new Set());
+  const [testingPolicies, setTestingPolicies] = useState<Set<string>>(new Set());
   const [delays, setDelays] = useState<Record<string, number>>({});
 
   // 代理服务器列表
@@ -199,14 +199,14 @@ export default function Proxy() {
   };
 
   const handleTestDelay = async (name: string) => {
-    setTestingNodes((prev) => new Set(prev).add(name));
+    setTestingPolicies((prev) => new Set(prev).add(name));
     try {
       const delay = await testDelay(name);
       setDelays((prev) => ({ ...prev, [name]: delay }));
     } catch {
       setDelays((prev) => ({ ...prev, [name]: -1 }));
     } finally {
-      setTestingNodes((prev) => {
+      setTestingPolicies((prev) => {
         const newSet = new Set(prev);
         newSet.delete(name);
         return newSet;
@@ -214,10 +214,10 @@ export default function Proxy() {
     }
   };
 
-  const handleTestAllDelays = async (groupNodes: string[]) => {
-    for (const node of groupNodes) {
-      if (!['DIRECT', 'REJECT'].includes(node)) {
-        handleTestDelay(node);
+  const handleTestAllDelays = async (groupPolicies: string[]) => {
+    for (const policyName of groupPolicies) {
+      if (!['DIRECT', 'REJECT'].includes(policyName)) {
+        handleTestDelay(policyName);
       }
     }
   };
@@ -249,16 +249,16 @@ export default function Proxy() {
       }
     >
         <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {group.all.map((nodeName: string) => {
-            const isSelected = group.now === nodeName;
-            const isTesting = testingNodes.has(nodeName);
-            const delay = delays[nodeName];
-            const isSpecial = ['DIRECT', 'REJECT', 'COMPATIBLE'].includes(nodeName);
+          {group.all.map((policyName: string) => {
+            const isSelected = group.now === policyName;
+            const isTesting = testingPolicies.has(policyName);
+            const delay = delays[policyName];
+            const isSpecial = ['DIRECT', 'REJECT', 'COMPATIBLE'].includes(policyName);
             
             return (
               <button
-                key={nodeName}
-                onClick={() => handleSelectProxy(group.name, nodeName)}
+                key={policyName}
+                onClick={() => handleSelectProxy(group.name, policyName)}
                 className={cn(
                   'relative p-2.5 rounded-xl border text-left transition-all duration-200 group flex flex-col justify-between h-[72px] overflow-hidden',
                   isSelected 
@@ -278,12 +278,12 @@ export default function Proxy() {
                   </div>
                 )}
 
-                {/* 节点名称 */}
+                {/* 策略名称 */}
                 <div className={cn(
                   "font-medium text-xs line-clamp-2 leading-tight pr-3 z-10",
                   isSelected ? "text-blue-700 dark:text-blue-300" : "text-gray-700 dark:text-gray-300"
                 )}>
-                  {nodeName}
+                  {policyName}
                 </div>
 
                 {/* 底部信息栏 */}
@@ -319,13 +319,13 @@ export default function Proxy() {
                     </div>
                   )}
 
-                  {/* 测速按钮 (仅在未测速且非特殊节点时显示) */}
+                  {/* 测速按钮 (仅在未测速且非特殊策略时显示) */}
                   {!isTesting && delay === undefined && !isSpecial && (
                     <div 
                       className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-2 right-2 p-1 hover:bg-gray-100 dark:hover:bg-zinc-700 rounded-md"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleTestDelay(nodeName);
+                        handleTestDelay(policyName);
                       }}
                     >
                       <Zap className="w-3 h-3 text-gray-400 hover:text-blue-500" />
@@ -369,7 +369,7 @@ export default function Proxy() {
         ) : (
           <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {proxyServers.map((server) => {
-              const isTesting = testingNodes.has(server.name);
+              const isTesting = testingPolicies.has(server.name);
               const delay = delays[server.name];
 
               return (
@@ -378,7 +378,7 @@ export default function Proxy() {
                   className="relative p-2.5 rounded-xl border border-gray-100 dark:border-zinc-700 bg-white dark:bg-zinc-900/50 text-left hover:bg-gray-50 dark:hover:bg-zinc-800 hover:border-gray-200 dark:hover:border-zinc-600 transition-all flex flex-col justify-between h-[80px] group overflow-hidden"
                 >
                   <div className="z-10">
-                    {/* 节点名称 */}
+                    {/* 策略名称 */}
                     <div className="font-medium text-xs text-gray-700 dark:text-gray-300 line-clamp-1 mb-0.5">
                       {server.name}
                     </div>
@@ -472,7 +472,7 @@ export default function Proxy() {
              <Server className="w-8 h-8 opacity-40" />
           </div>
           <p className="font-semibold text-gray-600 dark:text-gray-300">暂无代理</p>
-          <p className="text-sm mt-1">当前订阅中没有可用的代理节点</p>
+          <p className="text-sm mt-1">当前订阅中没有可用的代理策略</p>
           <Button 
             variant="outline" 
             onClick={() => navigate('/subscription')} 
@@ -506,7 +506,7 @@ export default function Proxy() {
          {/* 代理服务器列表 */}
         {proxyServers.length > 0 && (
           <div className="space-y-3">
-            <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 px-1 uppercase tracking-wider">所有节点</h2>
+            <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 px-1 uppercase tracking-wider">所有策略</h2>
             {renderProxyServersCard()}
           </div>
         )}
@@ -518,9 +518,9 @@ export default function Proxy() {
     <div className="space-y-6 pb-6 min-h-full flex flex-col">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">节点</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">策略</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            查看并切换代理节点，支持分组选择与延迟测速
+            查看并切换代理策略，支持分组选择与延迟测速
           </p>
         </div>
 

@@ -7,6 +7,7 @@ import {
   ProfileIcon,
   ConvertIcon,
   NodesIcon,
+  ServersIcon,
   RulesIcon,
   ResourceIcon,
   GeoDataIcon,
@@ -42,7 +43,8 @@ const navGroups: NavGroup[] = [
   {
     title: '代理',
     items: [
-      { path: '/proxy', icon: NodesIcon, label: '节点' },
+      { path: '/proxy', icon: NodesIcon, label: '策略' },
+      { path: '/proxy-servers', icon: ServersIcon, label: '服务器' },
       { path: '/rules', icon: RulesIcon, label: '规则' },
       { path: '/providers', icon: ResourceIcon, label: '资源' },
       { path: '/rule-database', icon: GeoDataIcon, label: '数据库' },
@@ -77,7 +79,8 @@ export default function Sidebar() {
               const isActive =
                 item.path === '/'
                   ? location.pathname === '/'
-                  : location.pathname.startsWith(item.path);
+                  : location.pathname === item.path ||
+                    location.pathname.startsWith(`${item.path}/`);
 
               return (
                 <Link
