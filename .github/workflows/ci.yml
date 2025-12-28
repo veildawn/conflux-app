@@ -9,6 +9,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: read
+
 jobs:
   # Frontend checks (lint, type-check, build)
   frontend-check:
@@ -104,7 +107,7 @@ jobs:
       - name: Fetch MiHomo binaries
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
@@ -129,7 +132,7 @@ jobs:
         if: steps.cache-substore.outputs.cache-hit != 'true'
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           chmod +x scripts/fetch-substore.sh
           ./scripts/fetch-substore.sh

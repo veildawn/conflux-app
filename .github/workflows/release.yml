@@ -72,7 +72,7 @@ jobs:
         if: steps.cache-mihomo.outputs.cache-hit != 'true'
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           MIHOMO_PLATFORM: darwin-arm64
         run: |
           chmod +x scripts/fetch-mihomo.sh
@@ -125,7 +125,7 @@ jobs:
         if: steps.cache-substore.outputs.cache-hit != 'true'
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           chmod +x scripts/fetch-substore.sh
           ./scripts/fetch-substore.sh
@@ -166,7 +166,7 @@ jobs:
       - name: Build Tauri app (macOS ARM64)
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           # Apple code signing (optional, configure secrets if needed)
           # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -263,7 +263,7 @@ jobs:
         if: steps.cache-mihomo.outputs.cache-hit != 'true'
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           MIHOMO_PLATFORM: darwin-amd64
         run: |
           chmod +x scripts/fetch-mihomo.sh
@@ -316,7 +316,7 @@ jobs:
         if: steps.cache-substore.outputs.cache-hit != 'true'
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           chmod +x scripts/fetch-substore.sh
           ./scripts/fetch-substore.sh
@@ -351,7 +351,7 @@ jobs:
       - name: Build Tauri app (macOS x86_64)
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           # Apple code signing (optional)
           # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -451,7 +451,7 @@ jobs:
         if: steps.cache-mihomo.outputs.cache-hit != 'true'
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           MIHOMO_PLATFORM: windows-amd64
         run: |
           chmod +x scripts/fetch-mihomo.sh
@@ -505,7 +505,7 @@ jobs:
         if: steps.cache-substore.outputs.cache-hit != 'true'
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           chmod +x scripts/fetch-substore.sh
           ./scripts/fetch-substore.sh
@@ -541,7 +541,7 @@ jobs:
       - name: Build Tauri app (Windows x86_64)
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           # Windows code signing (optional)
           # TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           # TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
