@@ -49,6 +49,13 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
+      - name: Cache Node.js binaries
+        id: cache-node
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/binaries/node-aarch64-apple-darwin
+          key: node-darwin-arm64-v20.18.2
+
       - name: Fetch MiHomo binaries
         shell: bash
         env:
@@ -58,12 +65,23 @@ jobs:
           ./scripts/fetch-mihomo.sh
 
       - name: Fetch Node.js binaries
+        if: steps.cache-node.outputs.cache-hit != 'true'
         shell: bash
+        env:
+          NODE_PLATFORM: darwin-arm64
         run: |
           chmod +x scripts/fetch-node.sh
           ./scripts/fetch-node.sh
 
+      - name: Cache Sub-Store
+        id: cache-substore
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/sub-store
+          key: substore-latest-v1
+
       - name: Fetch Sub-Store
+        if: steps.cache-substore.outputs.cache-hit != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -117,6 +135,13 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
+      - name: Cache Node.js binaries
+        id: cache-node
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/binaries/node-x86_64-apple-darwin
+          key: node-darwin-x64-v20.18.2
+
       - name: Fetch MiHomo binaries
         shell: bash
         env:
@@ -126,12 +151,23 @@ jobs:
           ./scripts/fetch-mihomo.sh
 
       - name: Fetch Node.js binaries
+        if: steps.cache-node.outputs.cache-hit != 'true'
         shell: bash
+        env:
+          NODE_PLATFORM: darwin-x64
         run: |
           chmod +x scripts/fetch-node.sh
           ./scripts/fetch-node.sh
 
+      - name: Cache Sub-Store
+        id: cache-substore
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/sub-store
+          key: substore-latest-v1
+
       - name: Fetch Sub-Store
+        if: steps.cache-substore.outputs.cache-hit != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -185,6 +221,13 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
+      - name: Cache Node.js binaries
+        id: cache-node
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/binaries/node-x86_64-pc-windows-msvc.exe
+          key: node-win-x64-v20.18.2
+
       - name: Fetch MiHomo binaries
         shell: bash
         env:
@@ -194,12 +237,23 @@ jobs:
           ./scripts/fetch-mihomo.sh
 
       - name: Fetch Node.js binaries
+        if: steps.cache-node.outputs.cache-hit != 'true'
         shell: bash
+        env:
+          NODE_PLATFORM: win-x64
         run: |
           chmod +x scripts/fetch-node.sh
           ./scripts/fetch-node.sh
 
+      - name: Cache Sub-Store
+        id: cache-substore
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/sub-store
+          key: substore-latest-v1
+
       - name: Fetch Sub-Store
+        if: steps.cache-substore.outputs.cache-hit != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -239,4 +293,3 @@ jobs:
           echo "| Windows x86_64 | ✅ |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "All builds completed successfully! Download artifacts from the workflow run." >> $GITHUB_STEP_SUMMARY
-

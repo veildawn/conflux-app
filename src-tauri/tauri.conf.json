@@ -40,7 +40,7 @@
     ],
     "resources": [
       "resources/mihomo-*",
-      "resources/sub-store/*"
+      "resources/sub-store"
     ],
     "externalBin": [
       "binaries/node"

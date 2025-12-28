@@ -62,12 +62,18 @@ jobs:
           - platform: macOS-ARM64
             os: macos-latest
             target: aarch64-apple-darwin
+            node_platform: darwin-arm64
+            node_binary: node-aarch64-apple-darwin
           - platform: macOS-x86_64
             os: macos-latest
             target: x86_64-apple-darwin
+            node_platform: darwin-x64
+            node_binary: node-x86_64-apple-darwin
           - platform: Windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
+            node_platform: win-x64
+            node_binary: node-x86_64-pc-windows-msvc.exe
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -88,6 +94,13 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - name: Cache Node.js binaries
+        id: cache-node
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/binaries/${{ matrix.node_binary }}
+          key: node-${{ matrix.node_platform }}-v20.18.2
+
       - name: Fetch MiHomo binaries
         shell: bash
         env:
@@ -97,12 +110,23 @@ jobs:
           ./scripts/fetch-mihomo.sh
 
       - name: Fetch Node.js binaries
+        if: steps.cache-node.outputs.cache-hit != 'true'
         shell: bash
+        env:
+          NODE_PLATFORM: ${{ matrix.node_platform }}
         run: |
           chmod +x scripts/fetch-node.sh
           ./scripts/fetch-node.sh
 
+      - name: Cache Sub-Store
+        id: cache-substore
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/sub-store
+          key: substore-latest-v1
+
       - name: Fetch Sub-Store
+        if: steps.cache-substore.outputs.cache-hit != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -19,7 +19,11 @@
   "bundle": {
     "targets": ["nsis"],
     "resources": [
-      "resources/*"
+      "resources/mihomo-*",
+      "resources/sub-store"
+    ],
+    "externalBin": [
+      "binaries/node"
     ],
     "windows": {
       "webviewInstallMode": {

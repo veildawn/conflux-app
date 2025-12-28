@@ -345,10 +345,10 @@ export default function RuleDatabase() {
                       <Icon className="w-5 h-5" />
                     </div>
                     <div className="flex flex-col min-w-0">
-                      <span className="font-semibold text-gray-900 dark:text-white truncate" title={database.name}>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white truncate leading-tight" title={database.name}>
                         {database.name}
                       </span>
-                      <span className="text-xs text-gray-500 truncate font-mono opacity-70" title={database.fileName}>
+                      <span className="text-[11px] text-gray-500 truncate font-mono opacity-70 leading-tight" title={database.fileName}>
                         {database.fileName}
                       </span>
                     </div>
