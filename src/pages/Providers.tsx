@@ -570,7 +570,7 @@ export default function Providers() {
   const currentList = activeTab === 'proxy' ? proxyProviderList : ruleProviderList;
 
   return (
-    <div className="space-y-6 pb-6">
+    <div className="space-y-6 pb-6 min-h-full flex flex-col">
       {/* Header */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
@@ -626,18 +626,18 @@ export default function Providers() {
           <RefreshCw className="w-8 h-8 animate-spin text-gray-300" />
         </div>
       ) : !activeProfileId ? (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px] bg-gray-50/50 dark:bg-zinc-900/50">
+        <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px] bg-gray-50/50 dark:bg-zinc-900/50">
           <AlertCircle className="w-12 h-12 mb-4 opacity-30" />
           <p className="font-medium text-gray-600 dark:text-gray-300">没有活跃的配置</p>
-          <p className="text-sm mt-1">请先在"配置"页面激活一个配置</p>
+          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">请先在"配置"页面创建或激活一个配置文件</p>
         </div>
       ) : currentList.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px] bg-gray-50/50 dark:bg-zinc-900/50">
+        <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px] bg-gray-50/50 dark:bg-zinc-900/50">
           <Server className="w-12 h-12 mb-4 opacity-30" />
           <p className="font-medium text-gray-600 dark:text-gray-300">
             暂无{activeTab === 'proxy' ? '代理' : '规则'}源
           </p>
-          <p className="text-sm mt-1">点击上方按钮添加新的资源</p>
+          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">点击上方按钮添加新的资源</p>
           <Button
             className="mt-4 rounded-full gap-2"
             onClick={() => activeTab === 'proxy' ? setProxyDialogOpen(true) : setRuleDialogOpen(true)}

@@ -364,17 +364,13 @@ export default function Rules() {
           </div>
         </div>
 
-        <BentoCard className="flex-1">
-          <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-gray-400">
-            <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center mb-4">
-              <AlertCircle className="w-8 h-8 text-amber-500" />
-            </div>
-            <p className="font-semibold text-gray-900 dark:text-white">没有活跃的配置</p>
-            <p className="text-sm mt-1 text-center max-w-xs text-gray-500">
-              请先在"配置"页面创建或激活一个配置文件
-            </p>
-          </div>
-        </BentoCard>
+        <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px] bg-gray-50/50 dark:bg-zinc-900/50">
+          <AlertCircle className="w-12 h-12 mb-4 opacity-30" />
+          <p className="font-medium text-gray-600 dark:text-gray-300">没有活跃的配置</p>
+          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400 max-w-xs">
+            请先在"配置"页面创建或激活一个配置文件
+          </p>
+        </div>
       </div>
     );
   }

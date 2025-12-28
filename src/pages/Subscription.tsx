@@ -344,7 +344,7 @@ export default function SubscriptionPage() {
   }
 
   return (
-    <div className="space-y-6 pb-6">
+    <div className="space-y-6 pb-6 min-h-full flex flex-col">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">配置管理</h1>
@@ -469,62 +469,69 @@ export default function SubscriptionPage() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {profiles.map((profile) => {
-          const isApplying = applyingId === profile.id;
-          const typeInfo = getProfileTypeInfo(profile.profileType);
+      {profiles.length === 0 ? (
+        <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px] bg-gray-50/50 dark:bg-zinc-900/50">
+          <Globe className="w-12 h-12 mb-4 opacity-30" />
+          <p className="font-medium text-gray-600 dark:text-gray-300">暂无配置</p>
+          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">点击右上角添加您的第一个配置</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {profiles.map((profile) => {
+            const isApplying = applyingId === profile.id;
+            const typeInfo = getProfileTypeInfo(profile.profileType);
 
-          return (
-          <BentoCard
-            key={profile.id}
-            className={cn(
-              "group relative",
-              profile.active
-                ? "border-blue-500 dark:border-blue-500 bg-blue-50/20 dark:bg-blue-900/10"
-                : "border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900",
-              isApplying && "opacity-70 pointer-events-none"
-            )}
-            onClick={() => handleActivate(profile.id)}
-            title={typeInfo.label}
-            icon={typeInfo.icon}
-            iconColor={typeInfo.color}
-            action={
-              <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                {profile.profileType === 'remote' && (
+            return (
+            <BentoCard
+              key={profile.id}
+              className={cn(
+                "group relative",
+                profile.active
+                  ? "border-blue-500 dark:border-blue-500 bg-blue-50/20 dark:bg-blue-900/10"
+                  : "border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900",
+                isApplying && "opacity-70 pointer-events-none"
+              )}
+              onClick={() => handleActivate(profile.id)}
+              title={typeInfo.label}
+              icon={typeInfo.icon}
+              iconColor={typeInfo.color}
+              action={
+                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                  {profile.profileType === 'remote' && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                      title="更新订阅"
+                      onClick={() => handleRefresh(profile)}
+                      disabled={isApplying}
+                    >
+                      <RefreshCw className={cn("w-3.5 h-3.5", isApplying && "animate-spin")} />
+                    </Button>
+                  )}
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
-                    title="更新订阅"
-                    onClick={() => handleRefresh(profile)}
+                    className="h-7 w-7 text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg"
+                    title="编辑"
+                    onClick={() => handleEdit(profile)}
                     disabled={isApplying}
                   >
-                    <RefreshCw className={cn("w-3.5 h-3.5", isApplying && "animate-spin")} />
+                    <Pencil className="w-3.5 h-3.5" />
                   </Button>
-                )}
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg"
-                  title="编辑"
-                  onClick={() => handleEdit(profile)}
-                  disabled={isApplying}
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                  title="删除"
-                  onClick={() => handleDelete(profile.id)}
-                  disabled={isApplying}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            }
-          >
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                    title="删除"
+                    onClick={() => handleDelete(profile.id)}
+                    disabled={isApplying}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              }
+            >
              {isApplying && (
                <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-zinc-900/50 z-20 backdrop-blur-sm rounded-[20px]">
                  <div className="flex flex-col items-center gap-2">
@@ -570,18 +577,11 @@ export default function SubscriptionPage() {
                    </div>
                 </div>
              </div>
-          </BentoCard>
-          );
-        })}
-
-        {profiles.length === 0 && (
-          <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px] bg-gray-50/50 dark:bg-zinc-900/50">
-            <Globe className="w-12 h-12 mb-4 opacity-30" />
-            <p className="font-medium text-gray-600 dark:text-gray-300">暂无配置</p>
-            <p className="text-sm mt-1 mb-6">点击右上角添加您的第一个配置</p>
-          </div>
-        )}
-      </div>
+            </BentoCard>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
