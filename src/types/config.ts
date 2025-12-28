@@ -164,8 +164,6 @@ export interface ProfileMetadata {
   profileType: ProfileType;
   /** 远程订阅 URL（仅 remote 类型） */
   url?: string;
-  /** 原始文件路径（仅 local 类型，用于记录来源） */
-  originalPath?: string;
   createdAt: string;
   updatedAt: string;
   proxyCount: number;

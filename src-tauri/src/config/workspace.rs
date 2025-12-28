@@ -164,8 +164,7 @@ impl Workspace {
         Composer::filter_invalid_rules(&mut config);
 
         let id = uuid::Uuid::new_v4().to_string();
-        let mut metadata =
-            ProfileMetadata::new_local(id.clone(), name.to_string(), file_path.to_string());
+        let mut metadata = ProfileMetadata::new_local(id.clone(), name.to_string());
         metadata.update_stats(
             config.proxy_count(),
             config.group_count(),

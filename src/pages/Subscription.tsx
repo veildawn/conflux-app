@@ -268,7 +268,7 @@ export default function SubscriptionPage() {
       setUrl(profile.url || '');
       setFilePath('');
     } else if (profile.profileType === 'local') {
-      setFilePath(profile.originalPath || '');
+      setFilePath('');
       setUrl('');
     }
     setIsDialogOpen(true);
@@ -552,7 +552,7 @@ export default function SubscriptionPage() {
                    <h3 className="font-bold text-lg text-gray-900 dark:text-white line-clamp-1 mb-1">{profile.name}</h3>
                    <div className="text-xs text-gray-500 dark:text-gray-400 font-mono break-all line-clamp-2 leading-relaxed opacity-70">
                      {profile.profileType === 'remote' && profile.url}
-                     {profile.profileType === 'local' && profile.originalPath}
+                     {profile.profileType === 'local' && '本地文件导入'}
                      {profile.profileType === 'blank' && '手动创建的空白配置'}
                    </div>
                 </div>
