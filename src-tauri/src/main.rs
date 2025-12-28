@@ -576,6 +576,8 @@ fn main() {
                                 log::info!("Sub-Store stopped successfully");
                             }
                         });
+                    } else if let Ok(manager) = substore_manager.try_lock() {
+                        manager.stop_sync();
                     } else {
                         log::warn!("No tokio runtime available for Sub-Store cleanup");
                     }
