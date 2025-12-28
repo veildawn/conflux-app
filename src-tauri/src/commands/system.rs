@@ -8,6 +8,8 @@ use tauri::{AppHandle, Emitter, Manager};
 pub async fn set_system_proxy(app: AppHandle) -> Result<(), String> {
     let state = get_app_state();
 
+    crate::commands::require_active_subscription_with_proxies()?;
+
     // 获取代理端口
     let config = state
         .config_manager

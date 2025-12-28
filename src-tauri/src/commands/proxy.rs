@@ -433,6 +433,10 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
         return Err("Proxy is not running".to_string());
     }
 
+    if enabled {
+        crate::commands::require_active_subscription_with_proxies()?;
+    }
+
     // 如果要启用 TUN 模式，先检查权限
     if enabled {
         let has_permission = crate::system::TunPermission::check_permission()
