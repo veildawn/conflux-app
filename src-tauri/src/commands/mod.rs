@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tauri::AppHandle;
 use tokio::sync::Mutex;
 
-use crate::config::ConfigManager;
+use crate::config::{ConfigManager, Workspace};
 use crate::mihomo::{LogStreamer, MihomoApi, MihomoManager};
 use crate::substore::SubStoreManager;
 use crate::utils::generate_api_secret;
@@ -34,6 +34,24 @@ static APP_STATE: OnceCell<AppState> = OnceCell::new();
 /// 获取应用状态
 pub fn get_app_state() -> &'static AppState {
     APP_STATE.get().expect("App state not initialized")
+}
+
+/// 需要有激活的远程订阅，并且订阅配置中存在代理节点
+pub fn require_active_subscription_with_proxies() -> Result<(), String> {
+    let workspace = Workspace::new().map_err(|e| e.to_string())?;
+    let active = workspace
+        .get_active_profile()
+        .map_err(|e| e.to_string())?;
+
+    let Some((metadata, config)) = active else {
+        return Err("需要先激活订阅才能开启该功能。".to_string());
+    };
+
+    if config.proxies.is_empty() && config.proxy_providers.is_empty() {
+        return Err("当前配置中没有可用代理服务器。".to_string());
+    }
+
+    Ok(())
 }
 
 /// 初始化应用状态

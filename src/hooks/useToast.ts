@@ -7,12 +7,14 @@ import type {
 
 const TOAST_LIMIT = 3;
 const TOAST_REMOVE_DELAY = 5000;
+const TOAST_LOG_LIMIT = 50;
 
 type ToasterToast = ToastProps & {
   id: string;
   title?: React.ReactNode;
   description?: React.ReactNode;
   action?: ToastActionElement;
+  createdAt?: number;
 };
 
 let count = 0;
@@ -27,6 +29,7 @@ type ActionType = {
   readonly UPDATE_TOAST: 'UPDATE_TOAST';
   readonly DISMISS_TOAST: 'DISMISS_TOAST';
   readonly REMOVE_TOAST: 'REMOVE_TOAST';
+  readonly CLEAR_ALL: 'CLEAR_ALL';
 };
 
 type Action =
@@ -45,10 +48,14 @@ type Action =
   | {
       type: ActionType['REMOVE_TOAST'];
       toastId?: ToasterToast['id'];
+    }
+  | {
+      type: ActionType['CLEAR_ALL'];
     };
 
 interface State {
   toasts: ToasterToast[];
+  history: ToasterToast[];
 }
 
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
@@ -75,12 +82,16 @@ export const reducer = (state: State, action: Action): State => {
       return {
         ...state,
         toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
+        history: [action.toast, ...state.history].slice(0, TOAST_LOG_LIMIT),
       };
 
     case 'UPDATE_TOAST':
       return {
         ...state,
         toasts: state.toasts.map((t) =>
+          t.id === action.toast.id ? { ...t, ...action.toast } : t
+        ),
+        history: state.history.map((t) =>
           t.id === action.toast.id ? { ...t, ...action.toast } : t
         ),
       };
@@ -119,12 +130,18 @@ export const reducer = (state: State, action: Action): State => {
         ...state,
         toasts: state.toasts.filter((t) => t.id !== action.toastId),
       };
+    case 'CLEAR_ALL':
+      return {
+        ...state,
+        toasts: [],
+        history: [],
+      };
   }
 };
 
 const listeners: Array<(state: State) => void> = [];
 
-let memoryState: State = { toasts: [] };
+let memoryState: State = { toasts: [], history: [] };
 
 function dispatch(action: Action) {
   memoryState = reducer(memoryState, action);
@@ -150,12 +167,14 @@ function toast({ ...props }: Toast) {
     toast: {
       ...props,
       id,
+      createdAt: Date.now(),
       open: true,
       onOpenChange: (open) => {
         if (!open) dismiss();
       },
     },
   });
+  addToRemoveQueue(id);
 
   return {
     id: id,
@@ -181,11 +200,12 @@ function useToast() {
     ...state,
     toast,
     dismiss: (toastId?: string) => dispatch({ type: 'DISMISS_TOAST', toastId }),
+    clearAll: () => {
+      toastTimeouts.forEach((timeout) => clearTimeout(timeout));
+      toastTimeouts.clear();
+      dispatch({ type: 'CLEAR_ALL' });
+    },
   };
 }
 
 export { useToast, toast };
-
-
-
-

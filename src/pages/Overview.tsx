@@ -145,6 +145,8 @@ export default function Overview() {
     }))
   );
   const { toast } = useToast();
+  const formatError = (error: unknown) =>
+    error instanceof Error ? error.message : String(error);
 
   // 仅在进入页面时刷新状态
   useEffect(() => {
@@ -152,11 +154,25 @@ export default function Overview() {
   }, [fetchStatus]);
 
   const handleSystemProxyToggle = (checked: boolean) => {
-    setSystemProxy(checked).catch(console.error);
+    setSystemProxy(checked).catch((error) => {
+      console.error('Failed to set system proxy:', error);
+      toast({
+        title: checked ? '无法开启系统代理' : '无法关闭系统代理',
+        description: formatError(error),
+        variant: 'destructive',
+      });
+    });
   };
 
   const handleEnhancedModeToggle = (checked: boolean) => {
-    setEnhancedMode(checked).catch(console.error);
+    setEnhancedMode(checked).catch((error) => {
+      console.error('Failed to set enhanced mode:', error);
+      toast({
+        title: checked ? '无法开启增强模式' : '无法关闭增强模式',
+        description: formatError(error),
+        variant: 'destructive',
+      });
+    });
   };
 
   const handleAllowLanToggle = (checked: boolean) => {

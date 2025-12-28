@@ -10,7 +10,6 @@ import SubStore from './pages/SubStore';
 import RuleDatabase from './pages/RuleDatabase';
 import Logs from './pages/Logs';
 import Providers from './pages/Providers';
-import { Toaster } from './components/ui/toaster';
 
 function App() {
   // 代理内核的启动逻辑已移至 AppLayout 组件中，避免重复启动
@@ -30,10 +29,8 @@ function App() {
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
-      <Toaster />
     </>
   );
 }
 
 export default App;
-
