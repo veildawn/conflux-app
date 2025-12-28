@@ -504,6 +504,7 @@ fn main() {
             commands::proxy::test_proxy_delay,
             // 配置命令
             commands::config::get_config,
+            commands::config::get_config_proxies,
             commands::config::save_config,
             commands::config::get_app_settings,
             commands::config::save_app_settings,
@@ -568,6 +569,7 @@ fn main() {
             commands::profile::refresh_profile,
             commands::profile::parse_config_file,
             commands::profile::preview_remote_config,
+            commands::profile::export_profile_config,
             // Profile 代理 CRUD 命令
             commands::profile::add_proxy,
             commands::profile::update_proxy,

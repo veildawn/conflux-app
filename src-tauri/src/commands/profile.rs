@@ -1,4 +1,5 @@
 use tauri::State;
+use std::path::Path;
 
 use crate::commands::AppState;
 use crate::config::Workspace;
@@ -176,6 +177,24 @@ pub async fn preview_remote_config(url: String) -> Result<ProfileConfig, String>
         .preview_remote(&url)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// 导出 Profile 配置到指定路径
+#[tauri::command]
+pub async fn export_profile_config(id: String, target_path: String) -> Result<(), String> {
+    let workspace = Workspace::new().map_err(|e| e.to_string())?;
+    let (_metadata, config) = workspace.get_profile(&id).map_err(|e| e.to_string())?;
+    let yaml = serde_yaml::to_string(&config).map_err(|e| e.to_string())?;
+    let target = Path::new(&target_path);
+
+    if let Some(parent) = target.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+    }
+
+    std::fs::write(target, yaml).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 // ==================== 代理 CRUD ====================

@@ -17,9 +17,9 @@ export function ConnectionIcon({ className, strokeWidth = 2 }: IconProps) {
       strokeLinejoin="round"
       className={cn("w-5 h-5", className)}
     >
-      {/* 左侧节点 */}
+      {/* 左侧策略 */}
       <circle cx="5" cy="12" r="2" />
-      {/* 右侧节点 */}
+      {/* 右侧策略 */}
       <circle cx="19" cy="12" r="2" />
       {/* 连接线带数据流动感 */}
       <path d="M7 12h3" />
@@ -97,7 +97,7 @@ export function ConvertIcon({ className, strokeWidth = 2 }: IconProps) {
   );
 }
 
-// 节点 - 服务器/节点网络
+// 策略 - 服务器/策略网络
 export function NodesIcon({ className, strokeWidth = 2 }: IconProps) {
   return (
     <svg
@@ -109,9 +109,9 @@ export function NodesIcon({ className, strokeWidth = 2 }: IconProps) {
       strokeLinejoin="round"
       className={cn("w-5 h-5", className)}
     >
-      {/* 中心节点 */}
+      {/* 中心策略 */}
       <circle cx="12" cy="12" r="3" />
-      {/* 周围节点 */}
+      {/* 周围策略 */}
       <circle cx="12" cy="4" r="2" />
       <circle cx="20" cy="12" r="2" />
       <circle cx="12" cy="20" r="2" />
@@ -121,6 +121,28 @@ export function NodesIcon({ className, strokeWidth = 2 }: IconProps) {
       <line x1="18" y1="12" x2="15" y2="12" />
       <line x1="12" y1="18" x2="12" y2="15" />
       <line x1="6" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+
+// 服务器 - 机架/列表
+export function ServersIcon({ className, strokeWidth = 2 }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn("w-5 h-5", className)}
+    >
+      <rect x="3" y="4" width="18" height="4" rx="1.5" />
+      <rect x="3" y="10" width="18" height="4" rx="1.5" />
+      <rect x="3" y="16" width="18" height="4" rx="1.5" />
+      <circle cx="7" cy="6" r="1" />
+      <circle cx="7" cy="12" r="1" />
+      <circle cx="7" cy="18" r="1" />
     </svg>
   );
 }
@@ -141,7 +163,7 @@ export function RulesIcon({ className, strokeWidth = 2 }: IconProps) {
       <circle cx="4" cy="12" r="2" />
       {/* 分叉点 */}
       <circle cx="12" cy="12" r="2" />
-      {/* 出口节点 */}
+      {/* 出口策略 */}
       <circle cx="20" cy="6" r="2" />
       <circle cx="20" cy="12" r="2" />
       <circle cx="20" cy="18" r="2" />

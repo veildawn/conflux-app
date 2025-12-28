@@ -25,6 +25,41 @@ pub async fn get_config() -> Result<MihomoConfig, String> {
         .map_err(|e| e.to_string())
 }
 
+#[derive(serde::Serialize)]
+pub struct ProxyServerInfo {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub proxy_type: String,
+    pub server: String,
+    pub port: u16,
+    pub udp: bool,
+}
+
+/// 获取配置文件中的代理服务器列表
+#[tauri::command]
+pub async fn get_config_proxies() -> Result<Vec<ProxyServerInfo>, String> {
+    let state = get_app_state();
+    let config = state
+        .config_manager
+        .load_mihomo_config()
+        .map_err(|e| e.to_string())?;
+
+    let mut proxies: Vec<ProxyServerInfo> = config
+        .proxies
+        .into_iter()
+        .map(|proxy| ProxyServerInfo {
+            name: proxy.name,
+            proxy_type: proxy.proxy_type,
+            server: proxy.server,
+            port: proxy.port,
+            udp: proxy.udp,
+        })
+        .collect();
+
+    proxies.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(proxies)
+}
+
 /// 保存 MiHomo 配置
 #[tauri::command]
 pub async fn save_config(config: MihomoConfig) -> Result<(), String> {

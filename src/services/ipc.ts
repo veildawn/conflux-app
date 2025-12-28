@@ -511,6 +511,13 @@ export const ipc = {
     return invoke('preview_remote_config', { url });
   },
 
+  /**
+   * 导出 Profile 配置到指定路径
+   */
+  async exportProfileConfig(id: string, targetPath: string): Promise<void> {
+    return invoke('export_profile_config', { id, targetPath });
+  },
+
   // ============= Profile 代理 CRUD =============
 
   /**
@@ -603,5 +610,4 @@ export const ipc = {
 };
 
 export default ipc;
-
 

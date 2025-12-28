@@ -5,6 +5,7 @@ import {
   FileText,
   RefreshCw,
   Trash2,
+  Download,
   Clock,
   Loader2,
   Pencil,
@@ -30,7 +31,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ProfileMetadata, ProfileType } from '@/types/config';
 import { cn } from '@/utils/cn';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import { useProxyStore } from '@/stores/proxyStore';
 import { ipc } from '@/services/ipc';
 import { useToast } from '@/hooks/useToast';
@@ -155,6 +156,19 @@ export default function SubscriptionPage() {
     loadProfiles();
   }, []);
 
+  const normalizeExportPath = (path: string) => {
+    if (/\.[^/\\]+$/.test(path)) {
+      return path;
+    }
+    return `${path}.yaml`;
+  };
+
+  const buildExportFileName = (profile: ProfileMetadata) => {
+    const baseName = profile.name.trim() || 'profile';
+    const safeName = baseName.replace(/[\\/:*?"<>|]/g, '-').trim() || 'profile';
+    return `${safeName}.yaml`;
+  };
+
   const handleBrowse = async () => {
     try {
       const selected = await open({
@@ -171,6 +185,36 @@ export default function SubscriptionPage() {
       }
     } catch (err) {
       console.error('Failed to open dialog:', err);
+    }
+  };
+
+  const handleExport = async (profile: ProfileMetadata) => {
+    try {
+      const selected = await save({
+        title: '导出配置',
+        defaultPath: buildExportFileName(profile),
+        filters: [{
+          name: 'YAML',
+          extensions: ['yaml', 'yml']
+        }]
+      });
+
+      if (!selected) return;
+      const targetPath = normalizeExportPath(selected);
+      await ipc.exportProfileConfig(profile.id, targetPath);
+      const fileName = targetPath.split(/[\\/]/).pop() || targetPath;
+
+      toast({
+        title: '导出成功',
+        description: `已保存为 ${fileName}`,
+      });
+    } catch (error) {
+      console.error('Failed to export profile:', error);
+      toast({
+        title: '导出失败',
+        description: String(error),
+        variant: 'destructive',
+      });
     }
   };
 
@@ -202,7 +246,7 @@ export default function SubscriptionPage() {
 
         toast({
           title: '配置已创建',
-          description: `配置 "${profile.name}" 已添加，包含 ${profile.proxyCount} 个节点`,
+          description: `配置 "${profile.name}" 已添加，包含 ${profile.proxyCount} 个策略`,
         });
       }
 
@@ -238,7 +282,7 @@ export default function SubscriptionPage() {
 
       toast({
         title: '配置已激活',
-        description: `已加载 ${profile.proxyCount} 个节点`,
+        description: `已加载 ${profile.proxyCount} 个策略`,
       });
     } catch (error) {
       console.error('Failed to activate profile:', error);
@@ -313,7 +357,7 @@ export default function SubscriptionPage() {
 
       toast({
         title: '订阅已更新',
-        description: `已加载 ${updated.proxyCount} 个节点`,
+        description: `已加载 ${updated.proxyCount} 个策略`,
       });
     } catch (error) {
       console.error('Failed to refresh profile:', error);
@@ -396,7 +440,7 @@ export default function SubscriptionPage() {
                   <Label htmlFor="name">名称 {!editingProfile && '(可选)'}</Label>
                   <Input
                     id="name"
-                    placeholder="例如：公司节点"
+                    placeholder="例如：公司策略"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="rounded-xl"
@@ -445,7 +489,7 @@ export default function SubscriptionPage() {
                     <TabsContent value="blank" className="space-y-4 mt-0">
                       <div className="p-4 bg-gray-50 dark:bg-zinc-800 rounded-xl">
                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                          创建一个空白配置，您可以之后在代理页面手动添加节点，或在规则页面添加规则。
+                          创建一个空白配置，您可以之后在策略页面手动添加策略，或在规则页面添加规则。
                         </p>
                       </div>
                     </TabsContent>
@@ -512,6 +556,16 @@ export default function SubscriptionPage() {
                   <Button
                     size="icon"
                     variant="ghost"
+                    className="h-7 w-7 text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg"
+                    title="导出配置"
+                    onClick={() => handleExport(profile)}
+                    disabled={isApplying}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
                     className="h-7 w-7 text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg"
                     title="编辑"
                     onClick={() => handleEdit(profile)}
@@ -569,7 +623,7 @@ export default function SubscriptionPage() {
                           ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
                           : "bg-gray-100 text-gray-500 dark:bg-zinc-800 dark:text-gray-400"
                       )}>
-                        {profile.proxyCount} 节点
+                        {profile.proxyCount} 策略
                       </span>
                       <span className="text-xs text-gray-400">
                         {profile.ruleCount} 规则
