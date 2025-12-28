@@ -34,9 +34,6 @@ pub struct ProfileMetadata {
     /// 远程订阅 URL（仅 Remote 类型）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
-    /// 原始文件路径（仅 Local 类型，用于记录来源）
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub original_path: Option<String>,
     /// 创建时间 (ISO 8601)
     pub created_at: String,
     /// 最后更新时间 (ISO 8601)
@@ -66,7 +63,6 @@ impl ProfileMetadata {
             name,
             profile_type: ProfileType::Remote,
             url: Some(url),
-            original_path: None,
             created_at: now.clone(),
             updated_at: now,
             proxy_count: 0,
@@ -79,14 +75,13 @@ impl ProfileMetadata {
     }
 
     /// 创建新的本地文件元数据
-    pub fn new_local(id: String, name: String, original_path: String) -> Self {
+    pub fn new_local(id: String, name: String) -> Self {
         let now = chrono::Local::now().to_rfc3339();
         Self {
             id,
             name,
             profile_type: ProfileType::Local,
             url: None,
-            original_path: Some(original_path),
             created_at: now.clone(),
             updated_at: now,
             proxy_count: 0,
@@ -106,7 +101,6 @@ impl ProfileMetadata {
             name,
             profile_type: ProfileType::Blank,
             url: None,
-            original_path: None,
             created_at: now.clone(),
             updated_at: now,
             proxy_count: 0,
