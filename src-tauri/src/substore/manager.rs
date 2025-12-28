@@ -231,8 +231,10 @@ impl SubStoreManager {
             log::info!("Using embedded frontend (no external frontend directory)");
         }
 
-        cmd.stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+        // Keep the child process headless to avoid spawning a terminal UI.
+        cmd.stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
 
         // Windows 特殊处理：防止创建控制台窗口
         #[cfg(target_os = "windows")]
@@ -328,6 +330,28 @@ impl SubStoreManager {
         Ok(())
     }
 
+    /// 同步停止进程（用于应用退出时）
+    pub fn stop_sync(&self) {
+        if let Ok(mut process_guard) = self.process.try_lock() {
+            if let Some(mut child) = process_guard.take() {
+                log::info!("Synchronously stopping Sub-Store process (PID: {:?})...", child.id());
+
+                #[cfg(unix)]
+                {
+                    unsafe {
+                        libc::kill(child.id() as i32, libc::SIGTERM);
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                }
+
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        } else {
+            log::warn!("Could not acquire Sub-Store process lock for sync shutdown");
+        }
+    }
+
     /// 检查端口是否可访问
     async fn check_port_accessible(&self) -> bool {
         // 尝试连接到 Sub-Store API
@@ -371,7 +395,7 @@ impl SubStoreManager {
 
 impl Drop for SubStoreManager {
     fn drop(&mut self) {
-        // 注意：这里不能使用 async，所以在应用退出时需要显式调用 stop
+        self.stop_sync();
         log::info!("SubStoreManager dropped");
     }
 }
