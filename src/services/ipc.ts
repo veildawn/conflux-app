@@ -401,6 +401,29 @@ export const ipc = {
   async getAppVersion(): Promise<string> {
     return invoke('get_app_version');
   },
+
+  // ============= Sub-Store 命令 =============
+
+  /**
+   * 启动 Sub-Store
+   */
+  async startSubStore(): Promise<void> {
+    return invoke('start_substore');
+  },
+
+  /**
+   * 停止 Sub-Store
+   */
+  async stopSubStore(): Promise<void> {
+    return invoke('stop_substore');
+  },
+
+  /**
+   * 获取 Sub-Store 状态
+   */
+  async getSubStoreStatus(): Promise<{ running: boolean; api_url: string; api_port: number }> {
+    return invoke('get_substore_status');
+  },
 };
 
 export default ipc;

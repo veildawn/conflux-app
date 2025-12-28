@@ -277,14 +277,6 @@ impl ConfigManager {
         Ok(())
     }
 
-    /// 更新日志级别
-    pub fn update_log_level(&self, level: String) -> Result<()> {
-        let mut config = self.load_mihomo_config()?;
-        config.log_level = level;
-        self.save_mihomo_config(&config)?;
-        Ok(())
-    }
-
     /// 获取当前代理模式
     #[allow(dead_code)]
     pub fn get_mode(&self) -> Result<String> {

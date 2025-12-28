@@ -39,7 +39,11 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "resources/*"
+      "resources/mihomo-*",
+      "resources/sub-store/*"
+    ],
+    "externalBin": [
+      "binaries/node"
     ],
     "category": "Utility",
     "shortDescription": "现代化代理管理桌面应用",

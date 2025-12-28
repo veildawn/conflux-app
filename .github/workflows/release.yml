@@ -82,13 +82,13 @@ jobs:
         run: |
           echo "Checking MiHomo binaries..."
           ls -lh src-tauri/resources/
-          
+
           # Check if file exists
           if [ ! -f "src-tauri/resources/mihomo-darwin-arm64" ]; then
             echo "ERROR: mihomo-darwin-arm64 not found!"
             exit 1
           fi
-          
+
           # Check file size (should be > 10MB)
           FILE_SIZE=$(stat -f%z "src-tauri/resources/mihomo-darwin-arm64" 2>/dev/null || stat -c%s "src-tauri/resources/mihomo-darwin-arm64")
           MIN_SIZE=10000000  # 10MB
@@ -97,6 +97,68 @@ jobs:
             exit 1
           fi
           echo "✅ mihomo-darwin-arm64 verified: $FILE_SIZE bytes"
+
+      - name: Cache Node.js binaries
+        id: cache-node
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/binaries/node-aarch64-apple-darwin
+          key: node-darwin-arm64-v20.18.2
+
+      - name: Fetch Node.js binaries
+        if: steps.cache-node.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          NODE_PLATFORM: darwin-arm64
+        run: |
+          chmod +x scripts/fetch-node.sh
+          ./scripts/fetch-node.sh
+
+      - name: Cache Sub-Store
+        id: cache-substore
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/sub-store
+          key: substore-latest-v1
+
+      - name: Fetch Sub-Store
+        if: steps.cache-substore.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x scripts/fetch-substore.sh
+          ./scripts/fetch-substore.sh
+
+      - name: Verify all resources
+        run: |
+          echo "=== Verifying all required resources ==="
+
+          # Check Node.js
+          if [ ! -f "src-tauri/binaries/node-aarch64-apple-darwin" ]; then
+            echo "ERROR: Node.js binary not found!"
+            exit 1
+          fi
+          echo "✅ Node.js binary present"
+
+          # Check Sub-Store
+          if [ ! -f "src-tauri/resources/sub-store/sub-store.bundle.js" ]; then
+            echo "ERROR: Sub-Store bundle not found!"
+            exit 1
+          fi
+          echo "✅ Sub-Store bundle present"
+
+          if [ ! -f "src-tauri/resources/sub-store/run-substore.js" ]; then
+            echo "ERROR: Sub-Store run script not found!"
+            exit 1
+          fi
+          echo "✅ Sub-Store run script present"
+
+          echo ""
+          echo "=== All resources verified ==="
+          ls -lh src-tauri/binaries/
+          ls -lh src-tauri/resources/
+          ls -lh src-tauri/resources/sub-store/
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -211,13 +273,13 @@ jobs:
         run: |
           echo "Checking MiHomo binaries..."
           ls -lh src-tauri/resources/
-          
+
           # Check if file exists
           if [ ! -f "src-tauri/resources/mihomo-darwin-amd64" ]; then
             echo "ERROR: mihomo-darwin-amd64 not found!"
             exit 1
           fi
-          
+
           # Check file size (should be > 10MB)
           FILE_SIZE=$(stat -f%z "src-tauri/resources/mihomo-darwin-amd64" 2>/dev/null || stat -c%s "src-tauri/resources/mihomo-darwin-amd64")
           MIN_SIZE=10000000  # 10MB
@@ -226,6 +288,62 @@ jobs:
             exit 1
           fi
           echo "✅ mihomo-darwin-amd64 verified: $FILE_SIZE bytes"
+
+      - name: Cache Node.js binaries
+        id: cache-node
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/binaries/node-x86_64-apple-darwin
+          key: node-darwin-x64-v20.18.2
+
+      - name: Fetch Node.js binaries
+        if: steps.cache-node.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          NODE_PLATFORM: darwin-x64
+        run: |
+          chmod +x scripts/fetch-node.sh
+          ./scripts/fetch-node.sh
+
+      - name: Cache Sub-Store
+        id: cache-substore
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/sub-store
+          key: substore-latest-v1
+
+      - name: Fetch Sub-Store
+        if: steps.cache-substore.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x scripts/fetch-substore.sh
+          ./scripts/fetch-substore.sh
+
+      - name: Verify all resources
+        run: |
+          echo "=== Verifying all required resources ==="
+
+          # Check Node.js
+          if [ ! -f "src-tauri/binaries/node-x86_64-apple-darwin" ]; then
+            echo "ERROR: Node.js binary not found!"
+            exit 1
+          fi
+          echo "✅ Node.js binary present"
+
+          # Check Sub-Store
+          if [ ! -f "src-tauri/resources/sub-store/sub-store.bundle.js" ]; then
+            echo "ERROR: Sub-Store bundle not found!"
+            exit 1
+          fi
+          echo "✅ Sub-Store bundle present"
+
+          if [ ! -f "src-tauri/resources/sub-store/run-substore.js" ]; then
+            echo "ERROR: Sub-Store run script not found!"
+            exit 1
+          fi
+          echo "✅ Sub-Store run script present"
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -344,13 +462,13 @@ jobs:
         run: |
           echo "Checking MiHomo binaries..."
           ls -lh src-tauri/resources/
-          
+
           # Check if file exists
           if [ ! -f "src-tauri/resources/mihomo-windows-amd64.exe" ]; then
             echo "ERROR: mihomo-windows-amd64.exe not found!"
             exit 1
           fi
-          
+
           # Check file size (should be > 10MB)
           FILE_SIZE=$(stat -c%s "src-tauri/resources/mihomo-windows-amd64.exe" 2>/dev/null || wc -c < "src-tauri/resources/mihomo-windows-amd64.exe")
           MIN_SIZE=10000000  # 10MB
@@ -359,6 +477,63 @@ jobs:
             exit 1
           fi
           echo "✅ mihomo-windows-amd64.exe verified: $FILE_SIZE bytes"
+
+      - name: Cache Node.js binaries
+        id: cache-node
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/binaries/node-x86_64-pc-windows-msvc.exe
+          key: node-win-x64-v20.18.2
+
+      - name: Fetch Node.js binaries
+        if: steps.cache-node.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          NODE_PLATFORM: win-x64
+        run: |
+          chmod +x scripts/fetch-node.sh
+          ./scripts/fetch-node.sh
+
+      - name: Cache Sub-Store
+        id: cache-substore
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/sub-store
+          key: substore-latest-v1
+
+      - name: Fetch Sub-Store
+        if: steps.cache-substore.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x scripts/fetch-substore.sh
+          ./scripts/fetch-substore.sh
+
+      - name: Verify all resources
+        shell: bash
+        run: |
+          echo "=== Verifying all required resources ==="
+
+          # Check Node.js
+          if [ ! -f "src-tauri/binaries/node-x86_64-pc-windows-msvc.exe" ]; then
+            echo "ERROR: Node.js binary not found!"
+            exit 1
+          fi
+          echo "✅ Node.js binary present"
+
+          # Check Sub-Store
+          if [ ! -f "src-tauri/resources/sub-store/sub-store.bundle.js" ]; then
+            echo "ERROR: Sub-Store bundle not found!"
+            exit 1
+          fi
+          echo "✅ Sub-Store bundle present"
+
+          if [ ! -f "src-tauri/resources/sub-store/run-substore.js" ]; then
+            echo "ERROR: Sub-Store run script not found!"
+            exit 1
+          fi
+          echo "✅ Sub-Store run script present"
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
