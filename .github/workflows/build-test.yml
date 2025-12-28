@@ -17,6 +17,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: read
+
 jobs:
   build-macos-arm64:
     name: Build macOS ARM64
@@ -59,7 +62,7 @@ jobs:
       - name: Fetch MiHomo binaries
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
@@ -84,7 +87,7 @@ jobs:
         if: steps.cache-substore.outputs.cache-hit != 'true'
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           chmod +x scripts/fetch-substore.sh
           ./scripts/fetch-substore.sh
@@ -145,7 +148,7 @@ jobs:
       - name: Fetch MiHomo binaries
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
@@ -170,7 +173,7 @@ jobs:
         if: steps.cache-substore.outputs.cache-hit != 'true'
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           chmod +x scripts/fetch-substore.sh
           ./scripts/fetch-substore.sh
@@ -231,7 +234,7 @@ jobs:
       - name: Fetch MiHomo binaries
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
@@ -256,7 +259,7 @@ jobs:
         if: steps.cache-substore.outputs.cache-hit != 'true'
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           chmod +x scripts/fetch-substore.sh
           ./scripts/fetch-substore.sh
