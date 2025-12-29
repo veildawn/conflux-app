@@ -9,35 +9,59 @@ export default function SubStore() {
   const [status, setStatus] = useState<{ running: boolean; api_url: string; api_port: number } | null>(null);
 
   useEffect(() => {
-    // 组件挂载时检查状态,并定期轮询
-    checkStatus();
+    let interval: NodeJS.Timeout | null = null;
+    let timeout: NodeJS.Timeout | null = null;
+    let isRunning = false;
 
-    // 每 2 秒检查一次状态,直到服务启动
-    const interval = setInterval(async () => {
+    // 首次检查状态
+    const checkInitialStatus = async () => {
       const result = await ipc.getSubStoreStatus().catch(() => null);
       if (result?.running) {
         setStatus(result);
-        clearInterval(interval);
+        isRunning = true;
+        return true;
       }
-    }, 2000);
+      return false;
+    };
 
-    // 最多等待 30 秒
-    const timeout = setTimeout(() => {
-      clearInterval(interval);
-      if (!status?.running) {
-        toast({
-          title: 'Sub-Store 启动超时',
-          description: '服务启动时间过长,请检查日志',
-          variant: 'destructive',
-        });
+    // 组件挂载时检查状态（后端已在应用启动时自动启动 Sub-Store）
+    const initSubStore = async () => {
+      // 首次检查
+      if (await checkInitialStatus()) {
+        return;
       }
-    }, 30000);
+
+      // 轮询检查服务状态（等待后端启动完成）
+      interval = setInterval(async () => {
+        const result = await ipc.getSubStoreStatus().catch(() => null);
+        if (result?.running) {
+          setStatus(result);
+          isRunning = true;
+          if (interval) clearInterval(interval);
+          if (timeout) clearTimeout(timeout);
+        }
+      }, 1000); // 更频繁检查，1秒一次
+
+      // 最多等待 30 秒
+      timeout = setTimeout(() => {
+        if (interval) clearInterval(interval);
+        if (!isRunning) {
+          toast({
+            title: 'Sub-Store 启动超时',
+            description: '服务启动时间过长,请检查日志或尝试重启应用',
+            variant: 'destructive',
+          });
+        }
+      }, 30000);
+    };
+
+    initSubStore();
 
     return () => {
-      clearInterval(interval);
-      clearTimeout(timeout);
+      if (interval) clearInterval(interval);
+      if (timeout) clearTimeout(timeout);
     };
-  }, []);
+  }, [toast]);
 
   const checkStatus = async () => {
     try {

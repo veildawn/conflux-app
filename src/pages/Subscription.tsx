@@ -135,6 +135,13 @@ export default function SubscriptionPage() {
   const [filePath, setFilePath] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Sub-Store 相关状态
+  const [urlSource, setUrlSource] = useState<'manual' | 'substore'>('manual');
+  const [substoreSubs, setSubstoreSubs] = useState<{ name: string; displayName?: string; icon?: string; url?: string }[]>([]);
+  const [selectedSub, setSelectedSub] = useState<string>('');
+  const [loadingSubs, setLoadingSubs] = useState(false);
+  const [substoreStatus, setSubstoreStatus] = useState<{ running: boolean; api_url: string } | null>(null);
+
   // 加载 Profile 列表
   const loadProfiles = async () => {
     try {
@@ -244,9 +251,12 @@ export default function SubscriptionPage() {
           profile = await ipc.createBlankProfile(profileName);
         }
 
+        const defaultRulesHint = profile.defaultRulesApplied
+          ? '。检测到配置没有任何规则，已自动创建默认规则'
+          : '';
         toast({
           title: '配置已创建',
-          description: `配置 "${profile.name}" 已添加，包含 ${profile.proxyCount} 个策略`,
+          description: `配置 "${profile.name}" 已添加，包含 ${profile.proxyCount} 个节点${defaultRulesHint}`,
         });
       }
 
@@ -282,7 +292,7 @@ export default function SubscriptionPage() {
 
       toast({
         title: '配置已激活',
-        description: `已加载 ${profile.proxyCount} 个策略`,
+        description: `已加载 ${profile.proxyCount} 个节点`,
       });
     } catch (error) {
       console.error('Failed to activate profile:', error);
@@ -296,12 +306,60 @@ export default function SubscriptionPage() {
     }
   };
 
+  // 加载 Sub-Store 状态和订阅列表
+  const loadSubStoreSubs = async () => {
+    setLoadingSubs(true);
+    try {
+      const status = await ipc.getSubStoreStatus();
+      setSubstoreStatus(status);
+
+      if (!status.running) {
+        toast({
+          title: 'Sub-Store 未运行',
+          description: '请先访问 Sub-Store 页面启动服务',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const subs = await ipc.getSubStoreSubs();
+      setSubstoreSubs(subs);
+    } catch (error) {
+      console.error('Failed to load Sub-Store subs:', error);
+      toast({
+        title: '加载失败',
+        description: String(error),
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingSubs(false);
+    }
+  };
+
+  // 当选择 Sub-Store 模式时自动加载订阅列表
+  useEffect(() => {
+    if (urlSource === 'substore' && activeTab === 'remote' && !editingProfile) {
+      loadSubStoreSubs();
+    }
+  }, [urlSource, activeTab, editingProfile]);
+
+  // 当选择订阅时自动生成 URL
+  useEffect(() => {
+    if (urlSource === 'substore' && selectedSub && substoreStatus) {
+      const generatedUrl = `${substoreStatus.api_url}/api/download/${encodeURIComponent(selectedSub)}?target=ClashMeta`;
+      setUrl(generatedUrl);
+    }
+  }, [selectedSub, urlSource, substoreStatus]);
+
   const resetForm = () => {
     setName('');
     setUrl('');
     setFilePath('');
     setActiveTab('remote');
     setEditingProfile(null);
+    setUrlSource('manual');
+    setSelectedSub('');
+    setSubstoreSubs([]);
   };
 
   const handleEdit = (profile: ProfileMetadata) => {
@@ -355,9 +413,12 @@ export default function SubscriptionPage() {
         await fetchGroups();
       }
 
+      const defaultRulesHint = updated.defaultRulesApplied
+        ? '。检测到配置没有任何规则，已自动创建默认规则'
+        : '';
       toast({
         title: '订阅已更新',
-        description: `已加载 ${updated.proxyCount} 个策略`,
+        description: `已加载 ${updated.proxyCount} 个节点${defaultRulesHint}`,
       });
     } catch (error) {
       console.error('Failed to refresh profile:', error);
@@ -450,19 +511,113 @@ export default function SubscriptionPage() {
                 {!editingProfile && (
                   <>
                     <TabsContent value="remote" className="space-y-4 mt-0">
-                      <div className="space-y-2">
-                        <Label htmlFor="url">订阅链接</Label>
-                        <Input
-                          id="url"
-                          placeholder="https://example.com/subscribe/..."
-                          value={url}
-                          onChange={(e) => setUrl(e.target.value)}
-                          className="rounded-xl font-mono text-sm"
-                        />
-                        <p className="text-xs text-gray-500">
-                          支持 MiHomo/Clash 格式的订阅链接
-                        </p>
+                      <div className="space-y-3">
+                        <Label>订阅来源</Label>
+                        <div className="space-y-2">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="urlSource"
+                              value="manual"
+                              checked={urlSource === 'manual'}
+                              onChange={(e) => setUrlSource(e.target.value as 'manual' | 'substore')}
+                              className="w-4 h-4 text-blue-600"
+                            />
+                            <span className="text-sm text-gray-700 dark:text-gray-300">直接输入 URL</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="urlSource"
+                              value="substore"
+                              checked={urlSource === 'substore'}
+                              onChange={(e) => setUrlSource(e.target.value as 'manual' | 'substore')}
+                              className="w-4 h-4 text-blue-600"
+                            />
+                            <span className="text-sm text-gray-700 dark:text-gray-300">从 Sub-Store 选择</span>
+                          </label>
+                        </div>
                       </div>
+
+                      {urlSource === 'manual' ? (
+                        <div className="space-y-2">
+                          <Label htmlFor="url">订阅链接</Label>
+                          <Input
+                            id="url"
+                            placeholder="https://example.com/subscribe/..."
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value)}
+                            className="rounded-xl font-mono text-sm"
+                          />
+                          <p className="text-xs text-gray-500">
+                            支持 MiHomo/Clash 格式的订阅链接
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {loadingSubs ? (
+                            <div className="flex items-center justify-center py-8">
+                              <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                            </div>
+                          ) : substoreSubs.length === 0 ? (
+                            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                              <p className="text-sm text-amber-800 dark:text-amber-200">
+                                未找到 Sub-Store 订阅。请先在 Sub-Store 页面添加订阅。
+                              </p>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="space-y-2">
+                                <Label>选择订阅</Label>
+                                <div className="grid gap-2 max-h-[300px] overflow-y-auto p-1">
+                                  {substoreSubs.map((sub) => (
+                                    <label
+                                      key={sub.name}
+                                      className={cn(
+                                        "flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all",
+                                        selectedSub === sub.name
+                                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                                          : "border-gray-200 dark:border-zinc-700 hover:border-blue-300 dark:hover:border-blue-700"
+                                      )}
+                                    >
+                                      <input
+                                        type="radio"
+                                        name="sub"
+                                        value={sub.name}
+                                        checked={selectedSub === sub.name}
+                                        onChange={(e) => setSelectedSub(e.target.value)}
+                                        className="w-4 h-4 text-blue-600"
+                                      />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="font-medium text-sm text-gray-900 dark:text-white truncate">
+                                          {sub.displayName || sub.name}
+                                        </div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 font-mono truncate">
+                                          {sub.name}
+                                        </div>
+                                      </div>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {selectedSub && url && (
+                                <div className="space-y-2">
+                                  <Label>生成的订阅链接</Label>
+                                  <div className="p-3 bg-gray-50 dark:bg-zinc-800 rounded-lg border border-gray-200 dark:border-zinc-700">
+                                    <p className="text-xs font-mono text-gray-600 dark:text-gray-400 break-all">
+                                      {url}
+                                    </p>
+                                  </div>
+                                  <p className="text-xs text-gray-500">
+                                    目标格式: ClashMeta
+                                  </p>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
                     </TabsContent>
 
                     <TabsContent value="local" className="space-y-4 mt-0">
@@ -623,7 +778,7 @@ export default function SubscriptionPage() {
                           ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
                           : "bg-gray-100 text-gray-500 dark:bg-zinc-800 dark:text-gray-400"
                       )}>
-                        {profile.proxyCount} 策略
+                        {profile.proxyCount} 节点
                       </span>
                       <span className="text-xs text-gray-400">
                         {profile.ruleCount} 规则

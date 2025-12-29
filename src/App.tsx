@@ -3,6 +3,7 @@ import AppLayout from './components/layout/AppLayout';
 import Home from './pages/Home';
 import Overview from './pages/Overview';
 import Proxy from './pages/Proxy';
+import ProxyGroups from './pages/ProxyGroups';
 import ProxyServers from './pages/ProxyServers';
 import Rules from './pages/Rules';
 import Settings from './pages/Settings';
@@ -21,6 +22,7 @@ function App() {
           <Route index element={<Home />} />
           <Route path="overview" element={<Overview />} />
           <Route path="proxy" element={<Proxy />} />
+          <Route path="proxy-groups" element={<ProxyGroups />} />
           <Route path="proxy-servers" element={<ProxyServers />} />
           <Route path="subscription" element={<Subscription />} />
           <Route path="sub-store" element={<SubStore />} />

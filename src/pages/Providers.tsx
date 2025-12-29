@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   RefreshCw,
   Clock,
@@ -35,7 +35,7 @@ import {
 import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
 import { useToast } from '@/hooks/useToast';
-import type { ProfileConfig, ProxyProvider, RuleProvider } from '@/types/config';
+import type { ProfileConfig, ProxyProvider, RuleProvider, ProfileMetadata } from '@/types/config';
 
 // -----------------------------------------------------------------------------
 // UI Components
@@ -450,7 +450,13 @@ export default function Providers() {
 
   // 活跃 Profile 数据
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [profileMetadata, setProfileMetadata] = useState<ProfileMetadata | null>(null);
   const [profileConfig, setProfileConfig] = useState<ProfileConfig | null>(null);
+
+  // 判断是否为远程订阅
+  const isRemoteProfile = useMemo(() => {
+    return profileMetadata?.profileType === 'remote';
+  }, [profileMetadata]);
 
   // Dialog states
   const [proxyDialogOpen, setProxyDialogOpen] = useState(false);
@@ -469,13 +475,16 @@ export default function Providers() {
       setActiveProfileId(activeId);
 
       if (activeId) {
-        const [, config] = await ipc.getProfile(activeId);
+        const [metadata, config] = await ipc.getProfile(activeId);
+        setProfileMetadata(metadata);
         setProfileConfig(config);
       } else {
+        setProfileMetadata(null);
         setProfileConfig(null);
       }
     } catch (error) {
       console.error('Failed to load active profile:', error);
+      setProfileMetadata(null);
       setProfileConfig(null);
     } finally {
       setLoading(false);
@@ -582,16 +591,18 @@ export default function Providers() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => activeTab === 'proxy' ? setProxyDialogOpen(true) : setRuleDialogOpen(true)}
-              disabled={!activeProfileId}
-              className="rounded-full gap-2 h-9 px-4 bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
-            >
-              <Plus className="w-4 h-4" />
-              添加{activeTab === 'proxy' ? '代理源' : '规则源'}
-            </Button>
+            {!isRemoteProfile && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => activeTab === 'proxy' ? setProxyDialogOpen(true) : setRuleDialogOpen(true)}
+                disabled={!activeProfileId}
+                className="rounded-full gap-2 h-9 px-4 bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
+              >
+                <Plus className="w-4 h-4" />
+                添加{activeTab === 'proxy' ? '代理源' : '规则源'}
+              </Button>
+            )}
 
             <Button
               variant="ghost"
@@ -637,14 +648,20 @@ export default function Providers() {
           <p className="font-medium text-gray-600 dark:text-gray-300">
             暂无{activeTab === 'proxy' ? '代理' : '规则'}源
           </p>
-          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">点击上方按钮添加新的资源</p>
-          <Button
-            className="mt-4 rounded-full gap-2"
-            onClick={() => activeTab === 'proxy' ? setProxyDialogOpen(true) : setRuleDialogOpen(true)}
-          >
-            <Plus className="w-4 h-4" />
-            添加{activeTab === 'proxy' ? '代理源' : '规则源'}
-          </Button>
+          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">
+            {isRemoteProfile
+              ? `远程订阅的配置为只读，无法添加${activeTab === 'proxy' ? '代理源' : '规则源'}`
+              : '点击上方按钮添加新的资源'}
+          </p>
+          {!isRemoteProfile && (
+            <Button
+              className="mt-4 rounded-full gap-2"
+              onClick={() => activeTab === 'proxy' ? setProxyDialogOpen(true) : setRuleDialogOpen(true)}
+            >
+              <Plus className="w-4 h-4" />
+              添加{activeTab === 'proxy' ? '代理源' : '规则源'}
+            </Button>
+          )}
         </div>
       ) : activeTab === 'proxy' ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -655,29 +672,31 @@ export default function Providers() {
               icon={Server}
               iconColor="text-blue-500"
               action={
-                <div className="flex gap-1">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
-                    title="编辑"
-                    onClick={() => {
-                      setEditProxyProvider({ name, provider });
-                      setProxyDialogOpen(true);
-                    }}
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                    title="删除"
-                    onClick={() => setDeleteConfirm({ type: 'proxy', name })}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
+                !isRemoteProfile ? (
+                  <div className="flex gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                      title="编辑"
+                      onClick={() => {
+                        setEditProxyProvider({ name, provider });
+                        setProxyDialogOpen(true);
+                      }}
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                      title="删除"
+                      onClick={() => setDeleteConfirm({ type: 'proxy', name })}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ) : undefined
               }
             >
               <div className="space-y-3">
@@ -722,29 +741,31 @@ export default function Providers() {
               icon={FileText}
               iconColor="text-purple-500"
               action={
-                <div className="flex gap-1">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
-                    title="编辑"
-                    onClick={() => {
-                      setEditRuleProvider({ name, provider });
-                      setRuleDialogOpen(true);
-                    }}
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                    title="删除"
-                    onClick={() => setDeleteConfirm({ type: 'rule', name })}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
+                !isRemoteProfile ? (
+                  <div className="flex gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                      title="编辑"
+                      onClick={() => {
+                        setEditRuleProvider({ name, provider });
+                        setRuleDialogOpen(true);
+                      }}
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                      title="删除"
+                      onClick={() => setDeleteConfirm({ type: 'rule', name })}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ) : undefined
               }
             >
               <div className="space-y-3">

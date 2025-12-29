@@ -7,6 +7,7 @@ import {
   ProfileIcon,
   ConvertIcon,
   NodesIcon,
+  GroupsIcon,
   ServersIcon,
   RulesIcon,
   ResourceIcon,
@@ -43,11 +44,12 @@ const navGroups: NavGroup[] = [
   {
     title: '代理',
     items: [
-      { path: '/proxy-servers', icon: ServersIcon, label: '服务器' },
       { path: '/proxy', icon: NodesIcon, label: '策略' },
+      { path: '/proxy-groups', icon: GroupsIcon, label: '策略组' },
       { path: '/rules', icon: RulesIcon, label: '规则' },
       { path: '/providers', icon: ResourceIcon, label: '资源' },
       { path: '/rule-database', icon: GeoDataIcon, label: '数据库' },
+      { path: '/proxy-servers', icon: ServersIcon, label: '服务器' },
     ]
   },
   {

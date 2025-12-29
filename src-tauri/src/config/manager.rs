@@ -261,6 +261,29 @@ impl ConfigManager {
         Ok(())
     }
 
+    /// 更新 TUN 开关
+    pub fn update_tun_mode(&self, enabled: bool) -> Result<()> {
+        let mut config = self.load_mihomo_config()?;
+        let mut tun = config.tun.unwrap_or_default();
+
+        tun.enable = enabled;
+        if enabled {
+            if tun.stack.is_none() {
+                tun.stack = Some("system".to_string());
+            }
+            if tun.auto_route.is_none() {
+                tun.auto_route = Some(true);
+            }
+            if tun.auto_detect_interface.is_none() {
+                tun.auto_detect_interface = Some(true);
+            }
+        }
+
+        config.tun = Some(tun);
+        self.save_mihomo_config(&config)?;
+        Ok(())
+    }
+
     /// 更新混合端口
     pub fn update_mixed_port(&self, port: Option<u16>) -> Result<()> {
         let mut config = self.load_mihomo_config()?;

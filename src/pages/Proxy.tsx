@@ -8,85 +8,46 @@ import {
   Shield, 
   Activity, 
   AlertCircle, 
-  ExternalLink, 
-  Wifi
+  ExternalLink 
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProxyStore } from '@/stores/proxyStore';
 import { useToast } from '@/hooks/useToast';
-import { formatDelay, getDelayColorClass } from '@/utils/format';
+import { formatDelay } from '@/utils/format';
 import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
 import type { ProxyMode, ProxyServerInfo, ProxyGroup } from '@/types/proxy';
 
-// -----------------------------------------------------------------------------
-// UI Components
-// -----------------------------------------------------------------------------
+const MANUAL_SELECT_TYPES = new Set(['selector']);
+const CARD_BG_STORAGE_KEY = 'proxy-group-card-backgrounds';
+const CARD_BACKGROUNDS = [
+  'bg-gradient-to-br from-amber-50 to-rose-50 dark:from-amber-950/30 dark:to-rose-950/20',
+  'bg-gradient-to-br from-sky-50 to-emerald-50 dark:from-sky-950/30 dark:to-emerald-950/20',
+  'bg-gradient-to-br from-indigo-50 to-cyan-50 dark:from-indigo-950/30 dark:to-cyan-950/20',
+  'bg-gradient-to-br from-lime-50 to-teal-50 dark:from-lime-950/25 dark:to-teal-950/20',
+  'bg-gradient-to-br from-fuchsia-50 to-orange-50 dark:from-fuchsia-950/25 dark:to-orange-950/20',
+  'bg-gradient-to-br from-slate-50 to-stone-50 dark:from-slate-900/40 dark:to-stone-900/30',
+];
 
-function BentoCard({ 
-  className, 
-  children, 
-  title, 
-  icon: Icon,
-  iconColor = "text-gray-500",
-  action 
-}: { 
-  className?: string; 
-  children: React.ReactNode; 
-  title?: string;
-  icon?: React.ElementType;
-  iconColor?: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className={cn(
-      "bg-white dark:bg-zinc-900 rounded-[20px] p-5 shadow-xs border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden",
-      className
-    )}>
-      {(title || Icon) && (
-        <div className="flex justify-between items-center mb-4 z-10">
-          <div className="flex items-center gap-2">
-            {Icon && <Icon className={cn("w-4 h-4", iconColor)} />}
-            {title && (
-              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                {title}
-              </span>
-            )}
-          </div>
-          {action}
-        </div>
-      )}
-      <div className="flex-1 z-10">{children}</div>
-    </div>
-  );
-}
+const isManualSelectableGroup = (group: ProxyGroup) =>
+  MANUAL_SELECT_TYPES.has(group.type.trim().toLowerCase());
 
-// -----------------------------------------------------------------------------
-// Helper Data
-// -----------------------------------------------------------------------------
-
-const getProxyTypeColor = (type: string) => {
-  const t = type.toLowerCase();
-  if (t.includes('ss') || t === 'shadowsocks') return 'bg-violet-500/10 text-violet-600 dark:text-violet-400';
-  if (t.includes('vmess') || t.includes('vless')) return 'bg-blue-500/10 text-blue-600 dark:text-blue-400';
-  if (t.includes('trojan')) return 'bg-red-500/10 text-red-600 dark:text-red-400';
-  if (t.includes('hysteria')) return 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
-  if (t.includes('wireguard')) return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
-  if (t.includes('tuic')) return 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400';
-  return 'bg-gray-500/10 text-gray-600 dark:text-gray-400';
-};
-
-const getProxyTypeBgColor = (type: string) => {
-  const t = type.toLowerCase();
-  if (t.includes('ss') || t === 'shadowsocks') return 'bg-violet-500';
-  if (t.includes('vmess') || t.includes('vless')) return 'bg-blue-500';
-  if (t.includes('trojan')) return 'bg-red-500';
-  if (t.includes('hysteria')) return 'bg-amber-500';
-  if (t.includes('wireguard')) return 'bg-emerald-500';
-  if (t.includes('tuic')) return 'bg-cyan-500';
-  return 'bg-gray-500';
+const getGroupTypeLabel = (group: ProxyGroup) => {
+  const type = group.type.trim().toLowerCase();
+  if (type === 'selector') return '手动选择策略组';
+  if (type === 'urltest') return 'Smart 策略组';
+  if (type === 'fallback') return 'Fallback 策略组';
+  if (type === 'loadbalance') return 'Smart 策略组';
+  return '策略组';
 };
 
 // -----------------------------------------------------------------------------
@@ -109,10 +70,21 @@ export default function Proxy() {
   const { toast } = useToast();
   const [testingPolicies, setTestingPolicies] = useState<Set<string>>(new Set());
   const [delays, setDelays] = useState<Record<string, number>>({});
+  const [activeGroup, setActiveGroup] = useState<ProxyGroup | null>(null);
+  const [cardBackgrounds, setCardBackgrounds] = useState<Record<string, number>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const raw = window.localStorage.getItem(CARD_BG_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
 
   // 代理服务器列表
   const [proxyServers, setProxyServers] = useState<ProxyServerInfo[]>([]);
-  const [loadingServers, setLoadingServers] = useState(false);
 
   // 是否有活跃的 Profile
   const [hasActiveProfile, setHasActiveProfile] = useState<boolean | null>(null);
@@ -133,14 +105,11 @@ export default function Proxy() {
 
   // 加载代理服务器列表
   const loadProxyServers = async () => {
-    setLoadingServers(true);
     try {
       const servers = await ipc.getConfigProxies();
       setProxyServers(servers);
     } catch (error) {
       console.error('Failed to load proxy servers:', error);
-    } finally {
-      setLoadingServers(false);
     }
   };
 
@@ -167,6 +136,36 @@ export default function Proxy() {
 
     return { mainGroup: main, strategyGroups: strategies };
   }, [groups]);
+
+  const groupCards = useMemo(() => {
+    const list: ProxyGroup[] = [];
+    if (mainGroup) list.push(mainGroup);
+    list.push(...strategyGroups);
+    return list;
+  }, [mainGroup, strategyGroups]);
+
+  useEffect(() => {
+    if (!groupCards.length) return;
+    setCardBackgrounds((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const group of groupCards) {
+        const existing = next[group.name];
+        if (typeof existing !== 'number' || existing < 0 || existing >= CARD_BACKGROUNDS.length) {
+          next[group.name] = Math.floor(Math.random() * CARD_BACKGROUNDS.length);
+          changed = true;
+        }
+      }
+      if (changed) {
+        try {
+          window.localStorage.setItem(CARD_BG_STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          // ignore storage failures
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [groupCards]);
 
   const handleModeChange = async (value: string) => {
     try {
@@ -222,223 +221,106 @@ export default function Proxy() {
     }
   };
 
-  const handleTestAllServerDelays = async () => {
-    for (const server of proxyServers) {
-      handleTestDelay(server.name);
+  const handlePolicySelect = async (group: ProxyGroup, policyName: string) => {
+    if (!isManualSelectableGroup(group)) {
+      toast({
+        title: '自动策略组',
+        description: '该策略组会自动选择节点，无法手动切换。',
+      });
+      return;
     }
+    await handleSelectProxy(group.name, policyName);
+    setActiveGroup(null);
   };
 
-  const renderGroupCard = (group: ProxyGroup, isMain = false) => (
-    <BentoCard 
-      key={group.name} 
-      title={group.name}
-      icon={Server}
-      iconColor={isMain ? "text-blue-500" : "text-orange-500"}
-      className="p-4"
-      action={
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => handleTestAllDelays(group.all)}
-          disabled={loading}
-          className="h-7 px-2 text-xs text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-        >
-          <Zap className="w-3.5 h-3.5 mr-1" />
-          测速全部
-        </Button>
-      }
-    >
-        <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {group.all.map((policyName: string) => {
-            const isSelected = group.now === policyName;
-            const isTesting = testingPolicies.has(policyName);
-            const delay = delays[policyName];
-            const isSpecial = ['DIRECT', 'REJECT', 'COMPATIBLE'].includes(policyName);
-            
-            return (
-              <button
-                key={policyName}
-                onClick={() => handleSelectProxy(group.name, policyName)}
-                className={cn(
-                  'relative p-2.5 rounded-xl border text-left transition-all duration-200 group flex flex-col justify-between h-[72px] overflow-hidden',
-                  isSelected 
-                    ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 shadow-md shadow-blue-500/10 ring-1 ring-blue-500/20' 
-                    : 'border-gray-100 dark:border-zinc-700 bg-white dark:bg-zinc-800/50 hover:bg-gray-50 dark:hover:bg-zinc-800 hover:border-gray-200 dark:hover:border-zinc-600 hover:shadow-sm'
-                )}
-              >
-                {/* 装饰性背景光晕 */}
-                {isSelected && (
-                  <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-blue-500/10 to-transparent rounded-bl-3xl -mr-2 -mt-2 pointer-events-none" />
-                )}
-                
-                {/* 选中标识 - 简化版 */}
-                {isSelected && (
-                  <div className="absolute top-2 right-2 z-10">
-                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-sm ring-2 ring-white dark:ring-zinc-900" />
-                  </div>
-                )}
+  const renderPolicyList = (group: ProxyGroup) => {
+    const manualSelectable = isManualSelectableGroup(group);
+    return (
+      <div className="max-h-[60vh] overflow-y-auto rounded-2xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+        {group.all.map((policyName) => {
+          const isSelected = group.now === policyName;
+          const isTesting = testingPolicies.has(policyName);
+          const delay = delays[policyName];
 
-                {/* 策略名称 */}
-                <div className={cn(
-                  "font-medium text-xs line-clamp-2 leading-tight pr-3 z-10",
-                  isSelected ? "text-blue-700 dark:text-blue-300" : "text-gray-700 dark:text-gray-300"
-                )}>
-                  {policyName}
-                </div>
-
-                {/* 底部信息栏 */}
-                <div className="flex items-center justify-between mt-auto pt-1.5 z-10">
-                   {/* 类型/特殊标签 */}
-                  {isSpecial ? (
-                     <div className="flex items-center gap-1">
-                        <div className="w-1 h-3 rounded-full bg-gray-300 dark:bg-gray-600" />
-                        <span className="text-[10px] text-gray-500">内置</span>
-                     </div>
-                  ) : (
-                    <div className="flex items-center gap-1.5">
-                       {/* 延迟指示点 */}
-                       <div className={cn(
-                         "w-1.5 h-1.5 rounded-full",
-                         delay !== undefined 
-                           ? (delay < 0 ? 'bg-red-400' : delay < 200 ? 'bg-emerald-400' : 'bg-amber-400')
-                           : 'bg-gray-200 dark:bg-zinc-700'
-                       )} />
-                       
-                       {delay !== undefined ? (
-                        <span className={cn(
-                          "text-[10px] font-medium tabular-nums",
-                          delay < 0 ? 'text-gray-400' : delay < 200 ? 'text-emerald-500' : delay < 500 ? 'text-amber-500' : 'text-red-500'
-                        )}>
-                          {formatDelay(delay)}
-                        </span>
-                       ) : isTesting ? (
-                         <RefreshCw className="w-2.5 h-2.5 animate-spin text-gray-400" />
-                       ) : (
-                         <span className="text-[9px] text-gray-400 group-hover:text-blue-500 transition-colors">测速</span>
-                       )}
-                    </div>
+          return (
+            <button
+              key={policyName}
+              onClick={() => handlePolicySelect(group, policyName)}
+              aria-disabled={!manualSelectable}
+              className={cn(
+                'w-full flex items-center justify-between px-4 py-3 text-left border-b border-gray-100 dark:border-zinc-800 transition-colors',
+                'last:border-b-0',
+                isSelected
+                  ? 'bg-blue-50/70 dark:bg-blue-900/20'
+                  : 'hover:bg-gray-50 dark:hover:bg-zinc-800/50',
+                !manualSelectable && 'cursor-not-allowed opacity-70'
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    'text-sm font-medium',
+                    isSelected
+                      ? 'text-blue-700 dark:text-blue-300'
+                      : 'text-gray-700 dark:text-gray-200'
                   )}
-
-                  {/* 测速按钮 (仅在未测速且非特殊策略时显示) */}
-                  {!isTesting && delay === undefined && !isSpecial && (
-                    <div 
-                      className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-2 right-2 p-1 hover:bg-gray-100 dark:hover:bg-zinc-700 rounded-md"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleTestDelay(policyName);
-                      }}
-                    >
-                      <Zap className="w-3 h-3 text-gray-400 hover:text-blue-500" />
-                    </div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-    </BentoCard>
-  );
-
-  // 渲染代理服务器列表卡片
-  const renderProxyServersCard = () => (
-    <BentoCard 
-      title="全部代理" 
-      icon={Wifi} 
-      iconColor="text-emerald-500"
-      action={
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleTestAllServerDelays}
-          disabled={loading || loadingServers}
-          className="h-7 px-2 text-xs text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
-        >
-          <Zap className="w-3.5 h-3.5 mr-1" />
-          测速全部
-        </Button>
-      }
-    >
-        {loadingServers ? (
-          <div className="flex items-center justify-center py-12">
-            <RefreshCw className="w-6 h-6 animate-spin text-gray-300" />
-          </div>
-        ) : proxyServers.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
-            <p className="text-sm">暂无代理服务器</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {proxyServers.map((server) => {
-              const isTesting = testingPolicies.has(server.name);
-              const delay = delays[server.name];
-
-              return (
-                <div
-                  key={server.name}
-                  className="relative p-2.5 rounded-xl border border-gray-100 dark:border-zinc-700 bg-white dark:bg-zinc-900/50 text-left hover:bg-gray-50 dark:hover:bg-zinc-800 hover:border-gray-200 dark:hover:border-zinc-600 transition-all flex flex-col justify-between h-[80px] group overflow-hidden"
                 >
-                  <div className="z-10">
-                    {/* 策略名称 */}
-                    <div className="font-medium text-xs text-gray-700 dark:text-gray-300 line-clamp-1 mb-0.5">
-                      {server.name}
-                    </div>
+                  {policyName}
+                </span>
+                {isSelected && <span className="text-[10px] text-blue-500">当前</span>}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                {isTesting ? (
+                  <RefreshCw className="w-3 h-3 animate-spin text-gray-400" />
+                ) : delay !== undefined ? (
+                  <span
+                    className={cn(
+                      'font-medium tabular-nums',
+                      delay < 0
+                        ? 'text-gray-400'
+                        : delay < 200
+                          ? 'text-emerald-500'
+                          : delay < 500
+                            ? 'text-amber-500'
+                            : 'text-red-500'
+                    )}
+                  >
+                    {formatDelay(delay)}
+                  </span>
+                ) : (
+                  <span>未测速</span>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
 
-                     {/* 服务器地址 */}
-                    <div className="text-[10px] text-gray-400 font-mono truncate opacity-60">
-                      {server.server}:{server.port}
-                    </div>
-                  </div>
-
-                  {/* 装饰性背景 */}
-                  <div className={cn(
-                    "absolute -right-4 -bottom-4 w-12 h-12 rounded-full opacity-5 pointer-events-none transition-opacity group-hover:opacity-10",
-                    getProxyTypeBgColor(server.type)
-                  )} />
-
-                  <div className="flex items-end justify-between z-10">
-                    {/* 服务器信息 */}
-                    <div className="flex flex-wrap gap-1">
-                      <span className={cn("text-[9px] font-bold rounded-md px-1 py-0.5 uppercase tracking-wider", getProxyTypeColor(server.type))}>
-                        {server.type}
-                      </span>
-                      {server.udp && (
-                         <span className="text-[9px] font-bold rounded-md px-1 py-0.5 bg-blue-500/5 text-blue-600 dark:text-blue-400 border border-blue-500/10">UDP</span>
-                      )}
-                    </div>
-
-                    {/* 延迟信息 */}
-                    <div>
-                      {isTesting ? (
-                        <RefreshCw className="w-3 h-3 animate-spin text-gray-400" />
-                      ) : delay !== undefined ? (
-                        <div className="flex items-center gap-1">
-                          <div className={cn(
-                             "w-1.5 h-1.5 rounded-full",
-                             delay < 0 ? 'bg-red-400' : delay < 200 ? 'bg-emerald-400' : 'bg-amber-400'
-                           )} />
-                          <span
-                            className={cn('text-[10px] font-bold', getDelayColorClass(delay).replace('bg-', 'text-').replace('/10', ''))}
-                          >
-                            {formatDelay(delay)}
-                          </span>
-                        </div>
-                      ) : (
-                        <div 
-                           className="opacity-0 group-hover:opacity-100 transition-opacity p-1 -mr-1 hover:bg-gray-100 dark:hover:bg-zinc-700 rounded-md cursor-pointer"
-                           onClick={() => handleTestDelay(server.name)}
-                        >
-                          <Zap className="w-3 h-3 text-gray-400 hover:text-emerald-500" />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+  const renderGroupCard = (group: ProxyGroup) => {
+    const currentName = group.now || '未选择';
+    const backgroundIndex = cardBackgrounds[group.name];
+    const backgroundClass =
+      backgroundIndex !== undefined
+        ? CARD_BACKGROUNDS[backgroundIndex] || CARD_BACKGROUNDS[0]
+        : CARD_BACKGROUNDS[0];
+    return (
+      <button
+        key={group.name}
+        onClick={() => setActiveGroup(group)}
+        className={cn(
+          'rounded-2xl border border-gray-200 dark:border-zinc-800 px-5 py-4 text-left transition-all',
+          'hover:border-gray-300 dark:hover:border-zinc-700 hover:shadow-sm',
+          backgroundClass
         )}
-    </BentoCard>
-  );
+      >
+        <div className="text-xs text-gray-400">{getGroupTypeLabel(group)}</div>
+        <div className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{group.name}</div>
+        <div className="mt-6 text-sm text-gray-400">{currentName}</div>
+      </button>
+    );
+  };
 
   const renderContent = () => {
     if (!status.running) {
@@ -487,22 +369,12 @@ export default function Proxy() {
 
     return (
       <div className="space-y-6">
-        {/* 策略组 (主策略组) */}
-        {mainGroup && (
-          <div className="space-y-3">
-            <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 px-1 uppercase tracking-wider">策略组</h2>
-            {renderGroupCard(mainGroup, true)}
+        <div className="space-y-3">
+          <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 px-1 uppercase tracking-wider">策略组</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {groupCards.map((group) => renderGroupCard(group))}
           </div>
-        )}
-
-        {/* 其他策略组 */}
-        {strategyGroups.length > 0 && (
-          <div className="space-y-4">
-             {/* 可以在这里添加一个小标题，如果需要区分的话 */}
-            {strategyGroups.map(group => renderGroupCard(group))}
-          </div>
-        )}
-
+        </div>
       </div>
     );
   };
@@ -550,6 +422,38 @@ export default function Proxy() {
       </div>
 
       {renderContent()}
+
+      <Dialog open={!!activeGroup} onOpenChange={(open) => !open && setActiveGroup(null)}>
+        <DialogContent className="max-w-3xl">
+          {activeGroup && (
+            <div className="space-y-4">
+              <DialogHeader className="text-left">
+                <DialogTitle>{activeGroup.name}</DialogTitle>
+                <DialogDescription>
+                  {getGroupTypeLabel(activeGroup)}
+                  {!isManualSelectableGroup(activeGroup) && ' · 自动选择，无法手动切换'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">
+                  当前选择: {activeGroup.now || '未选择'}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleTestAllDelays(activeGroup.all)}
+                  disabled={loading}
+                  className="rounded-full"
+                >
+                  <Zap className="w-3.5 h-3.5 mr-1" />
+                  测速全部
+                </Button>
+              </div>
+              {renderPolicyList(activeGroup)}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

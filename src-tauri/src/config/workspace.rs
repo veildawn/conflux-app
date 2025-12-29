@@ -122,7 +122,7 @@ impl Workspace {
     /// 创建新 Profile（从远程 URL）
     pub async fn create_from_remote(&self, name: &str, url: &str) -> Result<ProfileMetadata> {
         let id = uuid::Uuid::new_v4().to_string();
-        let mut config = Composer::fetch_and_parse(url).await?;
+        let (mut config, default_rules_applied) = Composer::fetch_and_parse_with_flags(url).await?;
 
         // 修正 rule-provider 路径
         Composer::fix_provider_paths(&mut config, &self.ruleset_dir)?;
@@ -130,12 +130,14 @@ impl Workspace {
         // 过滤无效规则
         Composer::filter_invalid_rules(&mut config);
 
-        let mut metadata = ProfileMetadata::new_remote(id.clone(), name.to_string(), url.to_string());
+        let mut metadata =
+            ProfileMetadata::new_remote(id.clone(), name.to_string(), url.to_string());
         metadata.update_stats(
             config.proxy_count(),
             config.group_count(),
             config.rule_count(),
         );
+        metadata.default_rules_applied = Some(default_rules_applied);
 
         self.save_profile(&id, &metadata, &config)?;
 
@@ -352,7 +354,7 @@ impl Workspace {
             .as_ref()
             .ok_or_else(|| anyhow!("Remote profile has no URL"))?;
 
-        let mut config = Composer::fetch_and_parse(url).await?;
+        let (mut config, default_rules_applied) = Composer::fetch_and_parse_with_flags(url).await?;
 
         // 修正 rule-provider 路径
         Composer::fix_provider_paths(&mut config, &self.ruleset_dir)?;
@@ -366,6 +368,7 @@ impl Workspace {
             config.group_count(),
             config.rule_count(),
         );
+        new_metadata.default_rules_applied = Some(default_rules_applied);
 
         self.save_profile(id, &new_metadata, &config)?;
 
