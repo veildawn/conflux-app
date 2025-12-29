@@ -84,6 +84,96 @@ pub struct MihomoConfig {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tun: Option<TunConfig>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dns: Option<DnsConfig>,
+}
+
+/// DNS Fallback 过滤器配置
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DnsFallbackFilter {
+    #[serde(default)]
+    pub geoip: bool,
+
+    #[serde(rename = "geoip-code", skip_serializing_if = "Option::is_none")]
+    pub geoip_code: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub geosite: Vec<String>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ipcidr: Vec<String>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub domain: Vec<String>,
+}
+
+/// DNS 配置
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DnsConfig {
+    /// 是否启用 DNS
+    #[serde(default)]
+    pub enable: bool,
+
+    /// DNS 监听地址
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub listen: Option<String>,
+
+    /// DNS 处理模式: normal, fake-ip, redir-host
+    #[serde(rename = "enhanced-mode", skip_serializing_if = "Option::is_none")]
+    pub enhanced_mode: Option<String>,
+
+    /// Fake IP 范围
+    #[serde(rename = "fake-ip-range", skip_serializing_if = "Option::is_none")]
+    pub fake_ip_range: Option<String>,
+
+    /// Fake IP 过滤模式: blacklist, whitelist
+    #[serde(rename = "fake-ip-filter-mode", skip_serializing_if = "Option::is_none")]
+    pub fake_ip_filter_mode: Option<String>,
+
+    /// Fake IP 过滤列表
+    #[serde(rename = "fake-ip-filter", default, skip_serializing_if = "Vec::is_empty")]
+    pub fake_ip_filter: Vec<String>,
+
+    /// 默认 DNS 服务器（用于解析 DNS 服务器域名）
+    #[serde(rename = "default-nameserver", default, skip_serializing_if = "Vec::is_empty")]
+    pub default_nameserver: Vec<String>,
+
+    /// 主 DNS 服务器
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nameserver: Vec<String>,
+
+    /// 备用 DNS 服务器
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fallback: Vec<String>,
+
+    /// Fallback 过滤器
+    #[serde(rename = "fallback-filter", skip_serializing_if = "Option::is_none")]
+    pub fallback_filter: Option<DnsFallbackFilter>,
+
+    /// 是否优先使用 HTTP/3
+    #[serde(rename = "prefer-h3", default)]
+    pub prefer_h3: bool,
+
+    /// 是否使用 hosts 文件
+    #[serde(rename = "use-hosts", default = "default_true")]
+    pub use_hosts: bool,
+
+    /// 是否使用系统 hosts
+    #[serde(rename = "use-system-hosts", default = "default_true")]
+    pub use_system_hosts: bool,
+
+    /// DNS 连接是否遵循路由规则
+    #[serde(rename = "respect-rules", default)]
+    pub respect_rules: bool,
+
+    /// 缓存算法: lru, arc
+    #[serde(rename = "cache-algorithm", skip_serializing_if = "Option::is_none")]
+    pub cache_algorithm: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// TUN 配置
@@ -103,6 +193,16 @@ pub struct TunConfig {
         skip_serializing_if = "Option::is_none"
     )]
     pub auto_detect_interface: Option<bool>,
+
+    /// 严格路由，强制所有流量（包括局域网）走 TUN
+    /// 确保局域网 DNS 也能被正确劫持
+    #[serde(rename = "strict-route", skip_serializing_if = "Option::is_none")]
+    pub strict_route: Option<bool>,
+
+    /// DNS 劫持地址列表，TUN 模式下必需
+    /// 例如: ["any:53", "tcp://any:53"]
+    #[serde(rename = "dns-hijack", default, skip_serializing_if = "Vec::is_empty")]
+    pub dns_hijack: Vec<String>,
 }
 
 /// GeoX URL 配置
@@ -172,6 +272,7 @@ impl Default for MihomoConfig {
             ipv6: false,
             tcp_concurrent: false,
             tun: None,
+            dns: None,
         }
     }
 }

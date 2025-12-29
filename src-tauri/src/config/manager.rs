@@ -277,6 +277,17 @@ impl ConfigManager {
             if tun.auto_detect_interface.is_none() {
                 tun.auto_detect_interface = Some(true);
             }
+            // 严格路由：强制所有流量（包括局域网 DNS）走 TUN，无需修改系统 DNS
+            if tun.strict_route.is_none() {
+                tun.strict_route = Some(true);
+            }
+            // TUN 模式下必须设置 dns-hijack，否则 DNS 请求无法被正确处理
+            if tun.dns_hijack.is_empty() {
+                tun.dns_hijack = vec![
+                    "any:53".to_string(),
+                    "tcp://any:53".to_string(),
+                ];
+            }
         }
 
         config.tun = Some(tun);

@@ -108,6 +108,8 @@ export default function Settings() {
   const [updateUrl, setUpdateUrl] = useState<string>('');
   const [dnsNameserverInput, setDnsNameserverInput] = useState('');
   const [dnsFallbackInput, setDnsFallbackInput] = useState('');
+  const [dnsDefaultNameserverInput, setDnsDefaultNameserverInput] = useState('');
+  const [dnsFakeIpFilterInput, setDnsFakeIpFilterInput] = useState('');
   const [loading, setLoading] = useState(true);
   const controlBase = "bg-white/80 dark:bg-zinc-900/50 border-white/70 dark:border-white/10 focus-visible:ring-sky-400/60";
   const controlSlim = "h-9 text-sm";
@@ -123,7 +125,11 @@ export default function Settings() {
     if (!config) return;
     setDnsNameserverInput((config.dns?.nameserver || []).join(', '));
     setDnsFallbackInput((config.dns?.fallback || []).join(', '));
+    setDnsDefaultNameserverInput((config.dns?.['default-nameserver'] || []).join(', '));
+    setDnsFakeIpFilterInput((config.dns?.['fake-ip-filter'] || []).join(', '));
   }, [config]);
+
+  const isFakeIpMode = config?.dns?.['enhanced-mode'] === 'fake-ip';
 
   const loadConfig = async () => {
     try {
@@ -264,8 +270,73 @@ export default function Settings() {
       .map((item) => item.trim())
       .filter(Boolean);
 
+  // 中国大陆最佳 DNS 默认配置
+  const getDefaultDnsConfig = () => ({
+    enable: true,
+    listen: '0.0.0.0:1053',
+    'enhanced-mode': 'fake-ip',
+    'fake-ip-range': '198.18.0.1/16',
+    'fake-ip-filter-mode': 'blacklist',
+    'fake-ip-filter': [
+      '*.lan',
+      '*.local',
+      '*.localhost',
+      '+.stun.*.*',
+      '+.stun.*.*.*',
+      'localhost.ptlogin2.qq.com',
+      'dns.msftncsi.com',
+      'www.msftncsi.com',
+      'www.msftconnecttest.com',
+    ],
+    // 默认 DNS：用于解析 DNS 服务器域名，必须是纯 IP
+    'default-nameserver': [
+      '223.5.5.5',      // 阿里 DNS
+      '119.29.29.29',   // 腾讯 DNSPod
+    ],
+    // 主 DNS：国内 DNS，用于解析国内域名
+    nameserver: [
+      'https://223.5.5.5/dns-query',      // 阿里 DoH
+      'https://doh.pub/dns-query',         // 腾讯 DoH
+    ],
+    // 备用 DNS：国外 DNS，用于解析被污染的域名
+    fallback: [
+      'https://1.1.1.1/dns-query',         // Cloudflare DoH
+      'https://8.8.8.8/dns-query',         // Google DoH
+      'tls://8.8.4.4:853',                 // Google DoT
+    ],
+    // Fallback 过滤器：智能分流
+    'fallback-filter': {
+      geoip: true,
+      'geoip-code': 'CN',
+      geosite: ['gfw'],
+      ipcidr: [
+        '240.0.0.0/4',    // 保留地址
+        '0.0.0.0/32',     // 无效地址
+      ],
+    },
+    'prefer-h3': true,
+    'use-hosts': true,
+    'use-system-hosts': true,
+    'respect-rules': false,
+    'cache-algorithm': 'arc',
+  });
+
   const handleDnsConfigChange = async (updates: Record<string, unknown>) => {
     if (!config) return;
+
+    // 如果是启用 DNS，且之前没有配置或配置为空，则填充默认配置
+    if (updates.enable === true) {
+      const currentDns = config.dns || {};
+      const hasValidConfig = currentDns.nameserver?.length > 0 || currentDns['default-nameserver']?.length > 0;
+
+      if (!hasValidConfig) {
+        // 使用默认配置
+        const defaultConfig = getDefaultDnsConfig();
+        await handleConfigChange({ dns: defaultConfig });
+        return;
+      }
+    }
+
     const nextDns = { ...(config.dns || {}), ...updates };
     await handleConfigChange({ dns: nextDns });
   };
@@ -364,8 +435,8 @@ export default function Settings() {
             <BentoCard title="DNS" icon={Server} iconColor="text-orange-500">
               <div className="flex flex-col gap-2 p-3">
                 <SettingItem
-                  title="DNS 启用"
-                  description="启用内置 DNS 解析"
+                  title="启用 DNS"
+                  description="启用内置 DNS 解析服务"
                   action={
                     <Switch
                       checked={config?.dns?.enable || false}
@@ -374,11 +445,12 @@ export default function Settings() {
                     />
                   }
                 />
-                {dnsEnabled ? (
+                {dnsEnabled && (
                   <>
+                    {/* 增强模式 */}
                     <SettingItem
-                      title="DNS 增强模式"
-                      description="选择 DNS 解析模式"
+                      title="增强模式"
+                      description="normal: 标准模式 | redir-host: 真实 IP | fake-ip: 虚拟 IP"
                       action={
                         <Select
                           value={config?.dns?.['enhanced-mode'] || 'normal'}
@@ -395,34 +467,162 @@ export default function Settings() {
                         </Select>
                       }
                     />
+
+                    {/* Fake IP 模式专属配置 */}
+                    {isFakeIpMode && (
+                      <>
+                        <SettingItem
+                          title="Fake IP 范围"
+                          description="虚拟 IP 分配范围"
+                          action={
+                            <Input
+                              value={config?.dns?.['fake-ip-range'] || '198.18.0.1/16'}
+                              onChange={(e) => handleDnsConfigChange({ 'fake-ip-range': e.target.value })}
+                              placeholder="198.18.0.1/16"
+                              className={cn("w-40", controlSlim, controlBase)}
+                            />
+                          }
+                        />
+                        <SettingItem
+                          title="Fake IP 过滤模式"
+                          description="blacklist: 列表内不使用 | whitelist: 仅列表内使用"
+                          action={
+                            <Select
+                              value={config?.dns?.['fake-ip-filter-mode'] || 'blacklist'}
+                              onValueChange={(value) => handleDnsConfigChange({ 'fake-ip-filter-mode': value })}
+                            >
+                              <SelectTrigger className={cn("w-32", controlSlim, controlBase)}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="blacklist">黑名单</SelectItem>
+                                <SelectItem value="whitelist">白名单</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          }
+                        />
+                        <SettingItem
+                          title="Fake IP 过滤列表"
+                          description="不使用 Fake IP 的域名，逗号分隔"
+                          action={
+                            <Input
+                              value={dnsFakeIpFilterInput}
+                              onChange={(e) => setDnsFakeIpFilterInput(e.target.value)}
+                              onBlur={() => handleDnsConfigChange({ 'fake-ip-filter': parseDnsList(dnsFakeIpFilterInput) })}
+                              placeholder="*.lan, localhost"
+                              className={cn("w-52", controlSlim, controlBase)}
+                            />
+                          }
+                        />
+                      </>
+                    )}
+
+                    {/* DNS 服务器配置 */}
                     <SettingItem
-                      title="DNS 服务器"
-                      description="多个地址请用逗号分隔"
+                      title="默认 DNS"
+                      description="用于解析 DNS 服务器域名，仅支持 IP"
+                      action={
+                        <Input
+                          value={dnsDefaultNameserverInput}
+                          onChange={(e) => setDnsDefaultNameserverInput(e.target.value)}
+                          onBlur={() => handleDnsConfigChange({ 'default-nameserver': parseDnsList(dnsDefaultNameserverInput) })}
+                          placeholder="114.114.114.114"
+                          className={cn("w-52", controlSlim, controlBase)}
+                        />
+                      }
+                    />
+                    <SettingItem
+                      title="主 DNS 服务器"
+                      description="支持 UDP/TCP/DoH/DoT，逗号分隔"
                       action={
                         <Input
                           value={dnsNameserverInput}
                           onChange={(e) => setDnsNameserverInput(e.target.value)}
                           onBlur={() => handleDnsConfigChange({ nameserver: parseDnsList(dnsNameserverInput) })}
-                          placeholder="1.1.1.1, 8.8.8.8"
+                          placeholder="https://1.1.1.1/dns-query"
                           className={cn("w-52", controlSlim, controlBase)}
                         />
                       }
                     />
                     <SettingItem
                       title="备用 DNS"
-                      description="当主 DNS 不可用时使用"
+                      description="当主 DNS 被污染时使用，一般为海外 DNS"
                       action={
                         <Input
                           value={dnsFallbackInput}
                           onChange={(e) => setDnsFallbackInput(e.target.value)}
                           onBlur={() => handleDnsConfigChange({ fallback: parseDnsList(dnsFallbackInput) })}
-                          placeholder="1.0.0.1, 8.8.4.4"
+                          placeholder="https://8.8.8.8/dns-query"
                           className={cn("w-52", controlSlim, controlBase)}
                         />
                       }
                     />
+
+                    {/* 高级选项 */}
+                    <SettingItem
+                      title="缓存算法"
+                      description="DNS 缓存使用的算法"
+                      action={
+                        <Select
+                          value={config?.dns?.['cache-algorithm'] || 'lru'}
+                          onValueChange={(value) => handleDnsConfigChange({ 'cache-algorithm': value })}
+                        >
+                          <SelectTrigger className={cn("w-24", controlSlim, controlBase)}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="lru">LRU</SelectItem>
+                            <SelectItem value="arc">ARC</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      }
+                    />
+                    <SettingItem
+                      title="优先 HTTP/3"
+                      description="DoH 优先使用 HTTP/3 协议"
+                      action={
+                        <Switch
+                          checked={config?.dns?.['prefer-h3'] || false}
+                          onCheckedChange={(checked) => handleDnsConfigChange({ 'prefer-h3': checked })}
+                          className="data-[state=checked]:bg-orange-500"
+                        />
+                      }
+                    />
+                    <SettingItem
+                      title="使用 hosts"
+                      description="响应配置的 hosts 映射"
+                      action={
+                        <Switch
+                          checked={config?.dns?.['use-hosts'] !== false}
+                          onCheckedChange={(checked) => handleDnsConfigChange({ 'use-hosts': checked })}
+                          className="data-[state=checked]:bg-orange-500"
+                        />
+                      }
+                    />
+                    <SettingItem
+                      title="使用系统 hosts"
+                      description="读取系统 hosts 文件"
+                      action={
+                        <Switch
+                          checked={config?.dns?.['use-system-hosts'] !== false}
+                          onCheckedChange={(checked) => handleDnsConfigChange({ 'use-system-hosts': checked })}
+                          className="data-[state=checked]:bg-orange-500"
+                        />
+                      }
+                    />
+                    <SettingItem
+                      title="遵循路由规则"
+                      description="DNS 连接遵循代理规则"
+                      action={
+                        <Switch
+                          checked={config?.dns?.['respect-rules'] || false}
+                          onCheckedChange={(checked) => handleDnsConfigChange({ 'respect-rules': checked })}
+                          className="data-[state=checked]:bg-orange-500"
+                        />
+                      }
+                    />
                   </>
-                ) : null}
+                )}
               </div>
             </BentoCard>
 

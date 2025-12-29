@@ -147,14 +147,14 @@ impl Composer {
             },
         ];
 
+        // 使用简单可靠的规则，避免依赖 GEOSITE 可能导致的问题
+        // GEOIP 规则更稳定，且 geoip.metadb 通常都能正确加载
         let rules = vec![
-            "GEOSITE,category-ads-all,REJECT".to_string(),
-            "GEOSITE,private,DIRECT".to_string(),
+            // 私有网络直连
             "GEOIP,private,DIRECT,no-resolve".to_string(),
-            "GEOSITE,steam@cn,DIRECT".to_string(),
-            "GEOSITE,category-games@cn,DIRECT".to_string(),
-            "GEOSITE,cn,DIRECT".to_string(),
+            // 中国大陆 IP 直连
             "GEOIP,cn,DIRECT,no-resolve".to_string(),
+            // 其他流量走代理
             format!("MATCH,{}", manual_group_name),
         ];
 

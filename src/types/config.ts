@@ -9,14 +9,50 @@ export interface GeoxUrl {
 }
 
 /**
+ * DNS Fallback 过滤器配置
+ */
+export interface DnsFallbackFilter {
+  geoip?: boolean;
+  'geoip-code'?: string;
+  geosite?: string[];
+  ipcidr?: string[];
+  domain?: string[];
+}
+
+/**
  * DNS 配置
  */
 export interface DnsConfig {
+  /** 是否启用 DNS */
   enable?: boolean;
+  /** DNS 监听地址 */
   listen?: string;
-  'enhanced-mode'?: string;
+  /** DNS 处理模式: normal, fake-ip, redir-host */
+  'enhanced-mode'?: 'normal' | 'fake-ip' | 'redir-host';
+  /** Fake IP 范围 */
+  'fake-ip-range'?: string;
+  /** Fake IP 过滤模式: blacklist, whitelist */
+  'fake-ip-filter-mode'?: 'blacklist' | 'whitelist';
+  /** Fake IP 过滤列表 */
+  'fake-ip-filter'?: string[];
+  /** 默认 DNS 服务器（用于解析 DNS 服务器域名） */
+  'default-nameserver'?: string[];
+  /** 主 DNS 服务器 */
   nameserver?: string[];
+  /** 备用 DNS 服务器 */
   fallback?: string[];
+  /** Fallback 过滤器 */
+  'fallback-filter'?: DnsFallbackFilter;
+  /** 是否优先使用 HTTP/3 */
+  'prefer-h3'?: boolean;
+  /** 是否使用 hosts 文件 */
+  'use-hosts'?: boolean;
+  /** 是否使用系统 hosts */
+  'use-system-hosts'?: boolean;
+  /** DNS 连接是否遵循路由规则 */
+  'respect-rules'?: boolean;
+  /** 缓存算法: lru, arc */
+  'cache-algorithm'?: 'lru' | 'arc';
 }
 
 /**
