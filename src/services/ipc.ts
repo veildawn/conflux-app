@@ -425,6 +425,20 @@ export const ipc = {
     return invoke('get_substore_status');
   },
 
+  /**
+   * 获取 Sub-Store 订阅列表
+   */
+  async getSubStoreSubs(): Promise<{ name: string; displayName?: string; icon?: string; url?: string }[]> {
+    return invoke('get_substore_subs');
+  },
+
+  /**
+   * 获取 Sub-Store 组合配置列表
+   */
+  async getSubStoreCollections(): Promise<{ name: string; displayName?: string; subscriptions?: string[] }[]> {
+    return invoke('get_substore_collections');
+  },
+
   // ============= Profile 命令 =============
 
   /**

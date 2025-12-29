@@ -18,6 +18,12 @@ impl Composer {
 
     /// 从远程 URL 获取并解析配置
     pub async fn fetch_and_parse(url: &str) -> Result<ProfileConfig> {
+        let (config, _) = Self::fetch_and_parse_with_flags(url).await?;
+        Ok(config)
+    }
+
+    /// 从远程 URL 获取并解析配置，并返回是否自动生成默认规则
+    pub async fn fetch_and_parse_with_flags(url: &str) -> Result<(ProfileConfig, bool)> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .build()?;
@@ -41,12 +47,24 @@ impl Composer {
             .await
             .map_err(|e| anyhow!("Failed to read response: {}", e))?;
 
-        Self::parse_yaml(&content)
+        let mut config = Self::parse_yaml(&content)?;
+        let mut default_rules_applied = false;
+        if Self::should_apply_nodes_only_template(&config) {
+            log::info!("Remote subscription only contains proxies, applying template config");
+            config = Self::build_nodes_only_template(config.proxies);
+            default_rules_applied = true;
+        }
+        Ok((config, default_rules_applied))
     }
 
     /// 从原始配置提取应用支持的内容
     fn extract_config(raw: &serde_yaml::Value) -> Result<ProfileConfig> {
         let mut config = ProfileConfig::default();
+
+        if raw.is_sequence() {
+            config.proxies = Self::parse_proxies(raw)?;
+            return Ok(config);
+        }
 
         // 提取 proxies
         if let Some(proxies) = raw.get("proxies") {
@@ -74,6 +92,78 @@ impl Composer {
         }
 
         Ok(config)
+    }
+
+    fn should_apply_nodes_only_template(config: &ProfileConfig) -> bool {
+        !config.proxies.is_empty()
+            && config.proxy_groups.is_empty()
+            && config.proxy_providers.is_empty()
+            && config.rule_providers.is_empty()
+            && config.rules.is_empty()
+    }
+
+    fn build_nodes_only_template(proxies: Vec<ProxyConfig>) -> ProfileConfig {
+        let manual_group_name = "🚀 节点选择";
+        let auto_group_name = "⚡ 自动选择";
+
+        let mut auto_proxies = Vec::new();
+        let mut auto_seen = std::collections::HashSet::new();
+        for proxy in &proxies {
+            if auto_seen.insert(proxy.name.clone()) {
+                auto_proxies.push(proxy.name.clone());
+            }
+        }
+
+        let mut manual_proxies = Vec::new();
+        let mut manual_seen = std::collections::HashSet::new();
+        for name in [auto_group_name, "DIRECT"] {
+            let name = name.to_string();
+            if manual_seen.insert(name.clone()) {
+                manual_proxies.push(name);
+            }
+        }
+        for proxy in &proxies {
+            if manual_seen.insert(proxy.name.clone()) {
+                manual_proxies.push(proxy.name.clone());
+            }
+        }
+
+        let proxy_groups = vec![
+            ProxyGroupConfig {
+                name: manual_group_name.to_string(),
+                group_type: "select".to_string(),
+                proxies: manual_proxies,
+                use_providers: Vec::new(),
+                url: None,
+                interval: None,
+            },
+            ProxyGroupConfig {
+                name: auto_group_name.to_string(),
+                group_type: "url-test".to_string(),
+                proxies: auto_proxies,
+                use_providers: Vec::new(),
+                url: Some("http://www.gstatic.com/generate_204".to_string()),
+                interval: Some(300),
+            },
+        ];
+
+        let rules = vec![
+            "GEOSITE,category-ads-all,REJECT".to_string(),
+            "GEOSITE,private,DIRECT".to_string(),
+            "GEOIP,private,DIRECT,no-resolve".to_string(),
+            "GEOSITE,steam@cn,DIRECT".to_string(),
+            "GEOSITE,category-games@cn,DIRECT".to_string(),
+            "GEOSITE,cn,DIRECT".to_string(),
+            "GEOIP,cn,DIRECT,no-resolve".to_string(),
+            format!("MATCH,{}", manual_group_name),
+        ];
+
+        ProfileConfig {
+            proxies,
+            proxy_groups,
+            rules,
+            ..Default::default()
+        }
     }
 
     /// 解析代理节点列表
@@ -472,6 +562,7 @@ rules:
                 name: "PROXY".to_string(),
                 group_type: "select".to_string(),
                 proxies: vec!["test".to_string(), "unknown".to_string()],
+                use_providers: Vec::new(),
                 url: None,
                 interval: None,
             }],
@@ -482,5 +573,49 @@ rules:
 
         let warnings = Composer::validate(&config);
         assert_eq!(warnings.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_proxy_sequence_yaml() {
+        let yaml = r#"
+- name: test-ss
+  type: ss
+  server: example.com
+  port: 8388
+  cipher: aes-256-gcm
+  password: password123
+"#;
+
+        let config = Composer::parse_yaml(yaml).unwrap();
+        assert_eq!(config.proxies.len(), 1);
+        assert!(config.proxy_groups.is_empty());
+        assert!(config.rules.is_empty());
+    }
+
+    #[test]
+    fn test_build_nodes_only_template() {
+        let proxies = vec![ProxyConfig {
+            name: "node-1".to_string(),
+            proxy_type: "ss".to_string(),
+            server: "example.com".to_string(),
+            port: 8388,
+            cipher: Some("aes-128-gcm".to_string()),
+            password: Some("password".to_string()),
+            uuid: None,
+            alter_id: None,
+            network: None,
+            tls: None,
+            skip_cert_verify: None,
+            sni: None,
+            udp: false,
+        }];
+
+        let config = Composer::build_nodes_only_template(proxies);
+        assert_eq!(config.proxy_groups.len(), 2);
+        assert_eq!(config.proxy_groups[0].name, "🚀 节点选择");
+        assert!(config.proxy_groups[0]
+            .proxies
+            .contains(&"node-1".to_string()));
+        assert_eq!(config.rules.last().unwrap(), "MATCH,🚀 节点选择");
     }
 }

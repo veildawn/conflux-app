@@ -556,6 +556,8 @@ fn main() {
             commands::substore::start_substore,
             commands::substore::stop_substore,
             commands::substore::get_substore_status,
+            commands::substore::get_substore_subs,
+            commands::substore::get_substore_collections,
             // Profile 命令
             commands::profile::list_profiles,
             commands::profile::get_profile,

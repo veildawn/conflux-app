@@ -89,12 +89,20 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
 
     let running = state.mihomo_manager.is_running().await;
     let system_proxy = *state.system_proxy_enabled.lock().await;
-    let enhanced_mode = *state.enhanced_mode.lock().await;
 
     let config = state
         .config_manager
         .load_mihomo_config()
         .map_err(|e| e.to_string())?;
+
+    let mut enhanced_mode = *state.enhanced_mode.lock().await;
+    if running {
+        if let Some(tun) = config.tun.as_ref() {
+            enhanced_mode = tun.enable;
+            let mut enhanced_mode_state = state.enhanced_mode.lock().await;
+            *enhanced_mode_state = enhanced_mode;
+        }
+    }
 
     Ok(ProxyStatus {
         running,
@@ -433,6 +441,7 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
         return Err("Proxy is not running".to_string());
     }
 
+    let mut needs_restart = false;
     if enabled {
         crate::commands::require_active_subscription_with_proxies()?;
     }
@@ -446,22 +455,32 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
             log::info!("TUN permission not set, requesting setup...");
             crate::system::TunPermission::setup_permission()
                 .map_err(|e| format!("设置 TUN 权限失败: {}", e))?;
-            
-            // 权限设置成功后，需要重启 mihomo 进程
-            log::info!("Permission setup complete, restarting MiHomo...");
-            state
-                .mihomo_manager
-                .restart()
-                .await
-                .map_err(|e| format!("重启代理失败: {}", e))?;
+
+            needs_restart = true;
         }
     }
 
     state
-        .mihomo_api
-        .set_tun(enabled)
-        .await
+        .config_manager
+        .update_tun_mode(enabled)
         .map_err(|e| e.to_string())?;
+
+    if needs_restart {
+        // 权限设置成功后，需要重启 mihomo 进程以应用 TUN 配置
+        log::info!("Permission setup complete, restarting MiHomo...");
+        state
+            .mihomo_manager
+            .restart()
+            .await
+            .map_err(|e| format!("重启代理失败: {}", e))?;
+    } else {
+        let config_path = state.config_manager.mihomo_config_path();
+        state
+            .mihomo_api
+            .reload_configs(config_path.to_str().unwrap_or(""), true)
+            .await
+            .map_err(|e| format!("Failed to reload config: {}", e))?;
+    }
 
     // 更新状态（注意：必须在调用 get_proxy_status 之前释放锁，否则会死锁）
     {

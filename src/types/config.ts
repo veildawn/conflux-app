@@ -72,8 +72,24 @@ export interface ProxyGroupConfig {
   name: string;
   type: string;
   proxies: string[];
+  use?: string[];
   url?: string;
   interval?: number;
+  lazy?: boolean;
+  timeout?: number;
+  'max-failed-times'?: number;
+  'disable-udp'?: boolean;
+  'include-all'?: boolean;
+  'include-all-proxies'?: boolean;
+  'include-all-providers'?: boolean;
+  filter?: string;
+  'exclude-filter'?: string;
+  'exclude-type'?: string;
+  'expected-status'?: string;
+  hidden?: boolean;
+  icon?: string;
+  strategy?: string;
+  tolerance?: number;
 }
 
 /**
@@ -169,6 +185,8 @@ export interface ProfileMetadata {
   proxyCount: number;
   groupCount: number;
   ruleCount: number;
+  /** 是否自动生成默认规则（远程订阅且无规则时） */
+  defaultRulesApplied?: boolean;
   active: boolean;
   /** 自动更新（仅 remote 类型） */
   autoUpdate?: boolean;

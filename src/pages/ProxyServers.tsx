@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { AlertCircle, Loader2, Pencil, Plus, RefreshCw, Trash2, Wifi, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +16,7 @@ import { useToast } from '@/hooks/useToast';
 import { useProxyStore } from '@/stores/proxyStore';
 import { formatDelay, getDelayColorClass } from '@/utils/format';
 import { cn } from '@/utils/cn';
-import type { ProxyConfig } from '@/types/config';
+import type { ProxyConfig, ProfileMetadata } from '@/types/config';
 
 function BentoCard({
   className,
@@ -37,12 +36,12 @@ function BentoCard({
   return (
     <div
       className={cn(
-        "bg-white dark:bg-zinc-900 rounded-[20px] p-5 shadow-xs border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden",
+        "bg-white dark:bg-zinc-900 rounded-[24px] shadow-sm border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden",
         className
       )}
     >
       {(title || Icon) && (
-        <div className="flex justify-between items-center mb-4 z-10">
+        <div className="flex justify-between items-center px-6 pt-5 pb-3 z-10 border-b border-gray-50 dark:border-zinc-800/50">
           <div className="flex items-center gap-2">
             {Icon && <Icon className={cn("w-4 h-4", iconColor)} />}
             {title && (
@@ -54,7 +53,7 @@ function BentoCard({
           {action}
         </div>
       )}
-      <div className="flex-1 z-10">{children}</div>
+      <div className="flex-1 z-10 flex flex-col min-h-0">{children}</div>
     </div>
   );
 }
@@ -654,10 +653,10 @@ function ProxyServerDialog({
 }
 
 export default function ProxyServers() {
-  const navigate = useNavigate();
   const status = useProxyStore((state) => state.status);
   const { toast } = useToast();
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [profileMetadata, setProfileMetadata] = useState<ProfileMetadata | null>(null);
   const [proxyServers, setProxyServers] = useState<ProxyConfig[]>([]);
   const [loadingServers, setLoadingServers] = useState(false);
   const [testingNodes, setTestingNodes] = useState<Set<string>>(new Set());
@@ -665,6 +664,11 @@ export default function ProxyServers() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProxy, setEditingProxy] = useState<ProxyConfig | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<ProxyConfig | null>(null);
+
+  // 判断是否为远程订阅
+  const isRemoteProfile = useMemo(() => {
+    return profileMetadata?.profileType === 'remote';
+  }, [profileMetadata]);
 
   const loadProxyServers = useCallback(async () => {
     setLoadingServers(true);
@@ -674,10 +678,12 @@ export default function ProxyServers() {
 
       if (!profileId) {
         setProxyServers([]);
+        setProfileMetadata(null);
         return;
       }
 
-      const [, config] = await ipc.getProfile(profileId);
+      const [metadata, config] = await ipc.getProfile(profileId);
+      setProfileMetadata(metadata);
       const sorted = [...config.proxies].sort((a, b) => a.name.localeCompare(b.name));
       setProxyServers(sorted);
     } catch (error) {
@@ -891,18 +897,20 @@ export default function ProxyServers() {
               核心未启动，测速不可用
             </span>
           )}
-          <Button
-            variant="outline"
-            onClick={() => {
-              setEditingProxy(null);
-              setDialogOpen(true);
-            }}
-            className="rounded-full gap-2"
-            disabled={!hasActiveProfile}
-          >
-            <Plus className="w-4 h-4" />
-            添加
-          </Button>
+          {!isRemoteProfile && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditingProxy(null);
+                setDialogOpen(true);
+              }}
+              className="rounded-full gap-2"
+              disabled={!hasActiveProfile}
+            >
+              <Plus className="w-4 h-4" />
+              添加
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={loadProxyServers}
@@ -915,47 +923,26 @@ export default function ProxyServers() {
         </div>
       </div>
 
-      <BentoCard
-        title="配置服务器"
-        icon={Wifi}
-        iconColor="text-emerald-500"
-        action={
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleTestAllDelays}
-            disabled={!status.running || loadingServers || proxyServers.length === 0}
-            className="h-7 px-2 text-xs text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
-          >
-            <Zap className="w-3.5 h-3.5 mr-1" />
-            测速全部
-          </Button>
-        }
-      >
-        {loadingServers ? (
-          <div className="flex items-center justify-center py-12">
-            <RefreshCw className="w-6 h-6 animate-spin text-gray-300" />
-          </div>
-        ) : !hasActiveProfile ? (
-          <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px] bg-gray-50/50 dark:bg-zinc-900/50">
-            <AlertCircle className="w-10 h-10 mb-4 opacity-30" />
-            <p className="font-medium text-gray-600 dark:text-gray-300">没有活跃的配置</p>
-            <p className="text-sm mt-1 text-gray-500 dark:text-gray-400 max-w-xs">
-              请先在"配置"页面创建或激活一个配置文件
-            </p>
-            <Button
-              variant="outline"
-              onClick={() => navigate('/subscription')}
-              className="mt-6 rounded-full gap-2"
-            >
-              前往配置
-            </Button>
-          </div>
-        ) : proxyServers.length === 0 ? (
-          <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px] bg-gray-50/50 dark:bg-zinc-900/50">
-            <Wifi className="w-10 h-10 mb-4 opacity-30" />
-            <p className="font-medium text-gray-600 dark:text-gray-300">暂无代理服务器</p>
-            <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">点击上方按钮添加新的服务器</p>
+      {loadingServers ? (
+        <div className="flex items-center justify-center py-12">
+          <RefreshCw className="w-6 h-6 animate-spin text-gray-300" />
+        </div>
+      ) : !hasActiveProfile ? (
+        <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px]">
+          <AlertCircle className="w-10 h-10 mb-4 opacity-30" />
+          <p className="font-medium text-gray-600 dark:text-gray-300">没有活跃的配置</p>
+          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400 max-w-xs">
+            请先在"配置"页面创建或激活一个配置文件
+          </p>
+        </div>
+      ) : proxyServers.length === 0 ? (
+        <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px]">
+          <Wifi className="w-10 h-10 mb-4 opacity-30" />
+          <p className="font-medium text-gray-600 dark:text-gray-300">暂无代理服务器</p>
+          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">
+            {isRemoteProfile ? '远程订阅的配置为只读，无法添加服务器' : '点击上方按钮添加新的服务器'}
+          </p>
+          {!isRemoteProfile && (
             <Button
               className="mt-6 rounded-full gap-2"
               onClick={() => {
@@ -966,9 +953,27 @@ export default function ProxyServers() {
               <Plus className="w-4 h-4" />
               添加服务器
             </Button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          )}
+        </div>
+      ) : (
+        <BentoCard
+          title="配置服务器"
+          icon={Wifi}
+          iconColor="text-emerald-500"
+          action={
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleTestAllDelays}
+              disabled={!status.running || loadingServers || proxyServers.length === 0}
+              className="h-7 px-2 text-xs text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+            >
+              <Zap className="w-3.5 h-3.5 mr-1" />
+              测速全部
+            </Button>
+          }
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 p-5">
             {proxyServers.map((server) => {
               const isTesting = testingNodes.has(server.name);
               const delay = delays[server.name];
@@ -978,29 +983,31 @@ export default function ProxyServers() {
                   key={server.name}
                   className="relative p-2.5 rounded-xl border border-gray-100 dark:border-zinc-700 bg-white dark:bg-zinc-900/50 text-left hover:bg-gray-50 dark:hover:bg-zinc-800 hover:border-gray-200 dark:hover:border-zinc-600 transition-all flex flex-col justify-between h-[90px] group overflow-hidden"
                 >
-                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                      title="编辑"
-                      onClick={() => {
-                        setEditingProxy(server);
-                        setDialogOpen(true);
-                      }}
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                      title="删除"
-                      onClick={() => setDeleteConfirm(server)}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
+                  {!isRemoteProfile && (
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                        title="编辑"
+                        onClick={() => {
+                          setEditingProxy(server);
+                          setDialogOpen(true);
+                        }}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        title="删除"
+                        onClick={() => setDeleteConfirm(server)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  )}
 
                   <div className="z-10">
                     <div className="font-medium text-xs text-gray-700 dark:text-gray-300 line-clamp-1 mb-0.5">
@@ -1061,8 +1068,8 @@ export default function ProxyServers() {
               );
             })}
           </div>
-        )}
-      </BentoCard>
+        </BentoCard>
+      )}
 
       <ProxyServerDialog
         open={dialogOpen}

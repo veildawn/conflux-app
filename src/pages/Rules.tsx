@@ -33,7 +33,7 @@ import {
 import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
 import { useToast } from '@/hooks/useToast';
-import { RULE_TYPES, parseRule, buildRule, type RuleType, type ProfileConfig, type RuleProvider } from '@/types/config';
+import { RULE_TYPES, parseRule, buildRule, type RuleType, type ProfileConfig, type RuleProvider, type ProfileMetadata } from '@/types/config';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -145,9 +145,15 @@ export default function Rules() {
 
   // Profile State
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [profileMetadata, setProfileMetadata] = useState<ProfileMetadata | null>(null);
   const [profileConfig, setProfileConfig] = useState<ProfileConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // 判断是否为远程订阅
+  const isRemoteProfile = useMemo(() => {
+    return profileMetadata?.profileType === 'remote';
+  }, [profileMetadata]);
 
   // UI State
   const [searchQuery, setSearchQuery] = useState('');
@@ -171,9 +177,11 @@ export default function Rules() {
       setActiveProfileId(profileId);
 
       if (profileId) {
-        const [, config] = await ipc.getProfile(profileId);
+        const [metadata, config] = await ipc.getProfile(profileId);
+        setProfileMetadata(metadata);
         setProfileConfig(config);
       } else {
+        setProfileMetadata(null);
         setProfileConfig(null);
       }
     } catch (error) {
@@ -436,14 +444,16 @@ export default function Rules() {
               <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
             </Button>
 
-            <Button
-              onClick={openAddDialog}
-              disabled={!activeProfileId}
-              className="h-10 shrink-0 bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800 text-blue-600 dark:text-blue-400 rounded-xl shadow-xs gap-2 border font-medium px-4 text-sm"
-            >
-              <Plus className="w-4 h-4" />
-              添加规则
-            </Button>
+            {!isRemoteProfile && (
+              <Button
+                onClick={openAddDialog}
+                disabled={!activeProfileId}
+                className="h-10 shrink-0 bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800 text-blue-600 dark:text-blue-400 rounded-xl shadow-xs gap-2 border font-medium px-4 text-sm"
+              >
+                <Plus className="w-4 h-4" />
+                添加规则
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -469,7 +479,7 @@ export default function Rules() {
               <RefreshCw className="w-8 h-8 animate-spin text-gray-300" />
             </div>
           ) : filteredRules.length === 0 ? (
-            <EmptyState searchQuery={searchQuery} />
+            <EmptyState searchQuery={searchQuery} isRemoteProfile={isRemoteProfile} />
           ) : (
             <div className="divide-y divide-gray-100 dark:divide-zinc-800/50">
               {filteredRules.map((rule, index) => {
@@ -489,6 +499,7 @@ export default function Rules() {
                     onEdit={() => openEditDialog(fullIndex)}
                     onDelete={() => handleDeleteClick(fullIndex)}
                     ruleProviderMap={ruleProviderMap}
+                    isRemoteProfile={isRemoteProfile}
                   />
                 );
               })}
@@ -641,6 +652,7 @@ function RuleTableRow({
   onEdit,
   onDelete,
   ruleProviderMap,
+  isRemoteProfile,
 }: {
   index: number;
   type: string;
@@ -649,6 +661,7 @@ function RuleTableRow({
   onEdit?: () => void;
   onDelete?: () => void;
   ruleProviderMap?: Map<string, RuleProvider & { name: string }>;
+  isRemoteProfile?: boolean;
 }) {
   const Icon = getRuleIcon(type);
   const isRuleSet = normalizeRuleType(type) === 'RULESET';
@@ -656,10 +669,10 @@ function RuleTableRow({
 
   return (
     <div
-      onClick={onEdit}
+      onClick={isRemoteProfile ? undefined : onEdit}
       className={cn(
         "group grid grid-cols-[48px_110px_1fr_100px_50px] gap-3 px-4 h-[52px] items-center transition-colors border-l-2 border-transparent text-sm",
-        "cursor-pointer hover:bg-blue-50/30 dark:hover:bg-blue-900/10 hover:border-blue-500"
+        !isRemoteProfile && "cursor-pointer hover:bg-blue-50/30 dark:hover:bg-blue-900/10 hover:border-blue-500"
       )}
     >
       {/* Index */}
@@ -712,38 +725,40 @@ function RuleTableRow({
 
       {/* Actions */}
       <div className="flex justify-center">
-        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="flex items-center gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit?.();
-              }}
-            >
-              <PenLine className="w-3.5 h-3.5" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete?.();
-              }}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </Button>
+        {!isRemoteProfile && (
+          <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit?.();
+                }}
+              >
+                <PenLine className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete?.();
+                }}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
 }
 
-function EmptyState({ searchQuery }: { searchQuery: string }) {
+function EmptyState({ searchQuery, isRemoteProfile }: { searchQuery: string; isRemoteProfile?: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-gray-400">
       <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center mb-4">
@@ -755,6 +770,8 @@ function EmptyState({ searchQuery }: { searchQuery: string }) {
       <p className="text-sm mt-1 text-center max-w-xs text-gray-500">
         {searchQuery
           ? '请尝试更换搜索关键词或清除过滤条件'
+          : isRemoteProfile
+          ? '远程订阅的配置为只读，无法添加规则'
           : '点击右上角的"添加规则"按钮开始配置'}
       </p>
     </div>

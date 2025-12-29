@@ -81,6 +81,28 @@ pub struct MihomoConfig {
 
     #[serde(rename = "tcp-concurrent", default)]
     pub tcp_concurrent: bool,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tun: Option<TunConfig>,
+}
+
+/// TUN 配置
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TunConfig {
+    #[serde(default)]
+    pub enable: bool,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stack: Option<String>,
+
+    #[serde(rename = "auto-route", skip_serializing_if = "Option::is_none")]
+    pub auto_route: Option<bool>,
+
+    #[serde(
+        rename = "auto-detect-interface",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub auto_detect_interface: Option<bool>,
 }
 
 /// GeoX URL 配置
@@ -140,6 +162,7 @@ impl Default for MihomoConfig {
                 name: "PROXY".to_string(),
                 group_type: "select".to_string(),
                 proxies: vec!["DIRECT".to_string()],
+                use_providers: Vec::new(),
                 url: None,
                 interval: None,
             }],
@@ -148,6 +171,7 @@ impl Default for MihomoConfig {
             rules: vec!["GEOIP,CN,DIRECT".to_string(), "MATCH,PROXY".to_string()],
             ipv6: false,
             tcp_concurrent: false,
+            tun: None,
         }
     }
 }
@@ -197,6 +221,8 @@ pub struct ProxyGroupConfig {
     #[serde(rename = "type")]
     pub group_type: String,
     pub proxies: Vec<String>,
+    #[serde(rename = "use", default, skip_serializing_if = "Vec::is_empty")]
+    pub use_providers: Vec<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,

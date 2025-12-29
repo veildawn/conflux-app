@@ -163,6 +163,76 @@ impl SubStoreManager {
         Ok(frontend_path)
     }
 
+    /// 获取 Sub-Store 默认数据文件路径
+    fn get_default_data_file_path(app_handle: &tauri::AppHandle) -> Result<PathBuf> {
+        let data_path = if cfg!(debug_assertions) {
+            // 开发模式：从项目目录加载
+            let exe_path = std::env::current_exe()
+                .map_err(|e| anyhow!("Failed to get exe path: {}", e))?;
+            let project_dir = exe_path
+                .parent()
+                .and_then(|p| p.parent())
+                .and_then(|p| p.parent())
+                .and_then(|p| p.parent())
+                .ok_or_else(|| anyhow!("Failed to determine project root"))?;
+            project_dir
+                .join("src-tauri")
+                .join("resources")
+                .join("sub-store")
+                .join("sub-store.json")
+        } else {
+            // 生产模式：从资源目录加载
+            app_handle
+                .path()
+                .resource_dir()
+                .map_err(|e| anyhow!("Failed to get resource dir: {}", e))?
+                .join("resources")
+                .join("sub-store")
+                .join("sub-store.json")
+        };
+
+        if !data_path.exists() {
+            return Err(anyhow!("Default Sub-Store data file not found at: {:?}", data_path));
+        }
+
+        Ok(data_path)
+    }
+
+    /// 获取 Sub-Store 数据文件路径
+    pub fn get_data_file_path(&self, app_handle: &tauri::AppHandle) -> Result<PathBuf> {
+        let data_dir = Self::ensure_data_directory(app_handle)?;
+        let data_file = data_dir.join("sub-store.json");
+
+        if !data_file.exists() {
+            match Self::get_default_data_file_path(app_handle) {
+                Ok(default_data) => {
+                    std::fs::copy(&default_data, &data_file).map_err(|e| {
+                        anyhow!("Failed to copy default Sub-Store data file: {}", e)
+                    })?;
+                }
+                Err(_) => {
+                    let default_content = r#"{
+  "subs": [],
+  "collections": [],
+  "artifacts": [],
+  "rules": [],
+  "files": [],
+  "tokens": [],
+  "schemaVersion": "2.0",
+  "settings": {},
+  "modules": []
+}
+"#;
+                    std::fs::write(&data_file, default_content).map_err(|e| {
+                        anyhow!("Failed to create default Sub-Store data file: {}", e)
+                    })?;
+                }
+            }
+        }
+
+        Ok(data_file)
+    }
+
     /// 获取并创建 Sub-Store 数据目录
     fn ensure_data_directory(app_handle: &tauri::AppHandle) -> Result<PathBuf> {
         let data_dir = app_handle
@@ -221,7 +291,7 @@ impl SubStoreManager {
         cmd.arg(&substore_script)
             .current_dir(&substore_data_dir)
             .env("SUB_STORE_BACKEND_API_PORT", self.api_port.to_string())
-            .env("SUB_STORE_FRONTEND_BACKEND_PATH", "/api")
+            .env("SUB_STORE_FRONTEND_BACKEND_PATH", "/__api__")
             .env("SUB_STORE_BACKEND_MERGE", "true")
             .env("SUB_STORE_DATA_DIR", substore_data_dir.to_string_lossy().to_string());
 

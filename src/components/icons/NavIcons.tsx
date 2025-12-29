@@ -125,6 +125,26 @@ export function NodesIcon({ className, strokeWidth = 2 }: IconProps) {
   );
 }
 
+// 策略组 - 组合模块
+export function GroupsIcon({ className, strokeWidth = 2 }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn("w-5 h-5", className)}
+    >
+      <rect x="3" y="4" width="8" height="7" rx="2" />
+      <rect x="13" y="4" width="8" height="7" rx="2" />
+      <rect x="3" y="13" width="8" height="7" rx="2" />
+      <rect x="13" y="13" width="8" height="7" rx="2" />
+    </svg>
+  );
+}
+
 // 服务器 - 机架/列表
 export function ServersIcon({ className, strokeWidth = 2 }: IconProps) {
   return (

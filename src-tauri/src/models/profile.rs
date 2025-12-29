@@ -44,6 +44,9 @@ pub struct ProfileMetadata {
     pub group_count: u32,
     /// 规则数量
     pub rule_count: u32,
+    /// 是否自动生成默认规则（远程订阅且无规则时）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_rules_applied: Option<bool>,
     /// 是否当前激活
     pub active: bool,
     /// 自动更新（仅 Remote 类型）
@@ -68,6 +71,7 @@ impl ProfileMetadata {
             proxy_count: 0,
             group_count: 0,
             rule_count: 0,
+            default_rules_applied: None,
             active: false,
             auto_update: Some(true),
             update_interval: Some(24),
@@ -87,6 +91,7 @@ impl ProfileMetadata {
             proxy_count: 0,
             group_count: 0,
             rule_count: 0,
+            default_rules_applied: None,
             active: false,
             auto_update: None,
             update_interval: None,
@@ -106,6 +111,7 @@ impl ProfileMetadata {
             proxy_count: 0,
             group_count: 0,
             rule_count: 0,
+            default_rules_applied: None,
             active: false,
             auto_update: None,
             update_interval: None,
@@ -160,6 +166,7 @@ impl ProfileConfig {
                 name: "PROXY".to_string(),
                 group_type: "select".to_string(),
                 proxies: vec!["DIRECT".to_string()],
+                use_providers: Vec::new(),
                 url: None,
                 interval: None,
             }],

@@ -4,20 +4,26 @@
 #
 # Environment variables:
 #   SUBSTORE_VERSION - Version to download (default: latest)
-#   SUBSTORE_REPO - GitHub repository (default: sub-store-org/Sub-Store)
+#   SUBSTORE_BACKEND_REPO - Backend GitHub repository (default: sub-store-org/Sub-Store)
+#   SUBSTORE_FRONTEND_REPO - Frontend GitHub repository (default: sub-store-org/Sub-Store-Front-End)
 #   SUBSTORE_TARGET_DIR - Target directory (default: $ROOT_DIR/src-tauri/resources)
 #   PYTHON_BIN - Python binary to use (default: auto-detect)
 #   GITHUB_TOKEN - GitHub token for API authentication (optional)
+#   API_TIMEOUT - API request timeout in seconds (default: 30)
+#   DOWNLOAD_TIMEOUT - Download timeout in seconds (default: 300)
 set -euo pipefail
 
 # Determine script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TARGET_DIR="${SUBSTORE_TARGET_DIR:-$ROOT_DIR/src-tauri/resources}"
-REPO="${SUBSTORE_REPO:-sub-store-org/Sub-Store}"
+BACKEND_REPO="${SUBSTORE_BACKEND_REPO:-sub-store-org/Sub-Store}"
+FRONTEND_REPO="${SUBSTORE_FRONTEND_REPO:-sub-store-org/Sub-Store-Front-End}"
 VERSION="${SUBSTORE_VERSION:-latest}"
 PYTHON_BIN="${PYTHON_BIN:-}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+API_TIMEOUT="${API_TIMEOUT:-30}"
+DOWNLOAD_TIMEOUT="${DOWNLOAD_TIMEOUT:-300}"
 
 # Build curl auth header if token is available
 CURL_AUTH_ARGS=()
@@ -53,17 +59,52 @@ fi
 
 echo "Using Python: $PYTHON_BIN"
 
-# Build API URL
-if [[ "$VERSION" == "latest" ]]; then
-  API_URL="https://api.github.com/repos/$REPO/releases/latest"
-else
-  API_URL="https://api.github.com/repos/$REPO/releases/tags/$VERSION"
-fi
+# Build API URL function
+build_api_url() {
+  local repo="$1"
+  local version="$2"
+  if [[ "$version" == "latest" ]]; then
+    echo "https://api.github.com/repos/$repo/releases/latest"
+  else
+    echo "https://api.github.com/repos/$repo/releases/tags/$version"
+  fi
+}
 
-echo "Fetching release info from $API_URL..."
+# Fetch release info with retry and timeout
+fetch_release_info() {
+  local repo="$1"
+  local version="$2"
+  local output_file="$3"
+  local api_url
+
+  api_url="$(build_api_url "$repo" "$version")"
+  echo "Fetching release info from $api_url..."
+
+  local max_retries=3
+  local retry_count=0
+
+  while [[ $retry_count -lt $max_retries ]]; do
+    if curl -fsSL --max-time "$API_TIMEOUT" --connect-timeout 10 \
+         ${CURL_AUTH_ARGS[@]+"${CURL_AUTH_ARGS[@]}"} \
+         "$api_url" > "$output_file" 2>/dev/null; then
+      echo "✓ Successfully fetched release info"
+      return 0
+    fi
+
+    retry_count=$((retry_count + 1))
+    if [[ $retry_count -lt $max_retries ]]; then
+      echo "⚠ API request failed (attempt $retry_count/$max_retries), retrying in 2s..."
+      sleep 2
+    fi
+  done
+
+  echo "✗ Failed to fetch release info after $max_retries attempts" >&2
+  return 1
+}
 
 # Create temp files
-tmp_json="$(mktemp)"
+tmp_backend_json="$(mktemp)"
+tmp_frontend_json="$(mktemp)"
 work_dir="$(mktemp -d)"
 
 # Helper to get path for Python (converts to Windows path on Windows)
@@ -76,32 +117,67 @@ python_path() {
 }
 
 cleanup() {
-  rm -f "$tmp_json" 2>/dev/null || true
+  rm -f "$tmp_backend_json" "$tmp_frontend_json" 2>/dev/null || true
   rm -rf "$work_dir" 2>/dev/null || true
 }
 trap cleanup EXIT
 
-# Download release info
-curl -fsSL ${CURL_AUTH_ARGS[@]+"${CURL_AUTH_ARGS[@]}"} "$API_URL" > "$tmp_json"
+# Fetch backend release info
+echo ""
+echo "================================================"
+echo "Fetching Backend Release Info"
+echo "================================================"
+if ! fetch_release_info "$BACKEND_REPO" "$VERSION" "$tmp_backend_json"; then
+  echo "Error: Failed to fetch backend release info" >&2
+  exit 1
+fi
 
-release_tag="$("$PYTHON_BIN" -c "
+backend_tag="$("$PYTHON_BIN" -c "
 import json
-with open(r'$(python_path "$tmp_json")', encoding='utf-8') as f:
+with open(r'$(python_path "$tmp_backend_json")', encoding='utf-8') as f:
     data = json.load(f)
 print(data.get('tag_name', 'unknown'))
 ")"
 
-echo "Found release: $release_tag"
+echo "Backend release: $backend_tag"
+
+# Fetch frontend release info
+echo ""
+echo "================================================"
+echo "Fetching Frontend Release Info"
+echo "================================================"
+frontend_tag=""
+frontend_available=false
+
+if fetch_release_info "$FRONTEND_REPO" "$VERSION" "$tmp_frontend_json"; then
+  frontend_tag="$("$PYTHON_BIN" -c "
+import json
+with open(r'$(python_path "$tmp_frontend_json")', encoding='utf-8') as f:
+    data = json.load(f)
+print(data.get('tag_name', 'unknown'))
+" 2>/dev/null || echo "")"
+
+  if [[ -n "$frontend_tag" && "$frontend_tag" != "unknown" ]]; then
+    echo "Frontend release: $frontend_tag"
+    frontend_available=true
+  else
+    echo "⚠ Frontend release info invalid, will skip frontend download"
+  fi
+else
+  echo "⚠ Frontend API unavailable, will skip frontend download"
+fi
+
 mkdir -p "$TARGET_DIR"
 
 # Download asset function
 download_asset() {
-  local asset_pattern="$1"
-  local target_name="$2"
+  local json_file="$1"
+  local asset_pattern="$2"
+  local target_name="$3"
 
   local url
   local tmp_json_path
-  tmp_json_path="$(python_path "$tmp_json")"
+  tmp_json_path="$(python_path "$json_file")"
   url="$("$PYTHON_BIN" -c "
 import json
 with open(r'$tmp_json_path', encoding='utf-8') as f:
@@ -110,33 +186,48 @@ for asset in data.get('assets', []):
     if asset.get('name', '') == '$asset_pattern':
         print(asset.get('browser_download_url', ''))
         break
-")"
+" 2>/dev/null || echo "")"
 
   if [[ -z "$url" ]]; then
-    echo "Warning: Asset '$asset_pattern' not found in release, skipping..." >&2
-    return 0
+    echo "⚠ Asset '$asset_pattern' not found in release, skipping..." >&2
+    return 1
   fi
 
   local asset_path="$work_dir/$asset_pattern"
   local target_path="$TARGET_DIR/$target_name"
 
   echo "Downloading $asset_pattern..."
-  curl -fL --retry 3 --retry-delay 1 -o "$asset_path" "$url"
+  if ! curl -fL --max-time "$DOWNLOAD_TIMEOUT" --retry 3 --retry-delay 2 \
+            -o "$asset_path" "$url"; then
+    echo "✗ Failed to download $asset_pattern" >&2
+    return 1
+  fi
+
+  # Verify download
+  if [[ ! -s "$asset_path" ]]; then
+    echo "✗ Downloaded file is empty: $asset_pattern" >&2
+    return 1
+  fi
+
+  # Create target directory if needed
+  mkdir -p "$(dirname "$target_path")"
 
   # Move to target
   mv "$asset_path" "$target_path"
 
-  echo "  -> $target_path ($(du -h "$target_path" 2>/dev/null | cut -f1 || echo "size unknown"))"
+  echo "  ✓ $target_path ($(du -h "$target_path" 2>/dev/null | cut -f1 || echo "size unknown"))"
+  return 0
 }
 
 # Download and extract zip function
 download_and_extract_zip() {
-  local asset_pattern="$1"
-  local target_subdir="$2"
+  local json_file="$1"
+  local asset_pattern="$2"
+  local target_subdir="$3"
 
   local url
   local tmp_json_path
-  tmp_json_path="$(python_path "$tmp_json")"
+  tmp_json_path="$(python_path "$json_file")"
   url="$("$PYTHON_BIN" -c "
 import json
 with open(r'$tmp_json_path', encoding='utf-8') as f:
@@ -145,18 +236,28 @@ for asset in data.get('assets', []):
     if asset.get('name', '') == '$asset_pattern':
         print(asset.get('browser_download_url', ''))
         break
-")"
+" 2>/dev/null || echo "")"
 
   if [[ -z "$url" ]]; then
-    echo "Warning: Asset '$asset_pattern' not found in release, skipping..." >&2
-    return 0
+    echo "⚠ Asset '$asset_pattern' not found in release, skipping..." >&2
+    return 1
   fi
 
   local asset_path="$work_dir/$asset_pattern"
   local target_path="$TARGET_DIR/$target_subdir"
 
   echo "Downloading $asset_pattern..."
-  curl -fL --retry 3 --retry-delay 1 -o "$asset_path" "$url"
+  if ! curl -fL --max-time "$DOWNLOAD_TIMEOUT" --retry 3 --retry-delay 2 \
+            -o "$asset_path" "$url"; then
+    echo "✗ Failed to download $asset_pattern" >&2
+    return 1
+  fi
+
+  # Verify download
+  if [[ ! -s "$asset_path" ]]; then
+    echo "✗ Downloaded file is empty: $asset_pattern" >&2
+    return 1
+  fi
 
   echo "  Extracting to $target_subdir..."
 
@@ -169,18 +270,27 @@ for asset in data.get('assets', []):
   mkdir -p "$extract_dir"
 
   if command -v unzip >/dev/null 2>&1; then
-    unzip -q -o "$asset_path" -d "$extract_dir"
+    if ! unzip -q -o "$asset_path" -d "$extract_dir" 2>/dev/null; then
+      echo "✗ Failed to extract $asset_pattern" >&2
+      rm -rf "$extract_dir"
+      return 1
+    fi
   elif command -v 7z >/dev/null 2>&1; then
-    7z x -y -o"$extract_dir" "$asset_path" >/dev/null
+    if ! 7z x -y -o"$extract_dir" "$asset_path" >/dev/null 2>&1; then
+      echo "✗ Failed to extract $asset_pattern" >&2
+      rm -rf "$extract_dir"
+      return 1
+    fi
   else
-    echo "Error: Neither unzip nor 7z found for extracting zip files" >&2
+    echo "✗ Neither unzip nor 7z found for extracting zip files" >&2
+    rm -rf "$extract_dir"
     return 1
   fi
 
   # Move extracted contents to target
   # Check if there's a single directory inside
   local extracted_items
-  extracted_items=$(ls -A "$extract_dir")
+  extracted_items=$(ls -A "$extract_dir" 2>/dev/null)
   local item_count
   item_count=$(echo "$extracted_items" | wc -l | tr -d ' ')
 
@@ -196,11 +306,13 @@ for asset in data.get('assets', []):
 
   rm -rf "$extract_dir"
 
-  echo "  -> $target_path ($(du -sh "$target_path" 2>/dev/null | cut -f1 || echo "size unknown"))"
+  echo "  ✓ $target_path ($(du -sh "$target_path" 2>/dev/null | cut -f1 || echo "size unknown"))"
+  return 0
 }
 
 echo ""
-echo "Downloading Sub-Store components..."
+echo "================================================"
+echo "Downloading Sub-Store Components"
 echo "================================================"
 
 # Create sub-store directory
@@ -208,10 +320,48 @@ SUBSTORE_DIR="$TARGET_DIR/sub-store"
 mkdir -p "$SUBSTORE_DIR"
 
 # Download backend bundle
-download_asset "sub-store.bundle.js" "sub-store/sub-store.bundle.js"
+echo ""
+echo "--- Backend Bundle ---"
+if download_asset "$tmp_backend_json" "sub-store.bundle.js" "sub-store/sub-store.bundle.js"; then
+  echo "✓ Backend bundle downloaded successfully"
+else
+  echo "✗ Failed to download backend bundle" >&2
+  exit 1
+fi
 
-# Note: Sub-Store 2.x has frontend embedded in the bundle
-# No need to download separate frontend files
+# Download frontend if available
+if [[ "$frontend_available" == true ]]; then
+  echo ""
+  echo "--- Frontend ---"
+
+  # Try to find and download frontend dist package
+  # Common patterns: dist.zip, frontend.zip, build.zip, Sub-Store-Front-End.zip
+  frontend_downloaded=false
+
+  for pattern in "dist.zip" "frontend.zip" "build.zip" "Sub-Store-Front-End.zip"; do
+    if download_and_extract_zip "$tmp_frontend_json" "$pattern" "sub-store/frontend"; then
+      echo "✓ Frontend downloaded and extracted successfully from $pattern"
+      frontend_downloaded=true
+      break
+    fi
+  done
+
+  if [[ "$frontend_downloaded" == false ]]; then
+    echo "⚠ No frontend package found in release"
+    echo "  Tried patterns: dist.zip, frontend.zip, build.zip, Sub-Store-Front-End.zip"
+    echo "  Available assets:"
+    "$PYTHON_BIN" -c "
+import json
+with open(r'$(python_path "$tmp_frontend_json")', encoding='utf-8') as f:
+    data = json.load(f)
+for asset in data.get('assets', []):
+    print(f\"    - {asset.get('name', 'unknown')}\")
+" 2>/dev/null || echo "    (unable to list assets)"
+  fi
+else
+  echo ""
+  echo "⚠ Skipping frontend download (API unavailable or version mismatch)"
+fi
 
 # Create package.json for sub-store
 echo "Creating package.json..."
@@ -344,7 +494,19 @@ fi
 
 echo ""
 echo "================================================"
-echo "✅ Successfully downloaded Sub-Store $release_tag"
+echo "✅ Download Complete"
+echo "================================================"
+echo ""
+echo "Backend: $backend_tag"
+if [[ "$frontend_available" == true && "$frontend_downloaded" == true ]]; then
+  echo "Frontend: $frontend_tag (local)"
+elif [[ "$frontend_available" == true ]]; then
+  echo "Frontend: $frontend_tag (download failed)"
+else
+  echo "Frontend: (not available)"
+fi
 echo ""
 echo "Directory structure:"
-ls -lh "$SUBSTORE_DIR" 2>/dev/null || dir "$SUBSTORE_DIR"
+ls -lhR "$SUBSTORE_DIR" 2>/dev/null || tree "$SUBSTORE_DIR" 2>/dev/null || find "$SUBSTORE_DIR" -type f -exec ls -lh {} \;
+echo ""
+echo "================================================"
