@@ -304,7 +304,7 @@ export default function RuleDatabase() {
         </div>
       </div>
 
-      <BentoCard className="p-0 overflow-hidden" title="">
+      <BentoCard className="p-0 overflow-hidden rounded-[12px] shadow-[0_4px_12px_rgba(0,0,0,0.04)] dark:shadow-none" title="">
         {/* Table Header */}
         <div className="grid grid-cols-[1fr_90px_90px_130px_100px] gap-4 px-6 py-3 border-b border-gray-100 dark:border-zinc-800/50 bg-gray-50/50 dark:bg-zinc-900/50 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider shrink-0">
           <div>数据库</div>

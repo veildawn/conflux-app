@@ -12,6 +12,7 @@ import SubStore from './pages/SubStore';
 import RuleDatabase from './pages/RuleDatabase';
 import Logs from './pages/Logs';
 import Providers from './pages/Providers';
+import ProxyGroupEditWindow from './pages/proxy-groups/ProxyGroupEditWindow';
 
 function App() {
   // 代理内核的启动逻辑已移至 AppLayout 组件中，避免重复启动
@@ -32,6 +33,7 @@ function App() {
           <Route path="logs" element={<Logs />} />
           <Route path="settings" element={<Settings />} />
         </Route>
+        <Route path="/proxy-group-edit" element={<ProxyGroupEditWindow />} />
       </Routes>
     </>
   );

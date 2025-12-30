@@ -32,6 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
 import { useToast } from '@/hooks/useToast';
@@ -312,6 +313,25 @@ function RuleProviderDialog({
   });
   const [submitting, setSubmitting] = useState(false);
 
+  const handleBrowse = async () => {
+    try {
+      const selected = await openDialog({
+        title: '选择规则文件',
+        multiple: false,
+        filters: [{
+          name: '规则文件',
+          extensions: ['yaml', 'yml', 'txt', 'list']
+        }]
+      });
+
+      if (selected) {
+        setFormData((prev) => ({ ...prev, path: selected as string }));
+      }
+    } catch (error) {
+      console.error('Failed to open rule file dialog:', error);
+    }
+  };
+
   useEffect(() => {
     if (editData && editName) {
       setFormData({
@@ -338,6 +358,8 @@ function RuleProviderDialog({
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) return;
+    if (formData.type === 'http' && !formData.url.trim()) return;
+    if (formData.type === 'file' && !formData.path.trim()) return;
 
     setSubmitting(true);
     try {
@@ -345,8 +367,8 @@ function RuleProviderDialog({
         type: formData.type,
         behavior: formData.behavior,
         format: formData.format || undefined,
-        url: formData.url || undefined,
-        path: formData.path || undefined,
+        url: formData.type === 'http' ? formData.url || undefined : undefined,
+        path: formData.type === 'file' ? formData.path || undefined : undefined,
         interval: formData.interval,
       };
       await onSubmit(formData.name.trim(), provider);
@@ -411,14 +433,31 @@ function RuleProviderDialog({
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">URL</label>
-            <Input
-              value={formData.url}
-              onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-              placeholder="https://example.com/rules.yaml"
-            />
-          </div>
+          {formData.type === 'http' ? (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">URL</label>
+              <Input
+                value={formData.url}
+                onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                placeholder="https://example.com/rules.yaml"
+              />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">文件路径</label>
+              <div className="flex gap-2">
+                <Input
+                  value={formData.path}
+                  onChange={(e) => setFormData({ ...formData, path: e.target.value })}
+                  placeholder="/path/to/rules.yaml"
+                  className="font-mono text-sm"
+                />
+                <Button variant="outline" className="shrink-0" onClick={handleBrowse}>
+                  浏览...
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <label className="text-sm font-medium">更新间隔 (秒)</label>
             <Input
@@ -430,7 +469,15 @@ function RuleProviderDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={submitting}>取消</Button>
-          <Button onClick={handleSubmit} disabled={!formData.name.trim() || submitting}>
+          <Button
+            onClick={handleSubmit}
+            disabled={
+              !formData.name.trim()
+              || (formData.type === 'http' && !formData.url.trim())
+              || (formData.type === 'file' && !formData.path.trim())
+              || submitting
+            }
+          >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : editName ? '保存' : '添加'}
           </Button>
         </DialogFooter>
@@ -637,13 +684,13 @@ export default function Providers() {
           <RefreshCw className="w-8 h-8 animate-spin text-gray-300" />
         </div>
       ) : !activeProfileId ? (
-        <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px] bg-gray-50/50 dark:bg-zinc-900/50">
+        <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[12px] bg-gray-50/50 dark:bg-zinc-900/50">
           <AlertCircle className="w-12 h-12 mb-4 opacity-30" />
           <p className="font-medium text-gray-600 dark:text-gray-300">没有活跃的配置</p>
           <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">请先在"配置"页面创建或激活一个配置文件</p>
         </div>
       ) : currentList.length === 0 ? (
-        <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px] bg-gray-50/50 dark:bg-zinc-900/50">
+        <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[12px] bg-gray-50/50 dark:bg-zinc-900/50">
           <Server className="w-12 h-12 mb-4 opacity-30" />
           <p className="font-medium text-gray-600 dark:text-gray-300">
             暂无{activeTab === 'proxy' ? '代理' : '规则'}源
@@ -653,15 +700,6 @@ export default function Providers() {
               ? `远程订阅的配置为只读，无法添加${activeTab === 'proxy' ? '代理源' : '规则源'}`
               : '点击上方按钮添加新的资源'}
           </p>
-          {!isRemoteProfile && (
-            <Button
-              className="mt-4 rounded-full gap-2"
-              onClick={() => activeTab === 'proxy' ? setProxyDialogOpen(true) : setRuleDialogOpen(true)}
-            >
-              <Plus className="w-4 h-4" />
-              添加{activeTab === 'proxy' ? '代理源' : '规则源'}
-            </Button>
-          )}
         </div>
       ) : activeTab === 'proxy' ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -721,6 +759,12 @@ export default function Providers() {
                   <div className="flex items-start gap-2 text-xs text-gray-500">
                     <ExternalLink className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                     <span className="break-all line-clamp-2">{provider.url}</span>
+                  </div>
+                )}
+                {provider.type === 'file' && provider.path && (
+                  <div className="flex items-start gap-2 text-xs text-gray-500">
+                    <FileText className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <span className="break-all line-clamp-2">{provider.path}</span>
                   </div>
                 )}
 

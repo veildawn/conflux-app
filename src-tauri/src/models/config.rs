@@ -313,6 +313,9 @@ pub struct ProxyConfig {
 
     #[serde(default)]
     pub udp: bool,
+
+    #[serde(flatten, default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub extra: std::collections::HashMap<String, serde_yaml::Value>,
 }
 
 /// 代理组配置
