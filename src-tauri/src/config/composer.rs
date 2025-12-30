@@ -557,6 +557,7 @@ rules:
                 skip_cert_verify: None,
                 sni: None,
                 udp: false,
+                extra: HashMap::new(),
             }],
             proxy_groups: vec![ProxyGroupConfig {
                 name: "PROXY".to_string(),
@@ -608,6 +609,7 @@ rules:
             skip_cert_verify: None,
             sni: None,
             udp: false,
+            extra: HashMap::new(),
         }];
 
         let config = Composer::build_nodes_only_template(proxies);

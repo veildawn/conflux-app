@@ -274,6 +274,16 @@ impl Workspace {
         // 修正 rule-provider 路径
         Composer::fix_provider_paths(&mut config, &self.ruleset_dir)?;
 
+        // 补全 vmess 缺失的 alterId，避免运行时配置校验失败
+        for proxy in &mut config.proxies {
+            if proxy.proxy_type == "vmess" && proxy.alter_id.is_none() {
+                proxy.alter_id = Some(0);
+            }
+            if proxy.proxy_type == "vmess" && proxy.cipher.is_none() {
+                proxy.cipher = Some("auto".to_string());
+            }
+        }
+
         // 合并配置
         let mut runtime_config = base_config.clone();
         runtime_config.proxies = config.proxies;

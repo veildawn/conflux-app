@@ -122,6 +122,27 @@ impl MihomoManager {
         }
     }
 
+    /// 判断 PID 是否存在
+    fn is_pid_running(pid: u32) -> bool {
+        #[cfg(unix)]
+        {
+            return unsafe { libc::kill(pid as i32, 0) == 0 };
+        }
+        #[cfg(windows)]
+        {
+            let filter = format!("PID eq {}", pid);
+            if let Ok(output) = Command::new("tasklist")
+                .args(["/FI", &filter, "/FO", "CSV", "/NH"])
+                .output()
+            {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let token = format!(",\"{}\",", pid);
+                return stdout.contains(&token);
+            }
+            return false;
+        }
+    }
+
     /// 杀死所有 mihomo 进程（通过进程名匹配）
     fn kill_all_mihomo_processes() {
         #[cfg(unix)]
@@ -328,6 +349,10 @@ impl MihomoManager {
             Self::remove_pid_file();
 
             log::info!("MiHomo stopped");
+        } else if let Some(pid) = Self::load_pid() {
+            log::info!("Stopping MiHomo process by PID file (PID: {})", pid);
+            Self::kill_process_by_pid(pid);
+            Self::remove_pid_file();
         }
 
         Ok(())
@@ -359,6 +384,10 @@ impl MihomoManager {
                 // 不调用 wait()，避免阻塞
                 // 进程会被系统回收
                 log::info!("MiHomo process killed (PID: {})", pid);
+            } else if let Some(pid) = Self::load_pid() {
+                log::info!("Stopping MiHomo process by PID file (PID: {})", pid);
+                Self::kill_process_by_pid(pid);
+                Self::remove_pid_file();
             }
         } else {
             // 如果拿不到锁，通过 PID 文件清理
@@ -383,22 +412,38 @@ impl MihomoManager {
 
     /// 检查进程是否正在运行
     pub async fn is_running(&self) -> bool {
-        let process_guard = self.process.lock().await;
+        let mut process_guard = self.process.lock().await;
         if let Some(child) = process_guard.as_ref() {
             // 检查进程是否还存在
             #[cfg(unix)]
             {
-                unsafe { libc::kill(child.id() as i32, 0) == 0 }
+                if unsafe { libc::kill(child.id() as i32, 0) == 0 } {
+                    return true;
+                }
             }
             #[cfg(windows)]
             {
-                // Windows 上通过进程 ID 存在性判断
-                let _ = child.id();
-                true
+                let pid = child.id();
+                if Self::is_pid_running(pid) {
+                    return true;
+                }
             }
-        } else {
-            false
+
+            // 进程已退出，清理状态
+            *process_guard = None;
+            Self::remove_pid_file();
+            return false;
         }
+
+        // 进程句柄丢失时，尝试通过 PID 文件判断
+        if let Some(pid) = Self::load_pid() {
+            if Self::is_pid_running(pid) {
+                return true;
+            }
+            Self::remove_pid_file();
+        }
+
+        false
     }
 
     /// 健康检查

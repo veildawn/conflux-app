@@ -26,7 +26,10 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -134,7 +137,7 @@ const getPolicyStyle = (policy: string) => {
   }
 };
 
-const DEFAULT_POLICIES = ['DIRECT', 'REJECT', 'PROXY'];
+const DEFAULT_POLICIES = ['DIRECT', 'REJECT'];
 
 // -----------------------------------------------------------------------------
 // Main Component
@@ -210,6 +213,18 @@ export default function Rules() {
   const proxyGroups = useMemo(() => {
     return profileConfig?.['proxy-groups']?.map(g => g.name) || [];
   }, [profileConfig]);
+
+  const proxyGroupOptions = useMemo(() => {
+    return Array.from(new Set(proxyGroups.filter(g => !DEFAULT_POLICIES.includes(g))))
+      .sort((a, b) => a.localeCompare(b));
+  }, [proxyGroups]);
+
+  const proxyNodeOptions = useMemo(() => {
+    const nodes = profileConfig?.proxies?.map(proxy => proxy.name).filter(Boolean) || [];
+    return Array.from(new Set(nodes))
+      .filter((name) => !DEFAULT_POLICIES.includes(name) && !proxyGroups.includes(name))
+      .sort((a, b) => a.localeCompare(b));
+  }, [profileConfig, proxyGroups]);
 
   const filteredRules = useMemo(() => {
     const normalizedFilterType = filterType === 'all' ? 'all' : normalizeRuleType(filterType);
@@ -372,7 +387,7 @@ export default function Rules() {
           </div>
         </div>
 
-        <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px] bg-gray-50/50 dark:bg-zinc-900/50">
+        <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[12px] bg-gray-50/50 dark:bg-zinc-900/50">
           <AlertCircle className="w-12 h-12 mb-4 opacity-30" />
           <p className="font-medium text-gray-600 dark:text-gray-300">没有活跃的配置</p>
           <p className="text-sm mt-1 text-gray-500 dark:text-gray-400 max-w-xs">
@@ -460,7 +475,7 @@ export default function Rules() {
 
       {/* Rules Table */}
       <BentoCard
-        className="flex-1 p-0 overflow-hidden bg-white dark:bg-zinc-900 border-gray-100 dark:border-zinc-800 flex flex-col"
+        className="flex-1 p-0 overflow-hidden bg-white dark:bg-zinc-900 border-gray-100 dark:border-zinc-800 flex flex-col rounded-[12px] shadow-[0_4px_12px_rgba(0,0,0,0.04)] dark:shadow-none"
         title=""
       >
         {/* Table Header */}
@@ -582,12 +597,33 @@ export default function Rules() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="DIRECT">DIRECT (直连)</SelectItem>
-                  <SelectItem value="REJECT">REJECT (拒绝)</SelectItem>
-                  <SelectItem value="PROXY">PROXY (代理)</SelectItem>
-                  {proxyGroups.filter(g => !DEFAULT_POLICIES.includes(g)).map((group) => (
-                    <SelectItem key={group} value={group}>{group}</SelectItem>
-                  ))}
+                  <SelectGroup>
+                    <SelectLabel>基础</SelectLabel>
+                    <SelectItem value="DIRECT">DIRECT (直连)</SelectItem>
+                    <SelectItem value="REJECT">REJECT (拒绝)</SelectItem>
+                  </SelectGroup>
+                  {proxyGroupOptions.length > 0 && (
+                    <>
+                      <SelectSeparator />
+                      <SelectGroup>
+                        <SelectLabel>策略组</SelectLabel>
+                        {proxyGroupOptions.map((group) => (
+                          <SelectItem key={group} value={group}>{group}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </>
+                  )}
+                  {proxyNodeOptions.length > 0 && (
+                    <>
+                      <SelectSeparator />
+                      <SelectGroup>
+                        <SelectLabel>节点</SelectLabel>
+                        {proxyNodeOptions.map((node) => (
+                          <SelectItem key={node} value={node}>{node}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>

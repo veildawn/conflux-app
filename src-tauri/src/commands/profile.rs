@@ -273,7 +273,7 @@ pub async fn delete_proxy(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
-    let (metadata, mut config) = workspace
+    let (_metadata, mut config) = workspace
         .get_profile(&profile_id)
         .map_err(|e| e.to_string())?;
 
@@ -282,7 +282,10 @@ pub async fn delete_proxy(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    if metadata.active {
+    let active_profile_id = workspace
+        .get_active_profile_id()
+        .map_err(|e| e.to_string())?;
+    if active_profile_id.as_deref() == Some(profile_id.as_str()) {
         reload_active_profile(&state).await?;
     }
 
@@ -564,6 +567,24 @@ pub async fn update_rule_provider_in_profile(
 
 /// 重载活跃 Profile 的辅助函数
 async fn reload_active_profile(state: &State<'_, AppState>) -> Result<(), String> {
+    let workspace = Workspace::new().map_err(|e| e.to_string())?;
+    let active_id = match workspace.get_active_profile_id().map_err(|e| e.to_string())? {
+        Some(id) => id,
+        None => return Ok(()),
+    };
+
+    let base_config = state
+        .config_manager
+        .load_mihomo_config()
+        .map_err(|e| e.to_string())?;
+    let runtime_config = workspace
+        .activate_profile(&active_id, &base_config)
+        .map_err(|e| e.to_string())?;
+    state
+        .config_manager
+        .save_mihomo_config(&runtime_config)
+        .map_err(|e| e.to_string())?;
+
     if state.mihomo_manager.is_running().await {
         let config_path = state.config_manager.mihomo_config_path();
         state

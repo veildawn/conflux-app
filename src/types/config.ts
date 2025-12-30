@@ -99,6 +99,7 @@ export interface ProxyConfig {
   'skip-cert-verify'?: boolean;
   sni?: string;
   udp?: boolean;
+  [key: string]: unknown;
 }
 
 /**
