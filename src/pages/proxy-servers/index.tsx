@@ -23,7 +23,8 @@ import { cn } from '@/utils/cn';
 import type { ProxyConfig } from '@/types/config';
 import { BentoCard } from './components/BentoCard';
 import { LinkParseDialog } from './LinkParseDialog';
-import { ProxyServerDialog } from './ProxyServerDialog';
+// Removed ProxyServerDialog in favor of window
+import { listen } from '@tauri-apps/api/event';
 import { getProxyTypeColor, getProxyTypeBgColor } from './utils';
 
 export default function ProxyServers() {
@@ -35,9 +36,8 @@ export default function ProxyServers() {
   const [loadingServers, setLoadingServers] = useState(false);
   const [testingNodes, setTestingNodes] = useState<Set<string>>(new Set());
   const [delays, setDelays] = useState<Record<string, number>>({});
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
-  const [editingProxy, setEditingProxy] = useState<ProxyConfig | null>(null);
+  // Removed dialogOpen and editingProxy
   const [deleteConfirm, setDeleteConfirm] = useState<ProxyConfig | null>(null);
   const [addMenuValue, setAddMenuValue] = useState('');
 
@@ -161,29 +161,64 @@ export default function ProxyServers() {
     }
   };
 
-  const handleUpdateProxy = async (proxy: ProxyConfig, originalProxy: ProxyConfig) => {
-    ensureActiveProfile();
+  const toWindowLabelSafe = (value: string) => {
+    const encoded = encodeURIComponent(value);
+    const sanitized = encoded.replace(/%/g, '_').replace(/[^a-zA-Z0-9_-]/g, '_');
+    return sanitized.replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+  };
 
+  const buildServerWindowLabel = (name?: string) => {
+    const prefix = name ? 'edit-server' : 'add-server';
+    if (!name) return `${prefix}-${Date.now()}`;
+    const safe = toWindowLabelSafe(name);
+    return safe ? `${prefix}-${safe}` : `${prefix}-${Date.now()}`;
+  };
+
+  const openServerWindow = async (name?: string) => {
     try {
-      await ipc.updateProxy(activeProfileId as string, originalProxy.name, proxy);
-      await loadProxyServers();
-      toast({ title: '保存成功', description: `服务器 "${proxy.name}" 已更新` });
-    } catch (error) {
-      toast({
-        title: '保存失败',
-        description: String(error),
-        variant: 'destructive',
+      const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+      const label = buildServerWindowLabel(name);
+      const existing = await WebviewWindow.getByLabel(label);
+      if (existing) {
+        await existing.show();
+        await existing.setFocus();
+        return;
+      }
+
+      const newWindow = new WebviewWindow(label, {
+        url: `/proxy-server-edit${name ? `?name=${encodeURIComponent(name)}` : ''}`,
+        title: name ? `编辑服务器 - ${name}` : '手动配置服务器',
+        width: 860,
+        height: 700,
+        center: true,
+        resizable: false,
+        decorations: false,
+        transparent: true,
+        shadow: false,
       });
-      throw error;
+
+      newWindow.once('tauri://error', (event) => {
+        console.error('Failed to create window', event);
+        toast({
+          title: '无法打开窗口',
+          description: String(event.payload) || '未知错误',
+          variant: 'destructive',
+        });
+      });
+    } catch (e) {
+      console.error('Failed to open window', e);
+      toast({ title: '无法打开窗口', description: String(e), variant: 'destructive' });
     }
   };
 
-  const handleSaveProxy = async (proxy: ProxyConfig, originalProxy?: ProxyConfig) => {
-    if (originalProxy) {
-      return handleUpdateProxy(proxy, originalProxy);
-    }
-    return handleAddProxy(proxy);
-  };
+  useEffect(() => {
+    const unlisten = listen('proxy-servers-changed', () => {
+      loadProxyServers();
+    });
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [loadProxyServers]);
 
   const handleDeleteProxy = async (name: string) => {
     if (!activeProfileId) return;
@@ -209,8 +244,7 @@ export default function ProxyServers() {
       setLinkDialogOpen(true);
       return;
     }
-    setEditingProxy(null);
-    setDialogOpen(true);
+    openServerWindow();
   };
 
   const renderAddServerMenu = (wrapperClassName?: string) => (
@@ -325,8 +359,7 @@ export default function ProxyServers() {
                       title="编辑"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setEditingProxy(server);
-                        setDialogOpen(true);
+                        openServerWindow(server.name);
                       }}
                     >
                       <Pencil className="w-3.5 h-3.5" />
@@ -423,17 +456,6 @@ export default function ProxyServers() {
         open={linkDialogOpen}
         onClose={() => setLinkDialogOpen(false)}
         onSuccess={handleAddProxy}
-        statusRunning={status.running}
-      />
-
-      <ProxyServerDialog
-        open={dialogOpen}
-        onClose={() => {
-          setDialogOpen(false);
-          setEditingProxy(null);
-        }}
-        onSubmit={handleSaveProxy}
-        editData={editingProxy}
         statusRunning={status.running}
       />
 
