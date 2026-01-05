@@ -71,6 +71,7 @@ const SelectContent = React.forwardRef<
       className
     )}
     position={position}
+    data-no-drag
     {...props}
   >
     <SelectScrollUpButton />

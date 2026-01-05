@@ -23,8 +23,11 @@ const dragIgnoreSelector = [
   '[role="button"]',
   '[role="link"]',
   '[role="menuitem"]',
+  '[role="tab"]',
+  '[role="option"]',
+  '[role="listbox"]',
   '[contenteditable="true"]',
-  '.cursor-pointer'
+  '.cursor-pointer',
 ].join(', ');
 
 export default function AppLayout() {
@@ -56,7 +59,7 @@ export default function AppLayout() {
         console.log('AppLayout: Settings fetched');
         await fetchStatus();
         console.log('AppLayout: Status fetched');
-        
+
         // 如果 mihomo 未运行，自动启动
         const currentStatus = useProxyStore.getState().status;
         console.log('AppLayout: Current status:', currentStatus);
@@ -67,7 +70,7 @@ export default function AppLayout() {
         } else {
           console.log('AppLayout: MiHomo already running');
         }
-        
+
         // 应用启动时检查规则数据库更新（只检查一次）
         checkRuleDatabaseUpdates();
         console.log('AppLayout: Rule database update check initiated');
@@ -162,7 +165,7 @@ export default function AppLayout() {
   };
 
   return (
-    <div 
+    <div
       className="flex flex-col h-screen app-bg-gradient overflow-hidden rounded-xl border border-gray-200 dark:border-zinc-800 shadow-2xl"
       style={{ willChange: 'transform' }}
       onMouseDown={handleMouseDown}
