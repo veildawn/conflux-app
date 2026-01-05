@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   RefreshCw,
   Clock,
@@ -13,11 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -31,12 +27,12 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
 import { useToast } from '@/hooks/useToast';
-import type { ProfileConfig, ProxyProvider, RuleProvider, ProfileMetadata } from '@/types/config';
+import type { ProfileConfig, ProxyProvider, RuleProvider } from '@/types/config';
 
 // -----------------------------------------------------------------------------
 // UI Components
@@ -47,8 +43,8 @@ function BentoCard({
   children,
   title,
   icon: Icon,
-  iconColor = "text-gray-500",
-  action
+  iconColor = 'text-gray-500',
+  action,
 }: {
   className?: string;
   children: React.ReactNode;
@@ -58,14 +54,16 @@ function BentoCard({
   action?: React.ReactNode;
 }) {
   return (
-    <div className={cn(
-      "bg-white dark:bg-zinc-900 rounded-[20px] p-5 shadow-xs border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden",
-      className
-    )}>
+    <div
+      className={cn(
+        'bg-white dark:bg-zinc-900 rounded-[20px] p-5 shadow-xs border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden',
+        className
+      )}
+    >
       {(title || Icon) && (
         <div className="flex justify-between items-center mb-4 z-10">
           <div className="flex items-center gap-2">
-            {Icon && <Icon className={cn("w-4 h-4", iconColor)} />}
+            {Icon && <Icon className={cn('w-4 h-4', iconColor)} />}
             {title && (
               <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 {title}
@@ -221,7 +219,10 @@ function ProxyProviderDialog({
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">类型</label>
-            <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v })}>
+            <Select
+              value={formData.type}
+              onValueChange={(v) => setFormData({ ...formData, type: v })}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -244,7 +245,9 @@ function ProxyProviderDialog({
             <Input
               type="number"
               value={formData.interval}
-              onChange={(e) => setFormData({ ...formData, interval: parseInt(e.target.value) || 3600 })}
+              onChange={(e) =>
+                setFormData({ ...formData, interval: parseInt(e.target.value) || 3600 })
+              }
             />
           </div>
           <div className="flex items-center gap-2">
@@ -255,7 +258,9 @@ function ProxyProviderDialog({
               onChange={(e) => setFormData({ ...formData, healthCheckEnabled: e.target.checked })}
               className="rounded"
             />
-            <label htmlFor="healthCheck" className="text-sm font-medium">启用健康检查</label>
+            <label htmlFor="healthCheck" className="text-sm font-medium">
+              启用健康检查
+            </label>
           </div>
           {formData.healthCheckEnabled && (
             <div className="space-y-2 pl-6">
@@ -272,14 +277,21 @@ function ProxyProviderDialog({
                 <Input
                   type="number"
                   value={formData.healthCheckInterval}
-                  onChange={(e) => setFormData({ ...formData, healthCheckInterval: parseInt(e.target.value) || 300 })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      healthCheckInterval: parseInt(e.target.value) || 300,
+                    })
+                  }
                 />
               </div>
             </div>
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={submitting}>取消</Button>
+          <Button variant="outline" onClick={onClose} disabled={submitting}>
+            取消
+          </Button>
           <Button onClick={handleSubmit} disabled={!formData.name.trim() || submitting}>
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : editName ? '保存' : '添加'}
           </Button>
@@ -318,10 +330,12 @@ function RuleProviderDialog({
       const selected = await openDialog({
         title: '选择规则文件',
         multiple: false,
-        filters: [{
-          name: '规则文件',
-          extensions: ['yaml', 'yml', 'txt', 'list']
-        }]
+        filters: [
+          {
+            name: '规则文件',
+            extensions: ['yaml', 'yml', 'txt', 'list'],
+          },
+        ],
       });
 
       if (selected) {
@@ -397,7 +411,10 @@ function RuleProviderDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">类型</label>
-              <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v })}>
+              <Select
+                value={formData.type}
+                onValueChange={(v) => setFormData({ ...formData, type: v })}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -409,7 +426,10 @@ function RuleProviderDialog({
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">行为</label>
-              <Select value={formData.behavior} onValueChange={(v) => setFormData({ ...formData, behavior: v })}>
+              <Select
+                value={formData.behavior}
+                onValueChange={(v) => setFormData({ ...formData, behavior: v })}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -423,7 +443,10 @@ function RuleProviderDialog({
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">格式</label>
-            <Select value={formData.format} onValueChange={(v) => setFormData({ ...formData, format: v })}>
+            <Select
+              value={formData.format}
+              onValueChange={(v) => setFormData({ ...formData, format: v })}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -463,19 +486,23 @@ function RuleProviderDialog({
             <Input
               type="number"
               value={formData.interval}
-              onChange={(e) => setFormData({ ...formData, interval: parseInt(e.target.value) || 86400 })}
+              onChange={(e) =>
+                setFormData({ ...formData, interval: parseInt(e.target.value) || 86400 })
+              }
             />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={submitting}>取消</Button>
+          <Button variant="outline" onClick={onClose} disabled={submitting}>
+            取消
+          </Button>
           <Button
             onClick={handleSubmit}
             disabled={
-              !formData.name.trim()
-              || (formData.type === 'http' && !formData.url.trim())
-              || (formData.type === 'file' && !formData.path.trim())
-              || submitting
+              !formData.name.trim() ||
+              (formData.type === 'http' && !formData.url.trim()) ||
+              (formData.type === 'file' && !formData.path.trim()) ||
+              submitting
             }
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : editName ? '保存' : '添加'}
@@ -497,22 +524,25 @@ export default function Providers() {
 
   // 活跃 Profile 数据
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
-  const [profileMetadata, setProfileMetadata] = useState<ProfileMetadata | null>(null);
   const [profileConfig, setProfileConfig] = useState<ProfileConfig | null>(null);
-
-  // 判断是否为远程订阅
-  const isRemoteProfile = useMemo(() => {
-    return profileMetadata?.profileType === 'remote';
-  }, [profileMetadata]);
 
   // Dialog states
   const [proxyDialogOpen, setProxyDialogOpen] = useState(false);
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
-  const [editProxyProvider, setEditProxyProvider] = useState<{ name: string; provider: ProxyProvider } | null>(null);
-  const [editRuleProvider, setEditRuleProvider] = useState<{ name: string; provider: RuleProvider } | null>(null);
+  const [editProxyProvider, setEditProxyProvider] = useState<{
+    name: string;
+    provider: ProxyProvider;
+  } | null>(null);
+  const [editRuleProvider, setEditRuleProvider] = useState<{
+    name: string;
+    provider: RuleProvider;
+  } | null>(null);
 
   // 删除确认
-  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'proxy' | 'rule'; name: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    type: 'proxy' | 'rule';
+    name: string;
+  } | null>(null);
 
   // 加载活跃 Profile 配置
   const loadActiveProfile = useCallback(async () => {
@@ -522,16 +552,13 @@ export default function Providers() {
       setActiveProfileId(activeId);
 
       if (activeId) {
-        const [metadata, config] = await ipc.getProfile(activeId);
-        setProfileMetadata(metadata);
+        const [, config] = await ipc.getProfile(activeId);
         setProfileConfig(config);
       } else {
-        setProfileMetadata(null);
         setProfileConfig(null);
       }
     } catch (error) {
       console.error('Failed to load active profile:', error);
-      setProfileMetadata(null);
       setProfileConfig(null);
     } finally {
       setLoading(false);
@@ -631,43 +658,51 @@ export default function Providers() {
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">资源</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+              资源
+            </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               管理配置中的代理源和规则源
             </p>
           </div>
 
           <div className="flex items-center gap-3">
-            {!isRemoteProfile && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => activeTab === 'proxy' ? setProxyDialogOpen(true) : setRuleDialogOpen(true)}
-                disabled={!activeProfileId}
-                className="rounded-full gap-2 h-9 px-4 bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
-              >
-                <Plus className="w-4 h-4" />
-                添加{activeTab === 'proxy' ? '代理源' : '规则源'}
-              </Button>
-            )}
-
             <Button
               variant="ghost"
               size="icon"
               onClick={loadActiveProfile}
               className="rounded-full h-9 w-9"
             >
-              <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                activeTab === 'proxy' ? setProxyDialogOpen(true) : setRuleDialogOpen(true)
+              }
+              disabled={!activeProfileId}
+              className="rounded-full gap-2 h-9 px-4 bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
+            >
+              <Plus className="w-4 h-4" />
+              添加{activeTab === 'proxy' ? '代理源' : '规则源'}
             </Button>
 
             <div className="bg-gray-100 dark:bg-zinc-800 p-1 rounded-full border border-gray-200 dark:border-zinc-700 inline-flex h-9">
               <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'proxy' | 'rule')}>
                 <TabsList className="bg-transparent h-full p-0 gap-1">
-                  <TabsTrigger value="proxy" className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 text-xs h-full font-medium transition-all">
+                  <TabsTrigger
+                    value="proxy"
+                    className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 text-xs h-full font-medium transition-all"
+                  >
                     <Server className="w-3.5 h-3.5" />
                     代理源
                   </TabsTrigger>
-                  <TabsTrigger value="rule" className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 text-xs h-full font-medium transition-all">
+                  <TabsTrigger
+                    value="rule"
+                    className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 text-xs h-full font-medium transition-all"
+                  >
                     <FileText className="w-3.5 h-3.5" />
                     规则源
                   </TabsTrigger>
@@ -687,7 +722,9 @@ export default function Providers() {
         <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[12px] bg-gray-50/50 dark:bg-zinc-900/50">
           <AlertCircle className="w-12 h-12 mb-4 opacity-30" />
           <p className="font-medium text-gray-600 dark:text-gray-300">没有活跃的配置</p>
-          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">请先在"配置"页面创建或激活一个配置文件</p>
+          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">
+            请先在"配置"页面创建或激活一个配置文件
+          </p>
         </div>
       ) : currentList.length === 0 ? (
         <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[12px] bg-gray-50/50 dark:bg-zinc-900/50">
@@ -695,11 +732,7 @@ export default function Providers() {
           <p className="font-medium text-gray-600 dark:text-gray-300">
             暂无{activeTab === 'proxy' ? '代理' : '规则'}源
           </p>
-          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">
-            {isRemoteProfile
-              ? `远程订阅的配置为只读，无法添加${activeTab === 'proxy' ? '代理源' : '规则源'}`
-              : '点击上方按钮添加新的资源'}
-          </p>
+          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">click上方按钮添加新的资源</p>
         </div>
       ) : activeTab === 'proxy' ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -710,41 +743,41 @@ export default function Providers() {
               icon={Server}
               iconColor="text-blue-500"
               action={
-                !isRemoteProfile ? (
-                  <div className="flex gap-1">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
-                      title="编辑"
-                      onClick={() => {
-                        setEditProxyProvider({ name, provider });
-                        setProxyDialogOpen(true);
-                      }}
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                      title="删除"
-                      onClick={() => setDeleteConfirm({ type: 'proxy', name })}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                ) : undefined
+                <div className="flex gap-1">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                    title="编辑"
+                    onClick={() => {
+                      setEditProxyProvider({ name, provider });
+                      setProxyDialogOpen(true);
+                    }}
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                    title="删除"
+                    onClick={() => setDeleteConfirm({ type: 'proxy', name })}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
               }
             >
               <div className="space-y-3">
                 <div>
                   <h3 className="font-bold text-lg text-gray-900 dark:text-white">{name}</h3>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className={cn(
-                      "text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase",
-                      getVehicleTypeStyle(provider.type)
-                    )}>
+                    <span
+                      className={cn(
+                        'text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase',
+                        getVehicleTypeStyle(provider.type)
+                      )}
+                    >
                       {provider.type}
                     </span>
                     {provider['health-check']?.enable && (
@@ -785,47 +818,49 @@ export default function Providers() {
               icon={FileText}
               iconColor="text-purple-500"
               action={
-                !isRemoteProfile ? (
-                  <div className="flex gap-1">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
-                      title="编辑"
-                      onClick={() => {
-                        setEditRuleProvider({ name, provider });
-                        setRuleDialogOpen(true);
-                      }}
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                      title="删除"
-                      onClick={() => setDeleteConfirm({ type: 'rule', name })}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                ) : undefined
+                <div className="flex gap-1">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                    title="编辑"
+                    onClick={() => {
+                      setEditRuleProvider({ name, provider });
+                      setRuleDialogOpen(true);
+                    }}
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                    title="删除"
+                    onClick={() => setDeleteConfirm({ type: 'rule', name })}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
               }
             >
               <div className="space-y-3">
                 <div>
                   <h3 className="font-bold text-lg text-gray-900 dark:text-white">{name}</h3>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className={cn(
-                      "text-[10px] font-bold px-1.5 py-0.5 rounded uppercase",
-                      getBehaviorStyle(provider.behavior)
-                    )}>
+                    <span
+                      className={cn(
+                        'text-[10px] font-bold px-1.5 py-0.5 rounded uppercase',
+                        getBehaviorStyle(provider.behavior)
+                      )}
+                    >
                       {provider.behavior}
                     </span>
-                    <span className={cn(
-                      "text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase",
-                      getVehicleTypeStyle(provider.type)
-                    )}>
+                    <span
+                      className={cn(
+                        'text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase',
+                        getVehicleTypeStyle(provider.type)
+                      )}
+                    >
                       {provider.type}
                     </span>
                     {provider.format && (
@@ -883,10 +918,13 @@ export default function Providers() {
             <DialogTitle>确认删除</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            确定要删除{deleteConfirm?.type === 'proxy' ? '代理源' : '规则源'} "{deleteConfirm?.name}" 吗？此操作不可撤销。
+            确定要删除{deleteConfirm?.type === 'proxy' ? '代理源' : '规则源'} "{deleteConfirm?.name}
+            " 吗？此操作不可撤销。
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>取消</Button>
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
+              取消
+            </Button>
             <Button
               variant="destructive"
               onClick={() => {

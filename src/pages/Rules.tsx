@@ -36,7 +36,13 @@ import {
 import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
 import { useToast } from '@/hooks/useToast';
-import { RULE_TYPES, parseRule, buildRule, type RuleType, type ProfileConfig, type RuleProvider, type ProfileMetadata } from '@/types/config';
+import {
+  RULE_TYPES,
+  parseRule,
+  buildRule,
+  type RuleType,
+  type ProfileConfig,
+} from '@/types/config';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -56,8 +62,8 @@ function BentoCard({
   children,
   title,
   icon: Icon,
-  iconColor = "text-gray-500",
-  action
+  iconColor = 'text-gray-500',
+  action,
 }: {
   className?: string;
   children: React.ReactNode;
@@ -67,14 +73,16 @@ function BentoCard({
   action?: React.ReactNode;
 }) {
   return (
-    <div className={cn(
-      "bg-white dark:bg-zinc-900 rounded-[24px] shadow-sm border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden",
-      className
-    )}>
+    <div
+      className={cn(
+        'bg-white dark:bg-zinc-900 rounded-[24px] shadow-sm border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden',
+        className
+      )}
+    >
       {(title || Icon) && (
         <div className="flex justify-between items-center px-6 pt-5 pb-3 z-10 border-b border-gray-50 dark:border-zinc-800/50">
           <div className="flex items-center gap-2">
-            {Icon && <Icon className={cn("w-4 h-4", iconColor)} />}
+            {Icon && <Icon className={cn('w-4 h-4', iconColor)} />}
             {title && (
               <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 {title}
@@ -148,15 +156,9 @@ export default function Rules() {
 
   // Profile State
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
-  const [profileMetadata, setProfileMetadata] = useState<ProfileMetadata | null>(null);
   const [profileConfig, setProfileConfig] = useState<ProfileConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  // 判断是否为远程订阅
-  const isRemoteProfile = useMemo(() => {
-    return profileMetadata?.profileType === 'remote';
-  }, [profileMetadata]);
 
   // UI State
   const [searchQuery, setSearchQuery] = useState('');
@@ -180,11 +182,9 @@ export default function Rules() {
       setActiveProfileId(profileId);
 
       if (profileId) {
-        const [metadata, config] = await ipc.getProfile(profileId);
-        setProfileMetadata(metadata);
+        const [, config] = await ipc.getProfile(profileId);
         setProfileConfig(config);
       } else {
-        setProfileMetadata(null);
         setProfileConfig(null);
       }
     } catch (error) {
@@ -211,16 +211,17 @@ export default function Rules() {
 
   // Get proxy groups for policy selection
   const proxyGroups = useMemo(() => {
-    return profileConfig?.['proxy-groups']?.map(g => g.name) || [];
+    return profileConfig?.['proxy-groups']?.map((g) => g.name) || [];
   }, [profileConfig]);
 
   const proxyGroupOptions = useMemo(() => {
-    return Array.from(new Set(proxyGroups.filter(g => !DEFAULT_POLICIES.includes(g))))
-      .sort((a, b) => a.localeCompare(b));
+    return Array.from(new Set(proxyGroups.filter((g) => !DEFAULT_POLICIES.includes(g)))).sort(
+      (a, b) => a.localeCompare(b)
+    );
   }, [proxyGroups]);
 
   const proxyNodeOptions = useMemo(() => {
-    const nodes = profileConfig?.proxies?.map(proxy => proxy.name).filter(Boolean) || [];
+    const nodes = profileConfig?.proxies?.map((proxy) => proxy.name).filter(Boolean) || [];
     return Array.from(new Set(nodes))
       .filter((name) => !DEFAULT_POLICIES.includes(name) && !proxyGroups.includes(name))
       .sort((a, b) => a.localeCompare(b));
@@ -231,7 +232,8 @@ export default function Rules() {
     return rules.filter((rule) => {
       const parsed = parseRule(rule);
       if (!parsed) return true;
-      if (normalizedFilterType !== 'all' && normalizeRuleType(parsed.type) !== normalizedFilterType) return false;
+      if (normalizedFilterType !== 'all' && normalizeRuleType(parsed.type) !== normalizedFilterType)
+        return false;
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         return (
@@ -244,25 +246,16 @@ export default function Rules() {
     });
   }, [rules, searchQuery, filterType]);
 
-  const ruleProviderMap = useMemo(() => {
-    return new Map(
-      Object.entries(ruleProviders).map(([name, provider]) => [
-        name,
-        { name, ...provider }
-      ])
-    );
-  }, [ruleProviders]);
-
   const ruleSetOptions = useMemo<RuleSetOption[]>(() => {
     const options = new Map<string, RuleSetOption>();
 
     // Add from rule-providers
-    Object.keys(ruleProviders).forEach(name => {
+    Object.keys(ruleProviders).forEach((name) => {
       options.set(name, { name });
     });
 
     // Add from existing rules
-    rules.forEach(rule => {
+    rules.forEach((rule) => {
       const parsed = parseRule(rule);
       if (parsed?.type === 'RULE-SET' && parsed.payload) {
         if (!options.has(parsed.payload)) {
@@ -316,7 +309,7 @@ export default function Rules() {
         newRules[editingIndex] = newRule;
       } else {
         // Add new rule before MATCH
-        const matchIndex = rules.findIndex(r => r.startsWith('MATCH,'));
+        const matchIndex = rules.findIndex((r) => r.startsWith('MATCH,'));
         if (matchIndex !== -1) {
           newRules = [...rules];
           newRules.splice(matchIndex, 0, newRule);
@@ -334,7 +327,10 @@ export default function Rules() {
       await ipc.updateProfileConfig(activeProfileId, newConfig);
       setProfileConfig(newConfig);
       setIsDialogOpen(false);
-      toast({ title: '保存成功', description: editingIndex !== null ? '规则已更新' : '规则已添加' });
+      toast({
+        title: '保存成功',
+        description: editingIndex !== null ? '规则已更新' : '规则已添加',
+      });
     } catch (error) {
       console.error('Failed to save rule:', error);
       toast({ title: '保存失败', description: String(error), variant: 'destructive' });
@@ -372,7 +368,7 @@ export default function Rules() {
     }
   };
 
-  const currentRuleTypeConfig = RULE_TYPES.find(t => t.value === ruleType);
+  const currentRuleTypeConfig = RULE_TYPES.find((t) => t.value === ruleType);
 
   // No active profile
   if (!loading && !activeProfileId) {
@@ -380,7 +376,9 @@ export default function Rules() {
       <div className="space-y-6 pb-6 h-full flex flex-col">
         <div className="flex flex-col gap-4 shrink-0">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">规则管理</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+              规则管理
+            </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               管理流量路由规则,控制不同流量的转发策略
             </p>
@@ -404,7 +402,9 @@ export default function Rules() {
       <div className="flex flex-col gap-4 shrink-0">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">规则管理</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+              规则管理
+            </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               管理流量路由规则,控制不同流量的转发策略
             </p>
@@ -450,25 +450,25 @@ export default function Rules() {
 
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
+              variant="ghost"
               onClick={loadProfileData}
               disabled={loading}
               size="icon"
-              className="h-10 w-10 shrink-0 bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 rounded-xl shadow-xs hover:bg-gray-50 dark:hover:bg-zinc-800"
+              className="rounded-full h-9 w-9"
             >
-              <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
             </Button>
 
-            {!isRemoteProfile && (
-              <Button
-                onClick={openAddDialog}
-                disabled={!activeProfileId}
-                className="h-10 shrink-0 bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800 text-blue-600 dark:text-blue-400 rounded-xl shadow-xs gap-2 border font-medium px-4 text-sm"
-              >
-                <Plus className="w-4 h-4" />
-                添加规则
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openAddDialog}
+              disabled={!activeProfileId}
+              className="rounded-full gap-2 h-9 px-4 bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
+            >
+              <Plus className="w-4 h-4" />
+              添加规则
+            </Button>
           </div>
         </div>
       </div>
@@ -494,7 +494,7 @@ export default function Rules() {
               <RefreshCw className="w-8 h-8 animate-spin text-gray-300" />
             </div>
           ) : filteredRules.length === 0 ? (
-            <EmptyState searchQuery={searchQuery} isRemoteProfile={isRemoteProfile} />
+            <EmptyState searchQuery={searchQuery} />
           ) : (
             <div className="divide-y divide-gray-100 dark:divide-zinc-800/50">
               {filteredRules.map((rule, index) => {
@@ -513,8 +513,6 @@ export default function Rules() {
                     policy={parsed.policy}
                     onEdit={() => openEditDialog(fullIndex)}
                     onDelete={() => handleDeleteClick(fullIndex)}
-                    ruleProviderMap={ruleProviderMap}
-                    isRemoteProfile={isRemoteProfile}
                   />
                 );
               })}
@@ -608,7 +606,9 @@ export default function Rules() {
                       <SelectGroup>
                         <SelectLabel>策略组</SelectLabel>
                         {proxyGroupOptions.map((group) => (
-                          <SelectItem key={group} value={group}>{group}</SelectItem>
+                          <SelectItem key={group} value={group}>
+                            {group}
+                          </SelectItem>
                         ))}
                       </SelectGroup>
                     </>
@@ -619,7 +619,9 @@ export default function Rules() {
                       <SelectGroup>
                         <SelectLabel>节点</SelectLabel>
                         {proxyNodeOptions.map((node) => (
-                          <SelectItem key={node} value={node}>{node}</SelectItem>
+                          <SelectItem key={node} value={node}>
+                            {node}
+                          </SelectItem>
                         ))}
                       </SelectGroup>
                     </>
@@ -630,7 +632,9 @@ export default function Rules() {
           </div>
 
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="rounded-xl">取消</Button>
+            <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="rounded-xl">
+              取消
+            </Button>
             <Button
               onClick={handleSaveRule}
               disabled={(currentRuleTypeConfig?.hasPayload && !rulePayload) || saving}
@@ -657,7 +661,11 @@ export default function Rules() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)} className="rounded-xl">
+            <Button
+              variant="ghost"
+              onClick={() => setDeleteDialogOpen(false)}
+              className="rounded-xl"
+            >
               取消
             </Button>
             <Button
@@ -687,8 +695,6 @@ function RuleTableRow({
   policy,
   onEdit,
   onDelete,
-  ruleProviderMap,
-  isRemoteProfile,
 }: {
   index: number;
   type: string;
@@ -696,35 +702,34 @@ function RuleTableRow({
   policy: string;
   onEdit?: () => void;
   onDelete?: () => void;
-  ruleProviderMap?: Map<string, RuleProvider & { name: string }>;
-  isRemoteProfile?: boolean;
 }) {
   const Icon = getRuleIcon(type);
-  const isRuleSet = normalizeRuleType(type) === 'RULESET';
   const payloadBadge = getPayloadBadge(type);
 
   return (
     <div
-      onClick={isRemoteProfile ? undefined : onEdit}
+      onClick={onEdit}
       className={cn(
-        "group grid grid-cols-[48px_110px_1fr_100px_50px] gap-3 px-4 h-[52px] items-center transition-colors border-l-2 border-transparent text-sm",
-        !isRemoteProfile && "cursor-pointer hover:bg-blue-50/30 dark:hover:bg-blue-900/10 hover:border-blue-500"
+        'group grid grid-cols-[48px_110px_1fr_100px_50px] gap-3 px-4 h-[52px] items-center transition-colors border-l-2 border-transparent text-sm cursor-pointer hover:bg-blue-50/30 dark:hover:bg-blue-900/10 hover:border-blue-500'
       )}
     >
       {/* Index */}
-      <div className="text-center text-xs font-mono text-gray-400 truncate">
-        {index}
-      </div>
+      <div className="text-center text-xs font-mono text-gray-400 truncate">{index}</div>
 
       {/* Type */}
       <div className="flex items-center gap-2 min-w-0">
-        <div className={cn(
-          "w-6 h-6 rounded-md flex items-center justify-center shrink-0",
-          getRuleColor(type)
-        )}>
-          {createElement(Icon, { className: "w-3.5 h-3.5" })}
+        <div
+          className={cn(
+            'w-6 h-6 rounded-md flex items-center justify-center shrink-0',
+            getRuleColor(type)
+          )}
+        >
+          {createElement(Icon, { className: 'w-3.5 h-3.5' })}
         </div>
-        <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 truncate" title={type}>
+        <span
+          className="text-xs font-semibold text-gray-600 dark:text-gray-300 truncate"
+          title={type}
+        >
           {type}
         </span>
       </div>
@@ -732,69 +737,70 @@ function RuleTableRow({
       {/* Payload */}
       <div className="min-w-0 pr-2">
         {payload ? (
-            <div className="flex items-center gap-2 min-w-0">
-              {payloadBadge && (
-                <span className="text-[10px] font-semibold rounded bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-gray-400 px-1.5 py-0.5 shrink-0">
-                  {payloadBadge}
-                </span>
-              )}
-              <span className="text-sm font-mono text-gray-900 dark:text-gray-200 truncate block" title={payload}>
-                {payload}
+          <div className="flex items-center gap-2 min-w-0">
+            {payloadBadge && (
+              <span className="text-[10px] font-semibold rounded bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-gray-400 px-1.5 py-0.5 shrink-0">
+                {payloadBadge}
               </span>
-            </div>
-          ) : (
-            <span className="text-xs text-gray-400 italic">
-              (无参数)
+            )}
+            <span
+              className="text-sm font-mono text-gray-900 dark:text-gray-200 truncate block"
+              title={payload}
+            >
+              {payload}
             </span>
+          </div>
+        ) : (
+          <span className="text-xs text-gray-400 italic">(无参数)</span>
         )}
       </div>
 
       {/* Policy */}
       <div className="min-w-0">
-        <span className={cn(
-          "px-2 py-0.5 rounded text-[10px] font-bold border truncate block w-fit max-w-full",
-          getPolicyStyle(policy)
-        )}>
+        <span
+          className={cn(
+            'px-2 py-0.5 rounded text-[10px] font-bold border truncate block w-fit max-w-full',
+            getPolicyStyle(policy)
+          )}
+        >
           {policy}
         </span>
       </div>
 
       {/* Actions */}
       <div className="flex justify-center">
-        {!isRemoteProfile && (
-          <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="flex items-center gap-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit?.();
-                }}
-              >
-                <PenLine className="w-3.5 h-3.5" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete?.();
-                }}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
-            </div>
+        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit?.();
+              }}
+            >
+              <PenLine className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete?.();
+              }}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
 
-function EmptyState({ searchQuery, isRemoteProfile }: { searchQuery: string; isRemoteProfile?: boolean }) {
+function EmptyState({ searchQuery }: { searchQuery: string }) {
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-gray-400">
       <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center mb-4">
@@ -804,11 +810,7 @@ function EmptyState({ searchQuery, isRemoteProfile }: { searchQuery: string; isR
         {searchQuery ? '未找到匹配规则' : '暂无规则'}
       </p>
       <p className="text-sm mt-1 text-center max-w-xs text-gray-500">
-        {searchQuery
-          ? '请尝试更换搜索关键词或清除过滤条件'
-          : isRemoteProfile
-          ? '远程订阅的配置为只读，无法添加规则'
-          : '点击右上角的"添加规则"按钮开始配置'}
+        {searchQuery ? '请尝试更换搜索关键词或清除过滤条件' : '点击右上角的"添加规则"按钮开始配置'}
       </p>
     </div>
   );
@@ -816,26 +818,42 @@ function EmptyState({ searchQuery, isRemoteProfile }: { searchQuery: string; isR
 
 function getPayloadPlaceholder(type: RuleType): string {
   switch (type) {
-    case 'DOMAIN': return 'example.com';
-    case 'DOMAIN-SUFFIX': return 'example.com';
-    case 'DOMAIN-KEYWORD': return 'google';
-    case 'GEOIP': return 'CN';
-    case 'GEOSITE': return 'cn';
-    case 'IP-CIDR': return '192.168.1.0/24';
-    case 'RULE-SET': return 'rule-provider 名称';
-    case 'PROCESS-NAME': return 'chrome.exe';
-    default: return '';
+    case 'DOMAIN':
+      return 'example.com';
+    case 'DOMAIN-SUFFIX':
+      return 'example.com';
+    case 'DOMAIN-KEYWORD':
+      return 'google';
+    case 'GEOIP':
+      return 'CN';
+    case 'GEOSITE':
+      return 'cn';
+    case 'IP-CIDR':
+      return '192.168.1.0/24';
+    case 'RULE-SET':
+      return 'rule-provider 名称';
+    case 'PROCESS-NAME':
+      return 'chrome.exe';
+    default:
+      return '';
   }
 }
 
 function getPayloadHint(type: RuleType): string {
   switch (type) {
-    case 'DOMAIN-SUFFIX': return '匹配域名后缀，如 example.com 匹配 *.example.com';
-    case 'DOMAIN-KEYWORD': return '匹配域名中包含的关键词';
-    case 'GEOIP': return '国家/地区代码，如 CN';
-    case 'GEOSITE': return '分类名称，如 cn 或 geolocation-!cn';
-    case 'IP-CIDR': return 'CIDR 格式的 IP 段';
-    case 'RULE-SET': return '填写 rule-providers 中的名称，引用规则集内容';
-    default: return '';
+    case 'DOMAIN-SUFFIX':
+      return '匹配域名后缀，如 example.com 匹配 *.example.com';
+    case 'DOMAIN-KEYWORD':
+      return '匹配域名中包含的关键词';
+    case 'GEOIP':
+      return '国家/地区代码，如 CN';
+    case 'GEOSITE':
+      return '分类名称，如 cn 或 geolocation-!cn';
+    case 'IP-CIDR':
+      return 'CIDR 格式的 IP 段';
+    case 'RULE-SET':
+      return '填写 rule-providers 中的名称，引用规则集内容';
+    default:
+      return '';
   }
 }
