@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Pencil, RefreshCw, Trash2, Wifi, Zap } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  AlertCircle,
+  ChevronDown,
+  Link,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Wifi,
+  Zap,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -27,6 +30,83 @@ import { LinkParseDialog } from './LinkParseDialog';
 import { listen } from '@tauri-apps/api/event';
 import { getProxyTypeColor, getProxyTypeBgColor } from './utils';
 
+// AddServerMenu component
+const AddServerMenu = ({
+  hasActiveProfile,
+  onParseLink,
+  onManualAdd,
+  wrapperClassName,
+}: {
+  hasActiveProfile: boolean;
+  onParseLink: () => void;
+  onManualAdd: () => void;
+  wrapperClassName?: string;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  return (
+    <div className={cn('relative', wrapperClassName)} ref={menuRef}>
+      <Button
+        variant="default"
+        size="sm"
+        onClick={() => setIsOpen(!isOpen)}
+        disabled={!hasActiveProfile}
+        className="rounded-full bg-black text-white dark:bg-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 font-medium"
+      >
+        <Plus className="w-4 h-4 mr-1.5" />
+        添加服务器
+        <ChevronDown
+          className={cn(
+            'w-3 h-3 ml-1.5 transition-transform duration-200',
+            isOpen ? 'rotate-180' : ''
+          )}
+        />
+      </Button>
+
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-2 w-40 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-xl shadow-lg shadow-gray-200/50 dark:shadow-black/50 overflow-hidden z-50 py-1">
+          <button
+            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-zinc-800 flex items-center gap-2 transition-colors"
+            onClick={() => {
+              setIsOpen(false);
+              onParseLink();
+            }}
+          >
+            <Link className="w-4 h-4 text-gray-500" />
+            解析链接
+          </button>
+          <button
+            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-zinc-800 flex items-center gap-2 transition-colors"
+            onClick={() => {
+              setIsOpen(false);
+              onManualAdd();
+            }}
+          >
+            <Pencil className="w-4 h-4 text-gray-500" />
+            手动添加
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function ProxyServers() {
   const status = useProxyStore((state) => state.status);
   const { toast } = useToast();
@@ -39,7 +119,6 @@ export default function ProxyServers() {
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   // Removed dialogOpen and editingProxy
   const [deleteConfirm, setDeleteConfirm] = useState<ProxyConfig | null>(null);
-  const [addMenuValue, setAddMenuValue] = useState('');
 
   const loadProxyServers = useCallback(async () => {
     setLoadingServers(true);
@@ -186,7 +265,7 @@ export default function ProxyServers() {
       }
 
       const newWindow = new WebviewWindow(label, {
-        url: `/proxy-server-edit${name ? `?name=${encodeURIComponent(name)}` : ''}`,
+        url: `/#/proxy-server-edit${name ? `?name=${encodeURIComponent(name)}` : ''}`,
         title: name ? `编辑服务器 - ${name}` : '手动配置服务器',
         width: 860,
         height: 700,
@@ -197,12 +276,14 @@ export default function ProxyServers() {
         shadow: false,
       });
 
-      newWindow.once('tauri://error', (event) => {
-        console.error('Failed to create window', event);
-        toast({
-          title: '无法打开窗口',
-          description: String(event.payload) || '未知错误',
-          variant: 'destructive',
+      // 等待窗口创建完成或出错
+      await new Promise<void>((resolve, reject) => {
+        newWindow.once('tauri://created', () => {
+          resolve();
+        });
+        newWindow.once('tauri://error', (event) => {
+          console.error('Failed to create window', event);
+          reject(new Error(String(event.payload) || '窗口创建失败'));
         });
       });
     } catch (e) {
@@ -238,37 +319,14 @@ export default function ProxyServers() {
   };
 
   const hasActiveProfile = useMemo(() => activeProfileId !== null, [activeProfileId]);
-  const handleAddMenuSelect = (value: 'parse' | 'manual') => {
-    setAddMenuValue('');
-    if (value === 'parse') {
-      setLinkDialogOpen(true);
-      return;
-    }
-    openServerWindow();
+
+  const handleParseLink = () => {
+    setLinkDialogOpen(true);
   };
 
-  const renderAddServerMenu = (wrapperClassName?: string) => (
-    <div className={wrapperClassName}>
-      <Select
-        value={addMenuValue}
-        onValueChange={(value) => handleAddMenuSelect(value as 'parse' | 'manual')}
-        disabled={!hasActiveProfile}
-      >
-        <SelectTrigger
-          className="w-auto rounded-full h-9 px-4 bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 font-medium hover:bg-accent hover:text-accent-foreground"
-          disabled={!hasActiveProfile}
-        >
-          <span className="inline-flex items-center gap-2">
-            <SelectValue placeholder="添加服务器" />
-          </span>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="parse">解析链接</SelectItem>
-          <SelectItem value="manual">手动配置</SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
-  );
+  const handleManualAdd = async () => {
+    await openServerWindow();
+  };
 
   return (
     <div className="space-y-6 pb-6 min-h-full flex flex-col">
@@ -297,7 +355,11 @@ export default function ProxyServers() {
           >
             <RefreshCw className={cn('w-4 h-4', loadingServers && 'animate-spin')} />
           </Button>
-          {renderAddServerMenu()}
+          <AddServerMenu
+            hasActiveProfile={hasActiveProfile}
+            onParseLink={handleParseLink}
+            onManualAdd={handleManualAdd}
+          />
         </div>
       </div>
 
@@ -320,7 +382,6 @@ export default function ProxyServers() {
           <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">
             点击上方按钮添加新的服务器
           </p>
-          {renderAddServerMenu('mt-6')}
         </div>
       ) : (
         <BentoCard
