@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   Settings as SettingsIcon,
   Info,
@@ -6,7 +7,9 @@ import {
   Globe,
   Zap,
   ExternalLink,
-  Server
+  Server,
+  Share2,
+  Laptop
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
@@ -15,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/useToast';
 import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
+import { useProxyStore } from '@/stores/proxyStore';
 
 function BentoCard({
   className,
@@ -115,11 +119,92 @@ export default function Settings() {
   const controlSlim = "h-9 text-sm";
   const dnsEnabled = Boolean(config?.dns?.enable);
 
+  // 从 proxyStore 获取网络配置状态
+  const {
+    status,
+    fetchStatus,
+    setAllowLan,
+    setPorts,
+    setIpv6,
+    setTcpConcurrent
+  } = useProxyStore(
+    useShallow((state) => ({
+      status: state.status,
+      fetchStatus: state.fetchStatus,
+      setAllowLan: state.setAllowLan,
+      setPorts: state.setPorts,
+      setIpv6: state.setIpv6,
+      setTcpConcurrent: state.setTcpConcurrent,
+    }))
+  );
+
+  // 局域网共享端口状态
+  const [httpPort, setHttpPort] = useState(String(status.port));
+  const [socksPort, setSocksPort] = useState(String(status.socks_port));
+  const [portsDirty, setPortsDirty] = useState(false);
+  const [savingPorts, setSavingPorts] = useState(false);
+
+  useEffect(() => {
+    if (!portsDirty) {
+      setHttpPort(String(status.port));
+      setSocksPort(String(status.socks_port));
+    }
+  }, [status.port, status.socks_port, portsDirty]);
+
+  const portError = useMemo(() => {
+    const http = Number(httpPort);
+    const socks = Number(socksPort);
+    if (!Number.isInteger(http) || http < 1 || http > 65535) {
+      return 'HTTP 端口需在 1-65535';
+    }
+    if (!Number.isInteger(socks) || socks < 1 || socks > 65535) {
+      return 'SOCKS5 端口需在 1-65535';
+    }
+    return null;
+  }, [httpPort, socksPort]);
+
+  const handleSavePorts = async () => {
+    if (portError) {
+      toast({ title: '端口无效', description: portError, variant: 'destructive' });
+      return;
+    }
+    try {
+      setSavingPorts(true);
+      await setPorts(Number(httpPort), Number(socksPort));
+      setPortsDirty(false);
+      toast({ title: '端口已保存' });
+    } catch (error) {
+      toast({ title: '保存失败', description: String(error), variant: 'destructive' });
+    } finally {
+      setSavingPorts(false);
+    }
+  };
+
+  const handlePortBlur = () => {
+    if (!portsDirty || savingPorts) {
+      return;
+    }
+    void handleSavePorts();
+  };
+
+  const handleAllowLanToggle = (checked: boolean) => {
+    setAllowLan(checked).catch(console.error);
+  };
+
+  const handleIpv6Toggle = (checked: boolean) => {
+    setIpv6(checked).catch(console.error);
+  };
+
+  const handleTcpConcurrentToggle = (checked: boolean) => {
+    setTcpConcurrent(checked).catch(console.error);
+  };
+
   // 加载配置
   useEffect(() => {
     loadConfig();
     loadVersions();
-  }, []);
+    fetchStatus();
+  }, [fetchStatus]);
 
   useEffect(() => {
     if (!config) return;
@@ -402,6 +487,84 @@ export default function Settings() {
                     />
                   }
                 />
+              </div>
+            </BentoCard>
+
+            <BentoCard title="网络配置" icon={Globe} iconColor="text-emerald-500">
+              <div className="flex flex-col gap-2 p-3">
+                <SettingItem
+                  title="IPv6"
+                  description="启用 IPv6 网络支持，适用于 IPv6 环境的代理连接。"
+                  action={
+                    <Switch
+                      checked={!!status.ipv6}
+                      onCheckedChange={handleIpv6Toggle}
+                      className="data-[state=checked]:bg-emerald-500"
+                    />
+                  }
+                />
+                <SettingItem
+                  title="TCP 并发"
+                  description="允许建立并发 TCP 连接以提升链路性能。"
+                  action={
+                    <Switch
+                      checked={!!status.tcp_concurrent}
+                      onCheckedChange={handleTcpConcurrentToggle}
+                      className="data-[state=checked]:bg-emerald-500"
+                    />
+                  }
+                />
+              </div>
+            </BentoCard>
+
+            <BentoCard title="局域网共享" icon={Share2} iconColor="text-orange-500">
+              <div className="flex flex-col gap-2 p-3">
+                <SettingItem
+                  icon={Laptop}
+                  iconColor="text-orange-500 bg-orange-50 dark:bg-orange-500/10"
+                  title="允许局域网访问"
+                  description="允许局域网内的其他设备通过 Conflux 连接网络。请确保防火墙允许相关端口的入站连接。"
+                  action={
+                    <Switch
+                      checked={!!status.allow_lan}
+                      onCheckedChange={handleAllowLanToggle}
+                      className="data-[state=checked]:bg-orange-500"
+                    />
+                  }
+                />
+                <div className="grid grid-cols-2 gap-3 px-4 py-2">
+                  <div className="space-y-2">
+                    <div className="text-[10px] uppercase text-gray-400 font-bold">HTTP 端口</div>
+                    <Input
+                      value={httpPort}
+                      onChange={(e) => {
+                        setHttpPort(e.target.value);
+                        setPortsDirty(true);
+                      }}
+                      onBlur={handlePortBlur}
+                      inputMode="numeric"
+                      className={cn("h-8 text-sm font-mono", controlBase)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-[10px] uppercase text-gray-400 font-bold">SOCKS5 端口</div>
+                    <Input
+                      value={socksPort}
+                      onChange={(e) => {
+                        setSocksPort(e.target.value);
+                        setPortsDirty(true);
+                      }}
+                      onBlur={handlePortBlur}
+                      inputMode="numeric"
+                      className={cn("h-8 text-sm font-mono", controlBase)}
+                    />
+                  </div>
+                </div>
+                {portError && (
+                  <div className="px-4 text-[10px] font-semibold text-rose-500">
+                    {portError}
+                  </div>
+                )}
               </div>
             </BentoCard>
           </div>
