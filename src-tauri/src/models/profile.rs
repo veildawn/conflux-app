@@ -153,11 +153,6 @@ pub struct ProfileConfig {
 }
 
 impl ProfileConfig {
-    /// 创建空配置
-    pub fn empty() -> Self {
-        Self::default()
-    }
-
     /// 创建带有基本代理组的空配置
     pub fn with_default_group() -> Self {
         Self {
@@ -195,19 +190,6 @@ impl ProfileConfig {
     pub fn has_proxy(&self, name: &str) -> bool {
         self.proxies.iter().any(|p| p.name == name)
     }
-
-    /// 检查代理组名称是否存在
-    pub fn has_group(&self, name: &str) -> bool {
-        self.proxy_groups.iter().any(|g| g.name == name)
-    }
-
-    /// 获取所有代理和代理组名称（用于规则策略选择）
-    pub fn get_all_policy_names(&self) -> Vec<String> {
-        let mut names: Vec<String> = vec!["DIRECT".to_string(), "REJECT".to_string()];
-        names.extend(self.proxy_groups.iter().map(|g| g.name.clone()));
-        names.extend(self.proxies.iter().map(|p| p.name.clone()));
-        names
-    }
 }
 
 /// 完整的 Profile（元数据 + 配置）
@@ -215,10 +197,4 @@ impl ProfileConfig {
 pub struct Profile {
     pub metadata: ProfileMetadata,
     pub config: ProfileConfig,
-}
-
-impl Profile {
-    pub fn new(metadata: ProfileMetadata, config: ProfileConfig) -> Self {
-        Self { metadata, config }
-    }
 }
