@@ -417,21 +417,22 @@ impl SubStoreManager {
     /// 同步停止进程（用于应用退出时）
     pub fn stop_sync(&self) {
         if let Ok(mut process_guard) = self.process.try_lock() {
+            #[cfg(windows)]
             if let Some(mut child) = process_guard.take() {
                 let pid = child.id();
                 log::info!("Synchronously stopping Sub-Store process (PID: {})...", pid);
+                let _ = child.kill();
+                log::info!("Sub-Store process killed (PID: {})", pid);
+            }
 
-                #[cfg(unix)]
-                {
-                    // 直接发送 SIGKILL，不等待
-                    unsafe {
-                        libc::kill(pid as i32, libc::SIGKILL);
-                    }
-                }
+            #[cfg(not(windows))]
+            if let Some(child) = process_guard.take() {
+                let pid = child.id();
+                log::info!("Synchronously stopping Sub-Store process (PID: {})...", pid);
 
-                #[cfg(windows)]
-                {
-                    let _ = child.kill();
+                // 直接发送 SIGKILL，不等待
+                unsafe {
+                    libc::kill(pid as i32, libc::SIGKILL);
                 }
 
                 // 不调用 wait()，避免阻塞

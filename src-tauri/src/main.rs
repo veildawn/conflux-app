@@ -10,6 +10,7 @@ mod system;
 mod tray_menu;
 mod utils;
 
+#[cfg(not(target_os = "windows"))]
 use std::time::Duration;
 
 #[cfg(target_os = "macos")]
@@ -74,6 +75,7 @@ fn build_fontdb() -> Arc<resvg::usvg::fontdb::Database> {
     Arc::new(fontdb)
 }
 
+#[cfg(not(target_os = "windows"))]
 fn format_speed_compact(bytes_per_sec: u64) -> String {
     const KB: f64 = 1024.0;
     const MB: f64 = KB * 1024.0;
