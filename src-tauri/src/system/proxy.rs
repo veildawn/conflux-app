@@ -119,6 +119,9 @@ impl SystemProxy {
     // Windows 实现
     #[cfg(target_os = "windows")]
     pub fn set_http_proxy(host: &str, port: u16) -> Result<()> {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
         let proxy_server = format!("{}:{}", host, port);
 
         Command::new("reg")
@@ -133,6 +136,7 @@ impl SystemProxy {
                 &proxy_server,
                 "/f",
             ])
+            .creation_flags(CREATE_NO_WINDOW)
             .output()?;
 
         Command::new("reg")
@@ -147,6 +151,7 @@ impl SystemProxy {
                 "1",
                 "/f",
             ])
+            .creation_flags(CREATE_NO_WINDOW)
             .output()?;
 
         log::info!("System HTTP proxy set to {}:{}", host, port);
@@ -162,6 +167,9 @@ impl SystemProxy {
 
     #[cfg(target_os = "windows")]
     pub fn clear_proxy() -> Result<()> {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
         Command::new("reg")
             .args([
                 "add",
@@ -174,6 +182,7 @@ impl SystemProxy {
                 "0",
                 "/f",
             ])
+            .creation_flags(CREATE_NO_WINDOW)
             .output()?;
 
         log::info!("System proxy cleared");
@@ -182,6 +191,9 @@ impl SystemProxy {
 
     #[cfg(target_os = "windows")]
     pub fn get_proxy_status() -> Result<bool> {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
         let output = Command::new("reg")
             .args([
                 "query",
@@ -189,6 +201,7 @@ impl SystemProxy {
                 "/v",
                 "ProxyEnable",
             ])
+            .creation_flags(CREATE_NO_WINDOW)
             .output()?;
 
         let output_str = String::from_utf8_lossy(&output.stdout);

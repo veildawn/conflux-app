@@ -6,7 +6,11 @@ import { useToast } from '@/hooks/useToast';
 export default function SubStore() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
-  const [status, setStatus] = useState<{ running: boolean; api_url: string; api_port: number } | null>(null);
+  const [status, setStatus] = useState<{
+    running: boolean;
+    api_url: string;
+    api_port: number;
+  } | null>(null);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -63,7 +67,6 @@ export default function SubStore() {
     };
   }, [toast]);
 
-
   const handleIframeLoad = () => {
     setIsLoading(false);
   };
@@ -108,9 +111,15 @@ export default function SubStore() {
 
       {/* iframe Container - 全屏显示 */}
       <iframe
-        src={`${status.api_url}?api=${status.api_url}/__api__`}
+        src={`${status.api_url}?api=${status.api_url}/api`}
         className="w-full h-full border-0"
-        style={{ background: 'transparent', colorScheme: 'dark', padding: 0, margin: 0, display: 'block' }}
+        style={{
+          background: 'transparent',
+          colorScheme: 'dark',
+          padding: 0,
+          margin: 0,
+          display: 'block',
+        }}
         title="Sub-Store"
         onLoad={handleIframeLoad}
         sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"
