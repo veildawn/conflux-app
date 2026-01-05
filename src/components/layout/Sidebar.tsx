@@ -3,7 +3,6 @@ import { cn } from '@/utils/cn';
 import appIconUrl from '../../../src-tauri/icons/icon.png';
 import {
   ConnectionIcon,
-  OverviewIcon,
   ProfileIcon,
   ConvertIcon,
   NodesIcon,
@@ -31,7 +30,6 @@ const navGroups: NavGroup[] = [
   {
     items: [
       { path: '/', icon: ConnectionIcon, label: '连接' },
-      { path: '/overview', icon: OverviewIcon, label: '概览' },
     ]
   },
   {
