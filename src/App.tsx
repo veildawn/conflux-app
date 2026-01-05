@@ -1,22 +1,35 @@
+import { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
-import Home from './pages/Home';
-import Proxy from './pages/Proxy';
-import ProxyGroups from './pages/ProxyGroups';
-import ProxyServers from './pages/ProxyServers';
-import Rules from './pages/Rules';
-import Settings from './pages/Settings';
-import Subscription from './pages/Subscription';
-import SubStore from './pages/SubStore';
-import RuleDatabase from './pages/RuleDatabase';
-import Logs from './pages/Logs';
-import Providers from './pages/Providers';
-import ProxyGroupEditWindow from './pages/proxy-groups/ProxyGroupEditWindow';
+
+// 懒加载页面组件
+const Home = lazy(() => import('./pages/Home'));
+const Proxy = lazy(() => import('./pages/Proxy'));
+const ProxyGroups = lazy(() => import('./pages/ProxyGroups'));
+const ProxyServers = lazy(() => import('./pages/proxy-servers'));
+const Rules = lazy(() => import('./pages/Rules'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Subscription = lazy(() => import('./pages/Subscription'));
+const SubStore = lazy(() => import('./pages/SubStore'));
+const RuleDatabase = lazy(() => import('./pages/RuleDatabase'));
+const Logs = lazy(() => import('./pages/Logs'));
+const Providers = lazy(() => import('./pages/Providers'));
+const ProxyGroupEditWindow = lazy(() => import('./pages/proxy-groups/ProxyGroupEditWindow'));
+
+// 加载中占位组件
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center h-screen">
+    <div className="text-center">
+      <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
+      <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">加载中...</p>
+    </div>
+  </div>
+);
 
 function App() {
   // 代理内核的启动逻辑已移至 AppLayout 组件中，避免重复启动
   return (
-    <>
+    <Suspense fallback={<LoadingFallback />}>
       <Routes>
         <Route path="/" element={<AppLayout />}>
           <Route index element={<Home />} />
@@ -33,7 +46,7 @@ function App() {
         </Route>
         <Route path="/proxy-group-edit" element={<ProxyGroupEditWindow />} />
       </Routes>
-    </>
+    </Suspense>
   );
 }
 

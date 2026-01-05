@@ -60,11 +60,7 @@ impl Workspace {
                             }
                         },
                         Err(e) => {
-                            log::warn!(
-                                "Failed to read metadata for {:?}: {}",
-                                entry.path(),
-                                e
-                            );
+                            log::warn!("Failed to read metadata for {:?}: {}", entry.path(), e);
                         }
                     }
                 }
@@ -254,11 +250,7 @@ impl Workspace {
     }
 
     /// 激活 Profile（生成运行时配置）
-    pub fn activate_profile(
-        &self,
-        id: &str,
-        base_config: &MihomoConfig,
-    ) -> Result<MihomoConfig> {
+    pub fn activate_profile(&self, id: &str, base_config: &MihomoConfig) -> Result<MihomoConfig> {
         let (metadata, mut config) = self.get_profile(id)?;
 
         // 修正 rule-provider 路径
@@ -285,11 +277,7 @@ impl Workspace {
         // 更新所有 Profile 的 active 状态
         self.set_active_profile(id)?;
 
-        log::info!(
-            "Activated profile '{}' ({})",
-            metadata.name,
-            id
-        );
+        log::info!("Activated profile '{}' ({})", metadata.name, id);
 
         Ok(runtime_config)
     }
@@ -304,14 +292,10 @@ impl Workspace {
                     let content = std::fs::read_to_string(&metadata_path)?;
                     let mut metadata: ProfileMetadata = serde_json::from_str(&content)?;
 
-                    let should_be_active =
-                        entry.file_name().to_string_lossy() == active_id;
+                    let should_be_active = entry.file_name().to_string_lossy() == active_id;
                     if metadata.active != should_be_active {
                         metadata.active = should_be_active;
-                        std::fs::write(
-                            &metadata_path,
-                            serde_json::to_string_pretty(&metadata)?,
-                        )?;
+                        std::fs::write(&metadata_path, serde_json::to_string_pretty(&metadata)?)?;
                     }
                 }
             }
@@ -343,7 +327,9 @@ impl Workspace {
 
     /// 刷新远程 Profile
     pub async fn refresh_remote(&self, id: &str) -> Result<ProfileMetadata> {
-        let (metadata, _) = self.get_profile(id)?;
+        // 1. 获取现有的 Profile 和配置
+        // 我们需要保留现有的非 Proxy 配置（如规则、代理组等）
+        let (metadata, old_config) = self.get_profile(id)?;
 
         if metadata.profile_type != ProfileType::Remote {
             return Err(anyhow!("Profile is not a remote subscription"));
@@ -354,30 +340,57 @@ impl Workspace {
             .as_ref()
             .ok_or_else(|| anyhow!("Remote profile has no URL"))?;
 
-        let (mut config, default_rules_applied) = Composer::fetch_and_parse_with_flags(url).await?;
+        // 2. 获取新的远程配置
+        // 注意：fetch_and_parse_with_flags 可能会应用模板，但这不影响我们获取代理列表
+        // 因为 fetch_and_parse_with_flags 也会返回解析出的 proxies
+        let (new_fetched_config, _default_rules_applied) =
+            Composer::fetch_and_parse_with_flags(url).await?;
 
-        // 修正 rule-provider 路径
-        Composer::fix_provider_paths(&mut config, &self.ruleset_dir)?;
+        // 3. 合并配置：保留本地配置，仅用远程的代理列表覆盖
+        // 但我们需要保留那些被标记为 "local" 的代理节点
+        let local_proxies: Vec<_> = old_config
+            .proxies
+            .iter()
+            .filter(|p| {
+                p.extra
+                    .get("x-conflux-managed")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s == "local")
+                    .unwrap_or(false)
+            })
+            .cloned()
+            .collect();
 
-        // 过滤无效规则
-        Composer::filter_invalid_rules(&mut config);
+        let mut final_config = old_config.clone();
+        final_config.proxies = new_fetched_config.proxies;
 
+        // 追加保留的本地代理
+        if !local_proxies.is_empty() {
+            log::info!(
+                "Preserving {} local proxies during refresh",
+                local_proxies.len()
+            );
+            final_config.proxies.extend(local_proxies);
+        }
+
+        // 4. 更新元数据
         let mut new_metadata = metadata.clone();
         new_metadata.update_stats(
-            config.proxy_count(),
-            config.group_count(),
-            config.rule_count(),
+            final_config.proxy_count(), // 使用新的代理数量
+            final_config.group_count(), // 保持旧的组数量
+            final_config.rule_count(),  // 保持旧的规则数量
         );
-        new_metadata.default_rules_applied = Some(default_rules_applied);
+        // 这里我们不更新 default_rules_applied，因为我们没有重新应用规则模板
 
-        self.save_profile(id, &new_metadata, &config)?;
+        // 5. 保存结果
+        self.save_profile(id, &new_metadata, &final_config)?;
 
         log::info!(
-            "Refreshed remote profile '{}' with {} proxies, {} groups, {} rules",
+            "Refreshed remote profile '{}' (Server List Only). Proxies: {} (Updated), Groups: {} (Preserved), Rules: {} (Preserved)",
             new_metadata.name,
-            config.proxy_count(),
-            config.group_count(),
-            config.rule_count()
+            final_config.proxy_count(),
+            final_config.group_count(),
+            final_config.rule_count()
         );
 
         Ok(new_metadata)

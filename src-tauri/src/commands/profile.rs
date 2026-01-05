@@ -1,5 +1,5 @@
-use tauri::State;
 use std::path::Path;
+use tauri::State;
 
 use crate::commands::AppState;
 use crate::config::Workspace;
@@ -30,10 +30,7 @@ pub async fn get_active_profile_id() -> Result<Option<String>, String> {
 
 /// 创建远程订阅 Profile
 #[tauri::command]
-pub async fn create_remote_profile(
-    name: String,
-    url: String,
-) -> Result<ProfileMetadata, String> {
+pub async fn create_remote_profile(name: String, url: String) -> Result<ProfileMetadata, String> {
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
     workspace
         .create_from_remote(&name, &url)
@@ -215,6 +212,13 @@ pub async fn add_proxy(
     if config.has_proxy(&proxy.name) {
         return Err(format!("Proxy name already exists: {}", proxy.name));
     }
+
+    // 标记为本地管理的节点
+    let mut proxy = proxy;
+    proxy.extra.insert(
+        "x-conflux-managed".to_string(),
+        serde_yaml::Value::String("local".to_string()),
+    );
 
     config.proxies.push(proxy);
     workspace
@@ -568,7 +572,10 @@ pub async fn update_rule_provider_in_profile(
 /// 重载活跃 Profile 的辅助函数
 async fn reload_active_profile(state: &State<'_, AppState>) -> Result<(), String> {
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
-    let active_id = match workspace.get_active_profile_id().map_err(|e| e.to_string())? {
+    let active_id = match workspace
+        .get_active_profile_id()
+        .map_err(|e| e.to_string())?
+    {
         Some(id) => id,
         None => return Ok(()),
     };
