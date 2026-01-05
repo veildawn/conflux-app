@@ -35,7 +35,7 @@ function BentoCard({
 }) {
   return (
     <div className={cn(
-      "bg-white dark:bg-zinc-900 rounded-[20px] p-5 shadow-xs border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden",
+      "bg-white/70 dark:bg-zinc-900/70 backdrop-blur-md rounded-[20px] p-5 shadow-xs border border-gray-100/50 dark:border-zinc-800/50 flex flex-col relative overflow-hidden",
       className
     )}>
       {(title || Icon) && (

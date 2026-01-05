@@ -163,10 +163,11 @@ export default function AppLayout() {
 
   return (
     <div 
-      className="flex flex-col h-screen bg-gray-50 dark:bg-zinc-950 overflow-hidden rounded-xl border border-gray-200 dark:border-zinc-800 shadow-2xl"
+      className="flex flex-col h-screen app-bg-gradient overflow-hidden rounded-xl border border-gray-200 dark:border-zinc-800 shadow-2xl"
       style={{ willChange: 'transform' }}
       onMouseDown={handleMouseDown}
     >
+      <div className="app-bg-gradient-extra" />
       {/* 顶部栏 - 全宽 */}
       <Header />
 

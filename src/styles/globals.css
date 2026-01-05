@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
   --color-border: hsl(var(--border));
@@ -20,7 +20,7 @@
   --color-popover-foreground: hsl(var(--popover-foreground));
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
-  
+
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
@@ -75,8 +75,10 @@
   * {
     border-color: hsl(var(--border));
   }
-  
-  html, body, #root {
+
+  html,
+  body,
+  #root {
     height: 100%;
     overflow: hidden;
     border: none;
@@ -86,8 +88,11 @@
   body {
     background-color: transparent;
     color: hsl(var(--foreground));
-    font-feature-settings: "rlig" 1, "calt" 1;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   }
 
   body,
@@ -145,14 +150,97 @@
   .drag-region textarea,
   .drag-region select,
   .drag-region a,
-  .drag-region [role="button"],
-  .drag-region [role="tab"],
-  .drag-region [role="switch"] {
+  .drag-region [role='button'],
+  .drag-region [role='tab'],
+  .drag-region [role='switch'] {
     -webkit-app-region: no-drag;
   }
-  
+
   .shadow-soft {
     box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+  }
+
+  .app-bg-gradient {
+    position: relative;
+    background-color: hsl(var(--background));
+    overflow: hidden;
+  }
+
+  .app-bg-gradient::before,
+  .app-bg-gradient::after,
+  .app-bg-gradient-extra::before {
+    content: "";
+    position: absolute;
+    width: 140%;
+    height: 140%;
+    top: -20%;
+    left: -20%;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.6;
+    transition: opacity 0.5s ease;
+    filter: blur(80px);
+  }
+
+  /* Light mode gradients */
+  .app-bg-gradient::before {
+    background: radial-gradient(
+      circle at 20% 20%,
+      rgba(59, 130, 246, 0.12) 0%,
+      transparent 50%
+    );
+  }
+
+  .app-bg-gradient::after {
+    background: radial-gradient(
+      circle at 80% 80%,
+      rgba(168, 85, 247, 0.12) 0%,
+      transparent 50%
+    );
+  }
+
+  /* Added a third point for better mesh coverage */
+  .app-bg-gradient-extra {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .app-bg-gradient-extra::before {
+    background: radial-gradient(
+      circle at 80% 20%,
+      rgba(236, 72, 153, 0.08) 0%,
+      transparent 40%
+    );
+  }
+
+  /* Dark mode overrides */
+  .dark .app-bg-gradient::before {
+    opacity: 0.25;
+    background: radial-gradient(
+      circle at 20% 20%,
+      rgba(59, 130, 246, 0.3) 0%,
+      transparent 55%
+    );
+  }
+
+  .dark .app-bg-gradient::after {
+    opacity: 0.25;
+    background: radial-gradient(
+      circle at 80% 80%,
+      rgba(168, 85, 247, 0.3) 0%,
+      transparent 55%
+    );
+  }
+
+  .dark .app-bg-gradient-extra::before {
+    opacity: 0.2;
+    background: radial-gradient(
+      circle at 80% 20%,
+      rgba(236, 72, 153, 0.25) 0%,
+      transparent 45%
+    );
   }
 
   .text-swap-in {
