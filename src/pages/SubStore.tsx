@@ -63,19 +63,6 @@ export default function SubStore() {
     };
   }, [toast]);
 
-  const checkStatus = async () => {
-    try {
-      const result = await ipc.getSubStoreStatus();
-      setStatus(result);
-    } catch (error) {
-      console.error('Failed to check Sub-Store status:', error);
-      toast({
-        title: '获取 Sub-Store 状态失败',
-        description: String(error),
-        variant: 'destructive',
-      });
-    }
-  };
 
   const handleIframeLoad = () => {
     setIsLoading(false);
@@ -121,7 +108,7 @@ export default function SubStore() {
 
       {/* iframe Container - 全屏显示 */}
       <iframe
-        src={`${status.api_url}?api=${status.api_url}/api`}
+        src={`${status.api_url}?api=${status.api_url}/__api__`}
         className="w-full h-full border-0"
         style={{ background: 'transparent', colorScheme: 'dark', padding: 0, margin: 0, display: 'block' }}
         title="Sub-Store"

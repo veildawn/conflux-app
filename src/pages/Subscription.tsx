@@ -346,7 +346,7 @@ export default function SubscriptionPage() {
   // 当选择订阅时自动生成 URL
   useEffect(() => {
     if (urlSource === 'substore' && selectedSub && substoreStatus) {
-      const generatedUrl = `${substoreStatus.api_url}/api/download/${encodeURIComponent(selectedSub)}?target=ClashMeta`;
+      const generatedUrl = `${substoreStatus.api_url}/download/${encodeURIComponent(selectedSub)}?target=ClashMeta`;
       setUrl(generatedUrl);
     }
   }, [selectedSub, urlSource, substoreStatus]);

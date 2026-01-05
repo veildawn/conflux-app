@@ -290,6 +290,7 @@ impl SubStoreManager {
         let mut cmd = Command::new(&node_binary);
         cmd.arg(&substore_script)
             .current_dir(&substore_data_dir)
+            .env("SUB_STORE_BACKEND_API_HOST", "127.0.0.1")
             .env("SUB_STORE_BACKEND_API_PORT", self.api_port.to_string())
             .env("SUB_STORE_FRONTEND_BACKEND_PATH", "/__api__")
             .env("SUB_STORE_BACKEND_MERGE", "true")
