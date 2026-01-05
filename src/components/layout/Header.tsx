@@ -48,8 +48,7 @@ const getToastText = (value: unknown) => {
 };
 
 const getToastVariantStyle = (variant?: string) =>
-  toastVariantStyles[variant as keyof typeof toastVariantStyles] ??
-  toastVariantStyles.default;
+  toastVariantStyles[variant as keyof typeof toastVariantStyles] ?? toastVariantStyles.default;
 
 export default function Header() {
   const { status, loading, setSystemProxy, setEnhancedMode } = useProxyStore(
@@ -61,8 +60,7 @@ export default function Header() {
     }))
   );
   const { toast, history, toasts, clearAll } = useToast();
-  const formatError = (error: unknown) =>
-    error instanceof Error ? error.message : String(error);
+  const formatError = (error: unknown) => (error instanceof Error ? error.message : String(error));
   const [logOpen, setLogOpen] = useState(false);
   const [pulseId, setPulseId] = useState<string | null>(null);
   const [swapActive, setSwapActive] = useState(false);
@@ -80,29 +78,34 @@ export default function Header() {
   );
   const latestToast = history[0];
   const latestMessage =
-    getToastText(latestToast?.description) ||
-    getToastText(latestToast?.title) ||
-    '暂无通知';
-  const latestVariantStyle = getToastVariantStyle(latestToast?.variant);
+    getToastText(latestToast?.description) || getToastText(latestToast?.title) || '暂无通知';
+  const latestVariantStyle = getToastVariantStyle(latestToast?.variant ?? undefined);
   const isNewToast = pulseId === latestToast?.id;
   const latestMessageKey = latestToast?.id ?? 'empty';
 
   useEffect(() => {
+    const scheduleSwap = (message: string | null, active: boolean) =>
+      window.setTimeout(() => {
+        setPreviousMessage(message);
+        setSwapActive(active);
+      }, 0);
+
     if (!latestToast?.id) {
       lastMessageRef.current = latestMessage;
-      setPreviousMessage(null);
-      setSwapActive(false);
-      return;
+      const frame = scheduleSwap(null, false);
+      return () => window.clearTimeout(frame);
     }
     const previous = lastMessageRef.current;
     lastMessageRef.current = latestMessage;
-    setPreviousMessage(previous);
-    setSwapActive(true);
+    const frame = scheduleSwap(previous, true);
     const timeout = window.setTimeout(() => {
       setSwapActive(false);
       setPreviousMessage(null);
     }, 360);
-    return () => window.clearTimeout(timeout);
+    return () => {
+      window.clearTimeout(frame);
+      window.clearTimeout(timeout);
+    };
   }, [latestToast?.id, latestMessage]);
 
   useEffect(() => {
@@ -113,11 +116,16 @@ export default function Header() {
     }
     if (nextId !== lastToastIdRef.current) {
       lastToastIdRef.current = nextId;
-      setPulseId(nextId);
+      const frame = window.setTimeout(() => {
+        setPulseId(nextId);
+      }, 0);
       const timeout = window.setTimeout(() => {
         setPulseId((current) => (current === nextId ? null : current));
       }, 900);
-      return () => window.clearTimeout(timeout);
+      return () => {
+        window.clearTimeout(frame);
+        window.clearTimeout(timeout);
+      };
     }
   }, [latestToast?.id]);
 
@@ -173,11 +181,14 @@ export default function Header() {
 
   return (
     <div className="flex flex-col w-full shrink-0 z-50">
-      <header data-tauri-drag-region className="h-11 min-[960px]:h-12 flex items-center justify-between px-3 min-[960px]:px-4 bg-transparent drag-region select-none transition-all duration-300">
+      <header
+        data-tauri-drag-region
+        className="h-11 min-[960px]:h-12 flex items-center justify-between px-3 min-[960px]:px-4 bg-transparent drag-region select-none transition-all duration-300"
+      >
         {/* 左侧：窗口控制 */}
         <div className="flex items-center gap-12">
-           <WindowControls />
-           <div className="relative no-drag" ref={logRef}>
+          <WindowControls />
+          <div className="relative no-drag" ref={logRef}>
             <button
               type="button"
               onClick={() => setLogOpen((open) => !open)}
@@ -221,10 +232,7 @@ export default function Header() {
                 {history.length}
               </span>
               <ChevronDown
-                className={cn(
-                  'h-3 w-3 transition-transform duration-300',
-                  logOpen && 'rotate-180'
-                )}
+                className={cn('h-3 w-3 transition-transform duration-300', logOpen && 'rotate-180')}
               />
             </button>
 
@@ -260,11 +268,9 @@ export default function Header() {
                 ) : (
                   history.map((item) => {
                     const itemMessage =
-                      getToastText(item.description) ||
-                      getToastText(item.title) ||
-                      '未命名通知';
-                    const itemVariantStyle = getToastVariantStyle(item.variant);
-                    const itemCreatedAt = item.createdAt ?? Date.now();
+                      getToastText(item.description) || getToastText(item.title) || '未命名通知';
+                    const itemVariantStyle = getToastVariantStyle(item.variant ?? undefined);
+                    const itemCreatedAt = item.createdAt;
                     const itemIsNew = item.id === latestToast?.id;
                     return (
                       <div
@@ -275,19 +281,14 @@ export default function Header() {
                           itemIsNew && 'animate-in fade-in slide-in-from-top-1 duration-500'
                         )}
                       >
-                        <span
-                          className={cn(
-                            'mt-1 h-2 w-2 rounded-full',
-                            itemVariantStyle.dot
-                          )}
-                        />
+                        <span className={cn('mt-1 h-2 w-2 rounded-full', itemVariantStyle.dot)} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-xs font-semibold text-gray-800 dark:text-zinc-100 break-words">
                               {itemMessage}
                             </span>
                             <span className="shrink-0 text-[10px] text-gray-400 dark:text-zinc-500">
-                              {timeFormatter.format(itemCreatedAt)}
+                              {itemCreatedAt ? timeFormatter.format(itemCreatedAt) : '--'}
                             </span>
                           </div>
                         </div>
@@ -303,51 +304,59 @@ export default function Header() {
         {/* 右侧：状态控制 */}
         <div className="flex items-center gap-3 no-drag">
           {/* 系统代理 */}
-          <button 
+          <button
             onClick={handleSystemProxyToggle}
             disabled={loading || !status.running}
             className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-300",
+              'flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-300',
               loading || !status.running
-                ? "opacity-50 cursor-not-allowed"
-                : "cursor-pointer hover:scale-105 active:scale-95",
-              status.system_proxy 
-                ? "bg-blue-500 hover:bg-blue-600 text-white shadow-md shadow-blue-500/20 ring-1 ring-blue-600" 
-                : "bg-white hover:bg-gray-50 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-200 ring-1 ring-gray-200 dark:ring-zinc-700"
+                ? 'opacity-50 cursor-not-allowed'
+                : 'cursor-pointer hover:scale-105 active:scale-95',
+              status.system_proxy
+                ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-md shadow-blue-500/20 ring-1 ring-blue-600'
+                : 'bg-white hover:bg-gray-50 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-200 ring-1 ring-gray-200 dark:ring-zinc-700'
             )}
           >
             {loading ? (
               <Loader2 className="w-3 h-3 animate-spin" />
             ) : (
-              <div className={cn(
-                "w-2 h-2 rounded-full transition-colors shadow-[0_0_8px_rgba(0,0,0,0.2)]",
-                status.system_proxy ? "bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]" : "bg-gray-400 dark:bg-gray-500"
-              )} />
+              <div
+                className={cn(
+                  'w-2 h-2 rounded-full transition-colors shadow-[0_0_8px_rgba(0,0,0,0.2)]',
+                  status.system_proxy
+                    ? 'bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]'
+                    : 'bg-gray-400 dark:bg-gray-500'
+                )}
+              />
             )}
             <span className="text-xs font-medium tracking-wide">系统代理</span>
           </button>
 
           {/* 增强模式 (TUN) */}
-          <button 
+          <button
             onClick={handleEnhancedModeToggle}
             disabled={loading || !status.running}
             className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-300",
+              'flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-300',
               loading || !status.running
-                ? "opacity-50 cursor-not-allowed"
-                : "cursor-pointer hover:scale-105 active:scale-95",
-              status.enhanced_mode 
-                ? "bg-purple-500 hover:bg-purple-600 text-white shadow-md shadow-purple-500/20 ring-1 ring-purple-600" 
-                : "bg-white hover:bg-gray-50 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-200 ring-1 ring-gray-200 dark:ring-zinc-700"
+                ? 'opacity-50 cursor-not-allowed'
+                : 'cursor-pointer hover:scale-105 active:scale-95',
+              status.enhanced_mode
+                ? 'bg-purple-500 hover:bg-purple-600 text-white shadow-md shadow-purple-500/20 ring-1 ring-purple-600'
+                : 'bg-white hover:bg-gray-50 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-200 ring-1 ring-gray-200 dark:ring-zinc-700'
             )}
           >
             {loading ? (
               <Loader2 className="w-3 h-3 animate-spin" />
             ) : (
-              <div className={cn(
-                "w-2 h-2 rounded-full transition-colors shadow-[0_0_8px_rgba(0,0,0,0.2)]",
-                status.enhanced_mode ? "bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]" : "bg-gray-400 dark:bg-gray-500"
-              )} />
+              <div
+                className={cn(
+                  'w-2 h-2 rounded-full transition-colors shadow-[0_0_8px_rgba(0,0,0,0.2)]',
+                  status.enhanced_mode
+                    ? 'bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]'
+                    : 'bg-gray-400 dark:bg-gray-500'
+                )}
+              />
             )}
             <span className="text-xs font-medium tracking-wide">增强模式</span>
           </button>

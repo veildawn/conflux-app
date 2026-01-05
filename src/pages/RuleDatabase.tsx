@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-  Database, 
-  RefreshCw, 
+import {
+  Database,
+  RefreshCw,
   ArrowUpCircle,
   Download,
   FileBox,
   Map,
   Globe,
-  Loader2
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,30 +21,32 @@ import { ipc } from '@/services/ipc';
 // UI Components
 // -----------------------------------------------------------------------------
 
-function BentoCard({ 
-  className, 
-  children, 
-  title, 
+function BentoCard({
+  className,
+  children,
+  title,
   icon: Icon,
-  iconColor = "text-gray-500",
-  action 
-}: { 
-  className?: string; 
-  children: React.ReactNode; 
+  iconColor = 'text-gray-500',
+  action,
+}: {
+  className?: string;
+  children: React.ReactNode;
   title?: string;
   icon?: React.ElementType;
   iconColor?: string;
   action?: React.ReactNode;
 }) {
   return (
-    <div className={cn(
-      "bg-white dark:bg-zinc-900 rounded-[20px] shadow-sm border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden",
-      className
-    )}>
+    <div
+      className={cn(
+        'bg-white dark:bg-zinc-900 rounded-[20px] shadow-sm border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden',
+        className
+      )}
+    >
       {(title || Icon) && (
         <div className="flex justify-between items-center px-6 pt-5 pb-3 z-10 border-b border-gray-50 dark:border-zinc-800/50">
           <div className="flex items-center gap-2">
-            {Icon && <Icon className={cn("w-4 h-4", iconColor)} />}
+            {Icon && <Icon className={cn('w-4 h-4', iconColor)} />}
             {title && (
               <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 {title}
@@ -74,12 +76,8 @@ interface FileStatus {
 // -----------------------------------------------------------------------------
 
 export default function RuleDatabase() {
-  const { 
-    settings, 
-    updateRuleDatabase, 
-    ruleDatabaseUpdateStatus, 
-    setRuleDatabaseUpdateStatus 
-  } = useAppStore();
+  const { settings, updateRuleDatabase, ruleDatabaseUpdateStatus, setRuleDatabaseUpdateStatus } =
+    useAppStore();
   const databases = useMemo(() => settings.ruleDatabases || [], [settings.ruleDatabases]);
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
   const [fileStatus, setFileStatus] = useState<Record<string, FileStatus>>({});
@@ -87,13 +85,13 @@ export default function RuleDatabase() {
 
   const checkFileStatus = useCallback(async () => {
     if (databases.length === 0) return;
-    
+
     try {
-      const fileNames = databases.map(db => db.fileName);
+      const fileNames = databases.map((db) => db.fileName);
       const results = await ipc.checkResourceFiles(fileNames);
-      
+
       const statusMap: Record<string, FileStatus> = {};
-      results.forEach(result => {
+      results.forEach((result) => {
         statusMap[result.fileName] = {
           exists: result.exists,
           size: result.size,
@@ -109,16 +107,16 @@ export default function RuleDatabase() {
   // 手动触发检查所有资源的更新状态
   const handleCheckAllUpdates = useCallback(async () => {
     if (databases.length === 0) return;
-    
+
     setCheckingAll(true);
-    
+
     // 设置所有数据库为检查中状态
-    databases.forEach(db => {
+    databases.forEach((db) => {
       setRuleDatabaseUpdateStatus(db.id, { hasUpdate: false, checking: true });
     });
-    
+
     try {
-      const requests = databases.map(db => ({
+      const requests = databases.map((db) => ({
         url: db.url,
         currentEtag: db.etag,
         currentModified: db.remoteModified,
@@ -126,9 +124,9 @@ export default function RuleDatabase() {
         githubRepo: db.githubRepo,
         assetName: db.assetName,
       }));
-      
+
       const results = await ipc.checkResourceUpdates(requests);
-      
+
       results.forEach((result, index) => {
         const db = databases[index];
         setRuleDatabaseUpdateStatus(db.id, {
@@ -137,19 +135,23 @@ export default function RuleDatabase() {
           error: result.error,
         });
       });
-      
-      const updateCount = results.filter(r => r.hasUpdate && !r.error).length;
+
+      const updateCount = results.filter((r) => r.hasUpdate && !r.error).length;
       if (updateCount > 0) {
         toast({
-          title: "发现更新",
+          title: '发现更新',
           description: `${updateCount} 个数据库有新版本可用`,
-          variant: "default",
+          variant: 'default',
         });
       }
     } catch (error) {
       console.error('Failed to check updates:', error);
-      databases.forEach(db => {
-        setRuleDatabaseUpdateStatus(db.id, { hasUpdate: false, checking: false, error: '检查失败' });
+      databases.forEach((db) => {
+        setRuleDatabaseUpdateStatus(db.id, {
+          hasUpdate: false,
+          checking: false,
+          error: '检查失败',
+        });
       });
     } finally {
       setCheckingAll(false);
@@ -168,63 +170,63 @@ export default function RuleDatabase() {
   };
 
   const handleUpdate = async (id: string, url: string, fileName: string, force = false) => {
-    setUpdating(prev => ({ ...prev, [id]: true }));
-    
-    const database = databases.find(db => db.id === id);
+    setUpdating((prev) => ({ ...prev, [id]: true }));
+
+    const database = databases.find((db) => db.id === id);
     const currentEtag = database?.etag;
     const currentModified = database?.remoteModified;
-    
+
     try {
       const result = await ipc.downloadResource(
-        url, 
-        fileName, 
-        force ? undefined : currentEtag, 
+        url,
+        fileName,
+        force ? undefined : currentEtag,
         force ? undefined : currentModified,
         force,
         database?.updateSourceType,
         database?.githubRepo,
         database?.assetName
       );
-      
+
       if (result.downloaded) {
         await updateRuleDatabase(id, {
           updatedAt: new Date().toLocaleString(),
           etag: result.etag,
           remoteModified: result.remoteModified,
         });
-        
+
         setRuleDatabaseUpdateStatus(id, { hasUpdate: false, checking: false });
-        
+
         await checkFileStatus();
-        
+
         toast({
-          title: "更新成功",
+          title: '更新成功',
           description: `${fileName} 已下载至应用数据目录`,
-          variant: "default",
+          variant: 'default',
         });
       } else {
         await updateRuleDatabase(id, {
           etag: result.etag,
           remoteModified: result.remoteModified,
         });
-        
+
         setRuleDatabaseUpdateStatus(id, { hasUpdate: false, checking: false });
-        
+
         toast({
-          title: "已是最新",
+          title: '已是最新',
           description: `${fileName} 无需更新`,
-          variant: "default",
+          variant: 'default',
         });
       }
     } catch (error) {
       console.error('Update failed:', error);
       toast({
-        title: "更新失败",
+        title: '更新失败',
         description: `无法下载 ${fileName}: ${error}`,
-        variant: "destructive",
+        variant: 'destructive',
       });
     } finally {
-      setUpdating(prev => ({ ...prev, [id]: false }));
+      setUpdating((prev) => ({ ...prev, [id]: false }));
     }
   };
 
@@ -234,21 +236,21 @@ export default function RuleDatabase() {
 
   const handleUpdateAll = async () => {
     await Promise.all(
-      databases.map(database =>
-        handleUpdate(database.id, database.url, database.fileName, false)
-      )
+      databases.map((database) => handleUpdate(database.id, database.url, database.fileName, false))
     );
   };
 
   const handleAutoUpdateToggle = async (id: string, checked: boolean) => {
     await updateRuleDatabase(id, { autoUpdate: checked });
     toast({
-      title: checked ? "自动更新已开启" : "自动更新已关闭",
-      description: checked ? "该数据库将自动保持最新" : "该数据库将不再自动更新",
+      title: checked ? '自动更新已开启' : '自动更新已关闭',
+      description: checked ? '该数据库将自动保持最新' : '该数据库将不再自动更新',
     });
   };
 
-  const updateCount = Object.values(ruleDatabaseUpdateStatus).filter(s => s.hasUpdate && !s.checking).length;
+  const updateCount = Object.values(ruleDatabaseUpdateStatus).filter(
+    (s) => s.hasUpdate && !s.checking
+  ).length;
 
   const getIconForType = (fileName: string) => {
     const lower = fileName.toLowerCase();
@@ -282,29 +284,34 @@ export default function RuleDatabase() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={handleCheckAllUpdates}
-            disabled={checkingAll}
-            className="rounded-full gap-2 text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-          >
-            <RefreshCw className={cn("w-4 h-4", checkingAll && "animate-spin")} />
-            检查更新
-          </Button>
-          <Button 
-            size="sm" 
-            onClick={handleUpdateAll}
-            disabled={Object.values(updating).some(v => v)}
-            className="rounded-full gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-          >
-            <Download className="w-4 h-4" />
-            全部更新
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCheckAllUpdates}
+              disabled={checkingAll}
+              className="rounded-full h-9 w-9"
+            >
+              <RefreshCw className={cn('w-4 h-4', checkingAll && 'animate-spin')} />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleUpdateAll}
+              disabled={Object.values(updating).some((v) => v)}
+              className="rounded-full gap-2 h-9 px-4 bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
+            >
+              <Download className="w-4 h-4" />
+              全部更新
+            </Button>
+          </div>
         </div>
       </div>
 
-      <BentoCard className="p-0 overflow-hidden rounded-[12px] shadow-[0_4px_12px_rgba(0,0,0,0.04)] dark:shadow-none" title="">
+      <BentoCard
+        className="p-0 overflow-hidden rounded-[12px] shadow-[0_4px_12px_rgba(0,0,0,0.04)] dark:shadow-none"
+        title=""
+      >
         {/* Table Header */}
         <div className="grid grid-cols-[1fr_90px_90px_130px_100px] gap-4 px-6 py-3 border-b border-gray-100 dark:border-zinc-800/50 bg-gray-50/50 dark:bg-zinc-900/50 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider shrink-0">
           <div>数据库</div>
@@ -330,25 +337,33 @@ export default function RuleDatabase() {
               const isChecking = dbUpdateStatus?.checking;
               const isUpdating = updating[database.id];
               const Icon = getIconForType(database.fileName);
-              
+
               return (
-                <div 
+                <div
                   key={database.id}
                   className="grid grid-cols-[1fr_90px_90px_130px_100px] gap-4 px-6 py-4 items-center hover:bg-gray-50/50 dark:hover:bg-zinc-800/30 transition-colors"
                 >
                   {/* Name & Icon */}
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className={cn(
-                      "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
-                      getIconColorClass(database.fileName)
-                    )}>
+                    <div
+                      className={cn(
+                        'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+                        getIconColorClass(database.fileName)
+                      )}
+                    >
                       <Icon className="w-5 h-5" />
                     </div>
                     <div className="flex flex-col min-w-0">
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white truncate leading-tight" title={database.name}>
+                      <span
+                        className="text-sm font-semibold text-gray-900 dark:text-white truncate leading-tight"
+                        title={database.name}
+                      >
                         {database.name}
                       </span>
-                      <span className="text-[11px] text-gray-500 truncate font-mono opacity-70 leading-tight" title={database.fileName}>
+                      <span
+                        className="text-[11px] text-gray-500 truncate font-mono opacity-70 leading-tight"
+                        title={database.fileName}
+                      >
                         {database.fileName}
                       </span>
                     </div>
@@ -357,7 +372,10 @@ export default function RuleDatabase() {
                   {/* Status */}
                   <div>
                     {isChecking ? (
-                      <Badge variant="outline" className="text-gray-500 border-gray-200 bg-gray-50 px-1.5 h-6">
+                      <Badge
+                        variant="outline"
+                        className="text-gray-500 border-gray-200 bg-gray-50 px-1.5 h-6"
+                      >
                         <Loader2 className="w-3 h-3 animate-spin" />
                       </Badge>
                     ) : hasUpdate ? (
@@ -366,11 +384,17 @@ export default function RuleDatabase() {
                         更新
                       </Badge>
                     ) : !fileExists ? (
-                      <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 px-1.5 h-6">
+                      <Badge
+                        variant="outline"
+                        className="text-amber-600 border-amber-200 bg-amber-50 px-1.5 h-6"
+                      >
                         未安装
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 px-1.5 h-6">
+                      <Badge
+                        variant="outline"
+                        className="text-emerald-600 border-emerald-200 bg-emerald-50 px-1.5 h-6"
+                      >
                         已安装
                       </Badge>
                     )}
@@ -378,7 +402,9 @@ export default function RuleDatabase() {
 
                   {/* Size */}
                   <div className="hidden sm:flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                    <span className="font-mono text-xs">{fileExists && status ? formatFileSize(status.size) : '-'}</span>
+                    <span className="font-mono text-xs">
+                      {fileExists && status ? formatFileSize(status.size) : '-'}
+                    </span>
                   </div>
 
                   {/* Updated At */}
@@ -394,25 +420,29 @@ export default function RuleDatabase() {
                   {/* Actions (Auto Update + Button) */}
                   <div className="flex items-center justify-end gap-3">
                     <div title="自动更新">
-                        <Switch 
-                          checked={database.autoUpdate}
-                          onCheckedChange={(checked) => handleAutoUpdateToggle(database.id, checked)}
-                          className="scale-75 data-[state=checked]:bg-blue-500"
-                        />
+                      <Switch
+                        checked={database.autoUpdate}
+                        onCheckedChange={(checked) => handleAutoUpdateToggle(database.id, checked)}
+                        className="scale-75 data-[state=checked]:bg-blue-500"
+                      />
                     </div>
-                    <Button 
-                      variant={hasUpdate ? "default" : "secondary"}
+                    <Button
+                      variant={hasUpdate ? 'default' : 'secondary'}
                       size="icon"
                       className={cn(
-                        "h-8 w-8 rounded-lg transition-all shrink-0",
-                        hasUpdate 
-                          ? "bg-blue-500 hover:bg-blue-600 text-white shadow-sm" 
-                          : "bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 hover:bg-gray-50 text-gray-600 dark:text-gray-300"
+                        'h-8 w-8 rounded-lg transition-all shrink-0',
+                        hasUpdate
+                          ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-sm'
+                          : 'bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 hover:bg-gray-50 text-gray-600 dark:text-gray-300'
                       )}
-                      onClick={() => handleUpdate(database.id, database.url, database.fileName, false)}
-                      onDoubleClick={() => handleForceUpdate(database.id, database.url, database.fileName)}
+                      onClick={() =>
+                        handleUpdate(database.id, database.url, database.fileName, false)
+                      }
+                      onDoubleClick={() =>
+                        handleForceUpdate(database.id, database.url, database.fileName)
+                      }
                       disabled={isUpdating}
-                      title={fileExists ? "检查更新（双击强制下载）" : "下载"}
+                      title={fileExists ? '检查更新（双击强制下载）' : '下载'}
                     >
                       {isUpdating ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
