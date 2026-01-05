@@ -79,6 +79,8 @@
   html, body, #root {
     height: 100%;
     overflow: hidden;
+    border: none;
+    outline: none;
   }
 
   body {
@@ -98,6 +100,8 @@
     background-color: transparent;
     border-radius: 12px;
     overflow: hidden;
+    border: none;
+    outline: none;
   }
 
   /* Custom scrollbar */
