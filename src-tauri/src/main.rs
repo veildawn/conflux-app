@@ -31,7 +31,16 @@ use crate::tray_menu::TrayMenuState;
 const TRAY_ID: &str = "main-tray";
 
 fn load_tray_icon() -> Option<Image<'static>> {
-    Image::from_bytes(include_bytes!("../icons/tray-icon.png")).ok()
+    // Windows 使用专用的 Windows 托盘图标（无 macOS 留白）
+    // macOS/Linux 使用专用托盘图标
+    #[cfg(windows)]
+    {
+        Image::from_bytes(include_bytes!("../icons/tray-icon-win.png")).ok()
+    }
+    #[cfg(not(windows))]
+    {
+        Image::from_bytes(include_bytes!("../icons/tray-icon.png")).ok()
+    }
 }
 
 fn build_terminal_proxy_command() -> Result<String, String> {
@@ -41,9 +50,22 @@ fn build_terminal_proxy_command() -> Result<String, String> {
         .map_err(|e| e.to_string())?;
     let http = format!("http://127.0.0.1:{}", config.port);
     let socks = format!("socks5://127.0.0.1:{}", config.socks_port);
-    Ok(format!(
-        "export http_proxy={http} https_proxy={http} all_proxy={socks}"
-    ))
+
+    #[cfg(target_os = "windows")]
+    {
+        // PowerShell 格式
+        Ok(format!(
+            "$env:http_proxy=\"{http}\"; $env:https_proxy=\"{http}\"; $env:all_proxy=\"{socks}\""
+        ))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Unix/Linux/macOS 格式
+        Ok(format!(
+            "export http_proxy={http} https_proxy={http} all_proxy={socks}"
+        ))
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -63,9 +85,54 @@ fn copy_to_clipboard(text: &str) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(target_os = "macos"))]
-fn copy_to_clipboard(_text: &str) -> Result<(), String> {
-    Err("Clipboard copy is not implemented on this platform".to_string())
+#[cfg(target_os = "windows")]
+fn copy_to_clipboard(text: &str) -> Result<(), String> {
+    use std::io::Write;
+    use std::os::windows::process::CommandExt;
+    use std::process::{Command, Stdio};
+
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let mut child = Command::new("cmd")
+        .args(["/C", "clip"])
+        .stdin(Stdio::piped())
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    {
+        let stdin = child.stdin.as_mut().ok_or("Failed to open clip stdin")?;
+        stdin.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    child.wait().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn copy_to_clipboard(text: &str) -> Result<(), String> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    // 尝试 xclip，如果失败则尝试 xsel
+    let result = Command::new("xclip")
+        .args(["-selection", "clipboard"])
+        .stdin(Stdio::piped())
+        .spawn();
+
+    let mut child = match result {
+        Ok(child) => child,
+        Err(_) => Command::new("xsel")
+            .args(["--clipboard", "--input"])
+            .stdin(Stdio::piped())
+            .spawn()
+            .map_err(|e| e.to_string())?,
+    };
+
+    {
+        let stdin = child.stdin.as_mut().ok_or("Failed to open clipboard stdin")?;
+        stdin.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    child.wait().map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]

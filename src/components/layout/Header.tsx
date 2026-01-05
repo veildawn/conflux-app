@@ -238,12 +238,13 @@ export default function Header() {
 
             <div
               className={cn(
-                'absolute left-0 mt-2 w-[240px] min-[960px]:w-[320px] overflow-hidden rounded-2xl border bg-white/95 shadow-xl backdrop-blur transition-all duration-300 dark:bg-zinc-900/95',
-                latestVariantStyle.panel,
-                logOpen
-                  ? 'pointer-events-auto max-h-[360px] translate-y-0 opacity-100'
-                  : 'pointer-events-none max-h-0 -translate-y-2 opacity-0'
+                'absolute left-0 mt-2 w-[240px] min-[960px]:w-[320px] overflow-hidden rounded-2xl border bg-white shadow-xl dark:bg-zinc-900',
+                latestVariantStyle.panel
               )}
+              style={{
+                display: logOpen ? 'block' : 'none',
+                maxHeight: '360px',
+              }}
             >
               <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 text-xs font-semibold text-gray-700 dark:border-zinc-800 dark:text-zinc-200">
                 <span>通知日志</span>
@@ -271,26 +272,21 @@ export default function Header() {
                       getToastText(item.description) || getToastText(item.title) || '未命名通知';
                     const itemVariantStyle = getToastVariantStyle(item.variant ?? undefined);
                     const itemCreatedAt = item.createdAt;
-                    const itemIsNew = item.id === latestToast?.id;
                     return (
                       <div
                         key={item.id}
-                        className={cn(
-                          'flex gap-3 px-4 py-2 transition-colors',
-                          itemVariantStyle.item,
-                          itemIsNew && 'animate-in fade-in slide-in-from-top-1 duration-500'
-                        )}
+                        className={cn('flex gap-3 px-4 py-2', itemVariantStyle.item)}
                       >
-                        <span className={cn('mt-1 h-2 w-2 rounded-full', itemVariantStyle.dot)} />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs font-semibold text-gray-800 dark:text-zinc-100 break-words">
-                              {itemMessage}
-                            </span>
-                            <span className="shrink-0 text-[10px] text-gray-400 dark:text-zinc-500">
-                              {itemCreatedAt ? timeFormatter.format(itemCreatedAt) : '--'}
-                            </span>
-                          </div>
+                        <span
+                          className={cn('mt-1 h-2 w-2 rounded-full shrink-0', itemVariantStyle.dot)}
+                        />
+                        <div className="flex-1 flex justify-between items-center gap-2">
+                          <span className="text-xs font-semibold text-gray-800 dark:text-zinc-100">
+                            {itemMessage}
+                          </span>
+                          <span className="shrink-0 text-[10px] text-gray-400 dark:text-zinc-500">
+                            {itemCreatedAt ? timeFormatter.format(itemCreatedAt) : '--'}
+                          </span>
                         </div>
                       </div>
                     );

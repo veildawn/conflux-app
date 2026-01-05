@@ -61,17 +61,22 @@ impl SubStoreManager {
     }
 
     /// 获取 Node.js 二进制文件路径
+    /// 
+    /// Tauri externalBin 会自动处理跨平台路径：
+    /// - 开发模式：从 src-tauri/binaries/node-{target_triple}[.exe] 读取
+    /// - 生产模式：
+    ///   - Windows: 与主程序同级 (Conflux/node.exe)
+    ///   - macOS: Contents/MacOS/node
+    ///   - Linux: 与主程序同级
     fn get_node_binary_path(app_handle: &tauri::AppHandle) -> Result<PathBuf> {
         let node_name = if cfg!(debug_assertions) {
-            // 开发模式：使用平台特定的二进制文件
             format!("node-{}{}", Self::get_target_triple(), if cfg!(windows) { ".exe" } else { "" })
         } else {
-            // 生产模式：使用简单的 node 名称
             format!("node{}", if cfg!(windows) { ".exe" } else { "" })
         };
 
         let node_binary = if cfg!(debug_assertions) {
-            // 开发模式：从项目目录加载
+            // 开发模式：从项目目录的 binaries 加载
             let exe_path = std::env::current_exe()
                 .map_err(|e| anyhow!("Failed to get exe path: {}", e))?;
             let project_dir = exe_path
@@ -82,22 +87,43 @@ impl SubStoreManager {
                 .ok_or_else(|| anyhow!("Failed to determine project root"))?;
             project_dir.join("src-tauri").join("binaries").join(&node_name)
         } else {
-            // 生产模式：从资源目录加载
-            app_handle
-                .path()
-                .resource_dir()
-                .map_err(|e| anyhow!("Failed to get resource dir: {}", e))?
-                .join(&node_name)
+            // 生产模式：externalBin 被 Tauri 放在主程序同级目录
+            // Tauri 会处理 macOS 的 Contents/MacOS 路径
+            let exe_path = std::env::current_exe()
+                .map_err(|e| anyhow!("Failed to get exe path: {}", e))?;
+            let exe_dir = exe_path
+                .parent()
+                .ok_or_else(|| anyhow!("Failed to get exe directory"))?;
+            exe_dir.join(&node_name)
         };
 
+        // 添加调试日志
+        log::debug!("Looking for node binary at: {:?}", node_binary);
+
         if !node_binary.exists() {
-            return Err(anyhow!("Node.js binary not found at: {:?}", node_binary));
+            // 备用方案：尝试使用 resource_dir
+            let fallback = app_handle
+                .path()
+                .resource_dir()
+                .ok()
+                .map(|d| d.join(&node_name));
+            
+            if let Some(ref path) = fallback {
+                if path.exists() {
+                    log::info!("Found node binary in resource_dir: {:?}", path);
+                    return Ok(path.clone());
+                }
+            }
+            
+            return Err(anyhow!("Node.js binary not found at: {:?} or {:?}", node_binary, fallback));
         }
 
         Ok(node_binary)
     }
 
     /// 获取 Sub-Store 脚本路径
+    /// 
+    /// 使用 Tauri 的 resource_dir() 统一处理跨平台路径
     fn get_substore_script_path(app_handle: &tauri::AppHandle) -> Result<PathBuf> {
         let script_path = if cfg!(debug_assertions) {
             // 开发模式：从项目目录加载
@@ -115,7 +141,7 @@ impl SubStoreManager {
                 .join("sub-store")
                 .join("run-substore.js")
         } else {
-            // 生产模式：从资源目录加载
+            // 生产模式：使用 Tauri 的 resource_dir() - 统一处理所有平台
             app_handle
                 .path()
                 .resource_dir()
@@ -125,6 +151,8 @@ impl SubStoreManager {
                 .join("run-substore.js")
         };
 
+        log::debug!("Looking for Sub-Store script at: {:?}", script_path);
+
         if !script_path.exists() {
             return Err(anyhow!("Sub-Store script not found at: {:?}", script_path));
         }
@@ -133,6 +161,8 @@ impl SubStoreManager {
     }
 
     /// 获取 Sub-Store 前端路径
+    /// 
+    /// 使用 Tauri 的 resource_dir() 统一处理跨平台路径
     fn get_frontend_path(app_handle: &tauri::AppHandle) -> Result<PathBuf> {
         let frontend_path = if cfg!(debug_assertions) {
             // 开发模式
@@ -150,7 +180,7 @@ impl SubStoreManager {
                 .join("sub-store")
                 .join("frontend")
         } else {
-            // 生产模式
+            // 生产模式：使用 Tauri 的 resource_dir() - 统一处理所有平台
             app_handle
                 .path()
                 .resource_dir()
@@ -160,10 +190,13 @@ impl SubStoreManager {
                 .join("frontend")
         };
 
+        log::debug!("Frontend path: {:?}", frontend_path);
         Ok(frontend_path)
     }
 
     /// 获取 Sub-Store 默认数据文件路径
+    /// 
+    /// 使用 Tauri 的 resource_dir() 统一处理跨平台路径
     fn get_default_data_file_path(app_handle: &tauri::AppHandle) -> Result<PathBuf> {
         let data_path = if cfg!(debug_assertions) {
             // 开发模式：从项目目录加载
@@ -181,7 +214,7 @@ impl SubStoreManager {
                 .join("sub-store")
                 .join("sub-store.json")
         } else {
-            // 生产模式：从资源目录加载
+            // 生产模式：使用 Tauri 的 resource_dir() - 统一处理所有平台
             app_handle
                 .path()
                 .resource_dir()
@@ -190,6 +223,8 @@ impl SubStoreManager {
                 .join("sub-store")
                 .join("sub-store.json")
         };
+
+        log::debug!("Looking for default data file at: {:?}", data_path);
 
         if !data_path.exists() {
             return Err(anyhow!("Default Sub-Store data file not found at: {:?}", data_path));
@@ -292,7 +327,7 @@ impl SubStoreManager {
             .current_dir(&substore_data_dir)
             .env("SUB_STORE_BACKEND_API_HOST", "127.0.0.1")
             .env("SUB_STORE_BACKEND_API_PORT", self.api_port.to_string())
-            .env("SUB_STORE_FRONTEND_BACKEND_PATH", "/__api__")
+            .env("SUB_STORE_FRONTEND_BACKEND_PATH", "/api")
             .env("SUB_STORE_BACKEND_MERGE", "true")
             .env("SUB_STORE_DATA_DIR", substore_data_dir.to_string_lossy().to_string());
 
