@@ -191,10 +191,3 @@ impl ProfileConfig {
         self.proxies.iter().any(|p| p.name == name)
     }
 }
-
-/// 完整的 Profile（元数据 + 配置）
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Profile {
-    pub metadata: ProfileMetadata,
-    pub config: ProfileConfig,
-}

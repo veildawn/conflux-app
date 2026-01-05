@@ -130,18 +130,6 @@ pub struct VersionInfo {
     pub meta: bool,
 }
 
-/// 前端代理节点显示
-#[allow(dead_code)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProxyNode {
-    pub name: String,
-    #[serde(rename = "type")]
-    pub node_type: String,
-    pub delay: Option<u32>,
-    pub udp: bool,
-    pub selected: bool,
-}
-
 /// 代理组
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProxyGroup {
