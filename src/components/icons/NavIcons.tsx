@@ -15,7 +15,7 @@ export function ConnectionIcon({ className, strokeWidth = 2 }: IconProps) {
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("w-5 h-5", className)}
+      className={cn('w-5 h-5', className)}
     >
       {/* 左侧策略 */}
       <circle cx="5" cy="12" r="2" />
@@ -40,7 +40,7 @@ export function OverviewIcon({ className, strokeWidth = 2 }: IconProps) {
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("w-5 h-5", className)}
+      className={cn('w-5 h-5', className)}
     >
       {/* 四宫格布局 */}
       <rect x="3" y="3" width="8" height="8" rx="2" />
@@ -61,7 +61,7 @@ export function ProfileIcon({ className, strokeWidth = 2 }: IconProps) {
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("w-5 h-5", className)}
+      className={cn('w-5 h-5', className)}
     >
       {/* 底层文档 */}
       <path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
@@ -85,7 +85,7 @@ export function ConvertIcon({ className, strokeWidth = 2 }: IconProps) {
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("w-5 h-5", className)}
+      className={cn('w-5 h-5', className)}
     >
       {/* 上方箭头 向右 */}
       <path d="M4 8h12" />
@@ -107,7 +107,7 @@ export function NodesIcon({ className, strokeWidth = 2 }: IconProps) {
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("w-5 h-5", className)}
+      className={cn('w-5 h-5', className)}
     >
       {/* 中心策略 */}
       <circle cx="12" cy="12" r="3" />
@@ -135,12 +135,15 @@ export function GroupsIcon({ className, strokeWidth = 2 }: IconProps) {
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("w-5 h-5", className)}
+      className={cn('w-5 h-5', className)}
     >
-      <rect x="3" y="4" width="8" height="7" rx="2" />
-      <rect x="13" y="4" width="8" height="7" rx="2" />
-      <rect x="3" y="13" width="8" height="7" rx="2" />
-      <rect x="13" y="13" width="8" height="7" rx="2" />
+      {/* 容器外框 */}
+      <rect x="3" y="4" width="18" height="16" rx="3" />
+      {/* 内部垂直分割线，表示不同的策略选择 */}
+      <path d="M9 4v16" />
+      <path d="M15 4v16" />
+      {/* 核心选中点，表示当前选中的策略 */}
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
     </svg>
   );
 }
@@ -155,7 +158,7 @@ export function ServersIcon({ className, strokeWidth = 2 }: IconProps) {
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("w-5 h-5", className)}
+      className={cn('w-5 h-5', className)}
     >
       <rect x="3" y="4" width="18" height="4" rx="1.5" />
       <rect x="3" y="10" width="18" height="4" rx="1.5" />
@@ -177,7 +180,7 @@ export function RulesIcon({ className, strokeWidth = 2 }: IconProps) {
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("w-5 h-5", className)}
+      className={cn('w-5 h-5', className)}
     >
       {/* 入口 */}
       <circle cx="4" cy="12" r="2" />
@@ -206,7 +209,7 @@ export function ResourceIcon({ className, strokeWidth = 2 }: IconProps) {
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("w-5 h-5", className)}
+      className={cn('w-5 h-5', className)}
     >
       {/* 立方体/包裹 */}
       <path d="M12 2L2 7l10 5 10-5-10-5z" />
@@ -226,7 +229,7 @@ export function GeoDataIcon({ className, strokeWidth = 2 }: IconProps) {
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("w-5 h-5", className)}
+      className={cn('w-5 h-5', className)}
     >
       {/* 地球轮廓 */}
       <circle cx="12" cy="12" r="9" />
@@ -250,7 +253,7 @@ export function LogsIcon({ className, strokeWidth = 2 }: IconProps) {
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("w-5 h-5", className)}
+      className={cn('w-5 h-5', className)}
     >
       {/* 终端窗口 */}
       <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -271,7 +274,7 @@ export function SettingsIcon({ className, strokeWidth = 2 }: IconProps) {
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={cn("w-5 h-5", className)}
+      className={cn('w-5 h-5', className)}
     >
       {/* 中心圆 */}
       <circle cx="12" cy="12" r="3" />

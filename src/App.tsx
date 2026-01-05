@@ -15,6 +15,7 @@ const RuleDatabase = lazy(() => import('./pages/RuleDatabase'));
 const Logs = lazy(() => import('./pages/Logs'));
 const Providers = lazy(() => import('./pages/Providers'));
 const ProxyGroupEditWindow = lazy(() => import('./pages/proxy-groups/ProxyGroupEditWindow'));
+const ProxyServerEditWindow = lazy(() => import('./pages/proxy-servers/ProxyServerEditWindow'));
 
 // 加载中占位组件
 const LoadingFallback = () => (
@@ -45,6 +46,7 @@ function App() {
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="/proxy-group-edit" element={<ProxyGroupEditWindow />} />
+        <Route path="/proxy-server-edit" element={<ProxyServerEditWindow />} />
       </Routes>
     </Suspense>
   );
