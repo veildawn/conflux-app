@@ -364,7 +364,7 @@ impl MihomoManager {
 
         // 尝试获取锁并停止进程
         if let Ok(mut guard) = self.process.try_lock() {
-            if let Some(child) = guard.take() {
+            if let Some(mut child) = guard.take() {
                 let pid = child.id();
                 log::info!("Stopping MiHomo process (PID: {})", pid);
 
