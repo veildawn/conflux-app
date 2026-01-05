@@ -1,6 +1,26 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { ProxyStatus, ProxyGroup, TrafficData, ConnectionsResponse, RuleItem, VersionInfo, ProxyServerInfo } from '@/types/proxy';
-import type { MihomoConfig, AppSettings, DownloadResourceResult, ResourceUpdateCheckRequest, ResourceUpdateCheckResult, ProfileMetadata, ProfileConfig, ProxyConfig, ProxyProvider, RuleProvider } from '@/types/config';
+import type {
+  ProxyStatus,
+  ProxyGroup,
+  TrafficData,
+  ConnectionsResponse,
+  RuleItem,
+  VersionInfo,
+  ProxyServerInfo,
+} from '@/types/proxy';
+import type {
+  MihomoConfig,
+  AppSettings,
+  DownloadResourceResult,
+  ResourceUpdateCheckRequest,
+  ResourceUpdateCheckResult,
+  ProfileMetadata,
+  ProfileConfig,
+  ProxyConfig,
+  ProxyProvider,
+  RuleProvider,
+  ProxyGroupConfig,
+} from '@/types/config';
 
 /**
  * IPC 服务 - 与 Tauri 后端通信
@@ -175,7 +195,10 @@ export const ipc = {
   /**
    * 应用订阅配置
    */
-  async applySubscription(path: string, subType: string): Promise<{
+  async applySubscription(
+    path: string,
+    subType: string
+  ): Promise<{
     proxies_count: number;
     proxy_groups_count: number;
     rules_count: number;
@@ -216,7 +239,7 @@ export const ipc = {
    * @returns 下载结果，包含是否实际下载了文件以及新的版本信息
    */
   async downloadResource(
-    url: string, 
+    url: string,
     fileName: string,
     currentEtag?: string,
     currentModified?: string,
@@ -225,34 +248,38 @@ export const ipc = {
     githubRepo?: string,
     assetName?: string
   ): Promise<DownloadResourceResult> {
-    return invoke('download_resource', { 
-      url, 
-      fileName, 
-      currentEtag, 
+    return invoke('download_resource', {
+      url,
+      fileName,
+      currentEtag,
       currentModified,
       force,
       updateSourceType,
       githubRepo,
-      assetName
+      assetName,
     });
   },
 
   /**
    * 检查外部资源文件状态
    */
-  async checkResourceFiles(fileNames: string[]): Promise<{
-    fileName: string;
-    exists: boolean;
-    size: number | null;
-    modified: string | null;
-  }[]> {
+  async checkResourceFiles(fileNames: string[]): Promise<
+    {
+      fileName: string;
+      exists: boolean;
+      size: number | null;
+      modified: string | null;
+    }[]
+  > {
     return invoke('check_resource_files', { fileNames });
   },
 
   /**
    * 批量检查资源是否有更新（只检查，不下载）
    */
-  async checkResourceUpdates(resources: ResourceUpdateCheckRequest[]): Promise<ResourceUpdateCheckResult[]> {
+  async checkResourceUpdates(
+    resources: ResourceUpdateCheckRequest[]
+  ): Promise<ResourceUpdateCheckResult[]> {
     return invoke('check_resource_updates', { resources });
   },
 
@@ -305,19 +332,21 @@ export const ipc = {
   /**
    * 获取代理 Provider 列表
    */
-  async getProxyProviders(): Promise<{
-    name: string;
-    type: string;
-    vehicleType: string;
-    proxies: { name: string; type: string; udp?: boolean; now?: string }[];
-    updatedAt?: string;
-    subscriptionInfo?: {
-      Upload?: number;
-      Download?: number;
-      Total?: number;
-      Expire?: number;
-    };
-  }[]> {
+  async getProxyProviders(): Promise<
+    {
+      name: string;
+      type: string;
+      vehicleType: string;
+      proxies: { name: string; type: string; udp?: boolean; now?: string }[];
+      updatedAt?: string;
+      subscriptionInfo?: {
+        Upload?: number;
+        Download?: number;
+        Total?: number;
+        Expire?: number;
+      };
+    }[]
+  > {
     return invoke('get_proxy_providers');
   },
 
@@ -338,14 +367,16 @@ export const ipc = {
   /**
    * 获取规则 Provider 列表
    */
-  async getRuleProviders(): Promise<{
-    name: string;
-    type: string;
-    behavior: string;
-    ruleCount: number;
-    updatedAt?: string;
-    vehicleType: string;
-  }[]> {
+  async getRuleProviders(): Promise<
+    {
+      name: string;
+      type: string;
+      behavior: string;
+      ruleCount: number;
+      updatedAt?: string;
+      vehicleType: string;
+    }[]
+  > {
     return invoke('get_rule_providers');
   },
 
@@ -428,14 +459,18 @@ export const ipc = {
   /**
    * 获取 Sub-Store 订阅列表
    */
-  async getSubStoreSubs(): Promise<{ name: string; displayName?: string; icon?: string; url?: string }[]> {
+  async getSubStoreSubs(): Promise<
+    { name: string; displayName?: string; icon?: string; url?: string }[]
+  > {
     return invoke('get_substore_subs');
   },
 
   /**
    * 获取 Sub-Store 组合配置列表
    */
-  async getSubStoreCollections(): Promise<{ name: string; displayName?: string; subscriptions?: string[] }[]> {
+  async getSubStoreCollections(): Promise<
+    { name: string; displayName?: string; subscriptions?: string[] }[]
+  > {
     return invoke('get_substore_collections');
   },
 
@@ -574,7 +609,11 @@ export const ipc = {
   /**
    * 添加 rule-provider 到 Profile
    */
-  async addRuleProviderToProfile(profileId: string, name: string, provider: RuleProvider): Promise<void> {
+  async addRuleProviderToProfile(
+    profileId: string,
+    name: string,
+    provider: RuleProvider
+  ): Promise<void> {
     return invoke('add_rule_provider_to_profile', { profileId, name, provider });
   },
 
@@ -588,7 +627,11 @@ export const ipc = {
   /**
    * 更新 Profile 中的 rule-provider
    */
-  async updateRuleProviderInProfile(profileId: string, name: string, provider: RuleProvider): Promise<void> {
+  async updateRuleProviderInProfile(
+    profileId: string,
+    name: string,
+    provider: RuleProvider
+  ): Promise<void> {
     return invoke('update_rule_provider_in_profile', { profileId, name, provider });
   },
 
@@ -604,14 +647,22 @@ export const ipc = {
   /**
    * 添加 proxy-provider 到 Profile
    */
-  async addProxyProviderToProfile(profileId: string, name: string, provider: ProxyProvider): Promise<void> {
+  async addProxyProviderToProfile(
+    profileId: string,
+    name: string,
+    provider: ProxyProvider
+  ): Promise<void> {
     return invoke('add_proxy_provider_to_profile', { profileId, name, provider });
   },
 
   /**
    * 更新 Profile 中的 proxy-provider
    */
-  async updateProxyProviderInProfile(profileId: string, name: string, provider: ProxyProvider): Promise<void> {
+  async updateProxyProviderInProfile(
+    profileId: string,
+    name: string,
+    provider: ProxyProvider
+  ): Promise<void> {
     return invoke('update_proxy_provider_in_profile', { profileId, name, provider });
   },
 
@@ -628,56 +679,58 @@ export const ipc = {
   async getProfileConfig(): Promise<ProfileConfig> {
     const activeId = await invoke<string | null>('get_active_profile_id');
     if (!activeId) throw new Error('No active profile');
-    const [, config] = await invoke<[ProfileMetadata, ProfileConfig]>('get_profile', { id: activeId });
+    const [, config] = await invoke<[ProfileMetadata, ProfileConfig]>('get_profile', {
+      id: activeId,
+    });
     return config;
   },
 
   /**
    * 更新当前活跃 Profile 中的策略组
    */
-  async updateProxyGroup(group: any, oldName?: string): Promise<void> {
-     const activeId = await invoke<string | null>('get_active_profile_id');
-     if (!activeId) throw new Error('No active profile');
-     
-     // Fetch current config
-     const [, config] = await invoke<[ProfileMetadata, ProfileConfig]>('get_profile', { id: activeId });
-     
-     const existing = config['proxy-groups'] || [];
-     
-     // Name check
-     const nameTaken = existing.some((item) => item.name === group.name && item.name !== oldName);
-     if (nameTaken) throw new Error('Group name already exists');
+  async updateProxyGroup(group: ProxyGroupConfig, oldName?: string): Promise<void> {
+    const activeId = await invoke<string | null>('get_active_profile_id');
+    if (!activeId) throw new Error('No active profile');
 
-     let nextGroups = [...existing];
-     let nextRules = [...(config.rules || [])];
-     
-     if (oldName) {
-       const index = nextGroups.findIndex((item) => item.name === oldName);
-       if (index === -1) throw new Error('Group not found to update');
-       nextGroups[index] = group;
-       
-       // Handle renaming references
-        if (oldName !== group.name) {
-             nextGroups = nextGroups.map((item) => ({
-                ...item,
-                proxies: item.proxies.map((proxy) => (proxy === oldName ? group.name : proxy)),
-             }));
-             // Simple regex based replacement for rules might be dangerous, but if we follow ProxyGroups.tsx logic:
-             // It parses rules. I'll skip complex rule parsing here for simplicity or duplicate it? 
-             // To avoid duplication and bugs, it is safer to DO THIS IN RUST BACKEND ultimately. 
-             // But for now, let's keep it simple: just update the group definition. 
-             // Refactoring needed later: move business logic to Backend.
-             
-             // For now, I will just update the group array.
-        }
-     } else {
-       nextGroups.push(group);
-     }
+    // Fetch current config
+    const [, config] = await invoke<[ProfileMetadata, ProfileConfig]>('get_profile', {
+      id: activeId,
+    });
 
-     const newConfig = { ...config, 'proxy-groups': nextGroups };
-     await invoke('update_profile_config', { profileId: activeId, config: newConfig });
+    const existing = config['proxy-groups'] || [];
+
+    // Name check
+    const nameTaken = existing.some((item) => item.name === group.name && item.name !== oldName);
+    if (nameTaken) throw new Error('Group name already exists');
+
+    let nextGroups = [...existing];
+
+    if (oldName) {
+      const index = nextGroups.findIndex((item) => item.name === oldName);
+      if (index === -1) throw new Error('Group not found to update');
+      nextGroups[index] = group;
+
+      // Handle renaming references
+      if (oldName !== group.name) {
+        nextGroups = nextGroups.map((item) => ({
+          ...item,
+          proxies: item.proxies.map((proxy) => (proxy === oldName ? group.name : proxy)),
+        }));
+        // Simple regex based replacement for rules might be dangerous, but if we follow ProxyGroups.tsx logic:
+        // It parses rules. I'll skip complex rule parsing here for simplicity or duplicate it?
+        // To avoid duplication and bugs, it is safer to DO THIS IN RUST BACKEND ultimately.
+        // But for now, let's keep it simple: just update the group definition.
+        // Refactoring needed later: move business logic to Backend.
+
+        // For now, I will just update the group array.
+      }
+    } else {
+      nextGroups.push(group);
+    }
+
+    const newConfig = { ...config, 'proxy-groups': nextGroups };
+    await invoke('update_profile_config', { profileId: activeId, config: newConfig });
   },
 };
 
 export default ipc;
-
