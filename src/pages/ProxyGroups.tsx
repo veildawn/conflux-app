@@ -131,14 +131,13 @@ export default function ProxyGroups() {
         const newWindow = new WebviewWindow(label, {
             url: `/proxy-group-edit${name ? `?name=${encodeURIComponent(name)}` : ''}`,
             title: name ? `编辑策略组 - ${name}` : '添加策略组',
-            width: 800,
+            width: 860,
             height: 700,
-            minWidth: 600,
-            minHeight: 500,
             center: true,
-            resizable: true,
+            resizable: false,
             decorations: false,
-            transparent: true
+            transparent: true,
+            shadow: false
         });
         newWindow.once('tauri://error', (event) => {
           console.error('Failed to create window', event);

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { emit } from '@tauri-apps/api/event';
@@ -44,6 +45,24 @@ const GROUP_TYPE_ICON_MAP: Record<string, typeof Layers> = {
   'load-balance': Zap,
   relay: CloudOff,
 };
+
+const dragIgnoreSelector = [
+  '[data-no-drag]',
+  '.no-drag',
+  'button',
+  'a',
+  'input',
+  'textarea',
+  'select',
+  'option',
+  'label',
+  '[role="button"]',
+  '[role="link"]',
+  '[role="menuitem"]',
+  '[role="tab"]',
+  '[contenteditable="true"]',
+  '.cursor-pointer'
+].join(', ');
 
 
 export default function ProxyGroupEditWindow() {
@@ -420,19 +439,36 @@ export default function ProxyGroupEditWindow() {
   const handleClose = async () => {
     await getCurrentWindow().close();
   };
-  
+
+  const handleMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (!target || target.closest(dragIgnoreSelector)) {
+      return;
+    }
+    void getCurrentWindow()
+      .startDragging()
+      .catch((error) => {
+        console.warn('Failed to start dragging:', error);
+      });
+  };
+
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-[radial-gradient(circle_at_10%_20%,rgba(255,200,200,0.6)_0%,transparent_40%),radial-gradient(circle_at_90%_80%,rgba(180,220,255,0.8)_0%,transparent_40%),radial-gradient(circle_at_50%_50%,#f0f0f5_0%,#e0e0eb_100%)] text-neutral-900 drag-region">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute -left-24 -top-20 h-64 w-64 rounded-full bg-white/40 blur-3xl" />
+    <div
+      className="relative h-screen w-screen overflow-hidden rounded-xl border border-black/8 bg-[radial-gradient(circle_at_10%_20%,rgba(255,200,200,0.6)_0%,transparent_40%),radial-gradient(circle_at_90%_80%,rgba(180,220,255,0.8)_0%,transparent_40%),radial-gradient(circle_at_50%_50%,#f0f0f5_0%,#e0e0eb_100%)] text-neutral-900"
+      onMouseDown={handleMouseDown}
+    >
+      <div className="absolute inset-0 pointer-events-none rounded-xl overflow-hidden border-none">
+        <div className="absolute left-0 top-32 h-64 w-64 rounded-full bg-white/40 blur-3xl" />
         <div className="absolute right-10 top-1/2 h-72 w-72 -translate-y-1/2 rounded-full bg-blue-200/40 blur-3xl" />
         <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-rose-200/40 blur-3xl" />
       </div>
 
-      <div className="relative h-full w-full grid grid-cols-[240px_1fr]">
-        <div className="flex flex-col bg-white/35 px-6 py-6 border-r border-black/5 backdrop-blur-[50px]">
-          <div data-tauri-drag-region className="h-6" />
-          <div className="mt-4 flex flex-col gap-2">
+      <div className="relative h-full w-full grid grid-cols-[240px_1fr] border-none">
+        <div className="flex flex-col bg-white/35 px-6 pt-3 pb-6 border-r border-black/5 backdrop-blur-[50px] rounded-l-xl border-l-0 border-t-0 border-b-0">
+          <div className="flex flex-col gap-2">
             {visibleSteps.map((key, index) => {
               const meta = STEP_METADATA[key];
               const isActive = step === key;
@@ -470,7 +506,7 @@ export default function ProxyGroupEditWindow() {
           </div>
         </div>
 
-        <div className="relative flex flex-col overflow-hidden bg-white/25 backdrop-blur-[50px]">
+        <div className="relative flex flex-col overflow-hidden bg-white/25 backdrop-blur-[50px] rounded-r-xl">
             <div className="relative flex-1 overflow-y-auto px-8 py-10 pb-28">
               <div className="mb-7">
                 <h1 className="text-2xl font-semibold text-neutral-900">{currentMeta.title}</h1>
