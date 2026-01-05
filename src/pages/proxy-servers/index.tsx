@@ -63,17 +63,17 @@ const AddServerMenu = ({
   return (
     <div className={cn('relative', wrapperClassName)} ref={menuRef}>
       <Button
-        variant="default"
+        variant="outline"
         size="sm"
         onClick={() => setIsOpen(!isOpen)}
         disabled={!hasActiveProfile}
-        className="rounded-full bg-black text-white dark:bg-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 font-medium"
+        className="rounded-full gap-2 h-9 px-4 bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
       >
-        <Plus className="w-4 h-4 mr-1.5" />
+        <Plus className="w-4 h-4" />
         添加服务器
         <ChevronDown
           className={cn(
-            'w-3 h-3 ml-1.5 transition-transform duration-200',
+            'w-3 h-3 ml-1 transition-transform duration-200',
             isOpen ? 'rotate-180' : ''
           )}
         />

@@ -55,6 +55,8 @@ const dragIgnoreSelector = [
   '[role="link"]',
   '[role="menuitem"]',
   '[role="tab"]',
+  '[role="option"]',
+  '[role="listbox"]',
   '[contenteditable="true"]',
   '.cursor-pointer',
 ].join(', ');

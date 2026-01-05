@@ -2,7 +2,15 @@
   "$schema": "https://schema.tauri.app/config/2/capability",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main", "edit-group-*", "add-group-*", "edit-server-*", "add-server-*"],
+  "windows": [
+    "main",
+    "edit-group-*",
+    "add-group-*",
+    "edit-server-*",
+    "add-server-*",
+    "edit-profile-*",
+    "add-profile-*"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-close",
