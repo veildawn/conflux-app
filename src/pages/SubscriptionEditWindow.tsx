@@ -1,22 +1,10 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { emit } from '@tauri-apps/api/event';
-import { open, save } from '@tauri-apps/plugin-dialog';
-import {
-  Loader2,
-  Globe,
-  FileText,
-  File,
-  CheckCircle2,
-  Save,
-  ChevronRight,
-  ChevronLeft,
-  X,
-  Search,
-  Filter,
-} from 'lucide-react';
+import { open } from '@tauri-apps/plugin-dialog';
+import { Loader2, Globe, FileText, File, CheckCircle2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
