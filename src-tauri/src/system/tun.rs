@@ -1,7 +1,13 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
+#[cfg(not(target_os = "windows"))]
+use anyhow::anyhow;
+#[cfg(not(target_os = "windows"))]
 use std::process::Command;
 
-use crate::utils::{ensure_mihomo_in_data_dir, get_mihomo_binary_path};
+#[cfg(not(target_os = "windows"))]
+use crate::utils::get_mihomo_binary_path;
+#[cfg(target_os = "macos")]
+use crate::utils::ensure_mihomo_in_data_dir;
 
 /// TUN 权限管理器
 pub struct TunPermission;
