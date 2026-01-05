@@ -352,25 +352,28 @@ impl MihomoManager {
 
         // 尝试获取锁并停止进程
         if let Ok(mut guard) = self.process.try_lock() {
+            #[cfg(windows)]
             if let Some(mut child) = guard.take() {
                 let pid = child.id();
                 log::info!("Stopping MiHomo process (PID: {})", pid);
+                let _ = child.kill();
+                log::info!("MiHomo process killed (PID: {})", pid);
+            } else if let Some(pid) = Self::load_pid() {
+                log::info!("Stopping MiHomo process by PID file (PID: {})", pid);
+                Self::kill_process_by_pid(pid);
+                Self::remove_pid_file();
+            }
 
-                #[cfg(unix)]
-                {
-                    // 直接发送 SIGKILL，不等待
-                    unsafe {
-                        libc::kill(pid as i32, libc::SIGKILL);
-                    }
+            #[cfg(not(windows))]
+            if let Some(child) = guard.take() {
+                let pid = child.id();
+                log::info!("Stopping MiHomo process (PID: {})", pid);
+
+                // 直接发送 SIGKILL，不等待
+                unsafe {
+                    libc::kill(pid as i32, libc::SIGKILL);
                 }
 
-                #[cfg(windows)]
-                {
-                    let _ = child.kill();
-                }
-
-                // 不调用 wait()，避免阻塞
-                // 进程会被系统回收
                 log::info!("MiHomo process killed (PID: {})", pid);
             } else if let Some(pid) = Self::load_pid() {
                 log::info!("Stopping MiHomo process by PID file (PID: {})", pid);
