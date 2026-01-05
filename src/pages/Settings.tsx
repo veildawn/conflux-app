@@ -704,7 +704,9 @@ export default function Settings() {
                         <Select
                           value={config?.dns?.['enhanced-mode'] || 'normal'}
                           onValueChange={(value) =>
-                            handleDnsConfigChange({ 'enhanced-mode': value })
+                            handleDnsConfigChange({
+                              'enhanced-mode': value as DnsConfig['enhanced-mode'],
+                            })
                           }
                         >
                           <SelectTrigger className={cn('w-32', controlSlim, controlBase)}>
@@ -741,7 +743,9 @@ export default function Settings() {
                           <Select
                             value={config?.dns?.['fake-ip-filter-mode'] || 'blacklist'}
                             onValueChange={(value) =>
-                              handleDnsConfigChange({ 'fake-ip-filter-mode': value })
+                              handleDnsConfigChange({
+                                'fake-ip-filter-mode': value as DnsConfig['fake-ip-filter-mode'],
+                              })
                             }
                           >
                             <SelectTrigger className={cn('w-24 h-7 text-xs', controlBase)}>
@@ -832,7 +836,9 @@ export default function Settings() {
                         <Select
                           value={config?.dns?.['cache-algorithm'] || 'lru'}
                           onValueChange={(value) =>
-                            handleDnsConfigChange({ 'cache-algorithm': value })
+                            handleDnsConfigChange({
+                              'cache-algorithm': value as DnsConfig['cache-algorithm'],
+                            })
                           }
                         >
                           <SelectTrigger className={cn('w-24', controlSlim, controlBase)}>
