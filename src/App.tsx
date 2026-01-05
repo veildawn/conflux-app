@@ -1,7 +1,6 @@
 import { Routes, Route } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import Home from './pages/Home';
-import Overview from './pages/Overview';
 import Proxy from './pages/Proxy';
 import ProxyGroups from './pages/ProxyGroups';
 import ProxyServers from './pages/ProxyServers';
@@ -21,7 +20,6 @@ function App() {
       <Routes>
         <Route path="/" element={<AppLayout />}>
           <Route index element={<Home />} />
-          <Route path="overview" element={<Overview />} />
           <Route path="proxy" element={<Proxy />} />
           <Route path="proxy-groups" element={<ProxyGroups />} />
           <Route path="proxy-servers" element={<ProxyServers />} />
