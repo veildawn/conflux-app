@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Plus,
   Globe,
@@ -9,7 +9,7 @@ import {
   Clock,
   Loader2,
   Pencil,
-  File
+  File,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,12 +21,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ProfileMetadata, ProfileType } from '@/types/config';
@@ -45,9 +40,9 @@ function BentoCard({
   children,
   title,
   icon: Icon,
-  iconColor = "text-gray-500",
+  iconColor = 'text-gray-500',
   action,
-  onClick
+  onClick,
 }: {
   className?: string;
   children: React.ReactNode;
@@ -60,8 +55,9 @@ function BentoCard({
   return (
     <div
       className={cn(
-        "bg-white dark:bg-zinc-900 rounded-[20px] p-5 shadow-xs border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden transition-all",
-        onClick && "cursor-pointer hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800",
+        'bg-white dark:bg-zinc-900 rounded-[20px] p-5 shadow-xs border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden transition-all',
+        onClick &&
+          'cursor-pointer hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800',
         className
       )}
       onClick={onClick}
@@ -69,7 +65,7 @@ function BentoCard({
       {(title || Icon) && (
         <div className="flex justify-between items-center mb-4 z-10">
           <div className="flex items-center gap-2">
-            {Icon && <Icon className={cn("w-4 h-4", iconColor)} />}
+            {Icon && <Icon className={cn('w-4 h-4', iconColor)} />}
             {title && (
               <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 {title}
@@ -137,13 +133,18 @@ export default function SubscriptionPage() {
 
   // Sub-Store 相关状态
   const [urlSource, setUrlSource] = useState<'manual' | 'substore'>('manual');
-  const [substoreSubs, setSubstoreSubs] = useState<{ name: string; displayName?: string; icon?: string; url?: string }[]>([]);
+  const [substoreSubs, setSubstoreSubs] = useState<
+    { name: string; displayName?: string; icon?: string; url?: string }[]
+  >([]);
   const [selectedSub, setSelectedSub] = useState<string>('');
   const [loadingSubs, setLoadingSubs] = useState(false);
-  const [substoreStatus, setSubstoreStatus] = useState<{ running: boolean; api_url: string } | null>(null);
+  const [substoreStatus, setSubstoreStatus] = useState<{
+    running: boolean;
+    api_url: string;
+  } | null>(null);
 
   // 加载 Profile 列表
-  const loadProfiles = async () => {
+  const loadProfiles = useCallback(async () => {
     try {
       const list = await ipc.listProfiles();
       setProfiles(list);
@@ -157,11 +158,11 @@ export default function SubscriptionPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     loadProfiles();
-  }, []);
+  }, [loadProfiles]);
 
   const normalizeExportPath = (path: string) => {
     if (/\.[^/\\]+$/.test(path)) {
@@ -181,10 +182,12 @@ export default function SubscriptionPage() {
       const selected = await open({
         title: '选择配置文件',
         multiple: false,
-        filters: [{
-          name: '配置文件',
-          extensions: ['yaml', 'yml', 'json', 'conf']
-        }]
+        filters: [
+          {
+            name: '配置文件',
+            extensions: ['yaml', 'yml', 'json', 'conf'],
+          },
+        ],
       });
 
       if (selected) {
@@ -200,10 +203,12 @@ export default function SubscriptionPage() {
       const selected = await save({
         title: '导出配置',
         defaultPath: buildExportFileName(profile),
-        filters: [{
-          name: 'YAML',
-          extensions: ['yaml', 'yml']
-        }]
+        filters: [
+          {
+            name: 'YAML',
+            extensions: ['yaml', 'yml'],
+          },
+        ],
       });
 
       if (!selected) return;
@@ -241,7 +246,13 @@ export default function SubscriptionPage() {
       } else {
         // 新增模式
         let profile: ProfileMetadata;
-        const profileName = name || (activeTab === 'remote' ? '新远程订阅' : activeTab === 'local' ? '新本地配置' : '新空白配置');
+        const profileName =
+          name ||
+          (activeTab === 'remote'
+            ? '新远程订阅'
+            : activeTab === 'local'
+              ? '新本地配置'
+              : '新空白配置');
 
         if (activeTab === 'remote') {
           profile = await ipc.createRemoteProfile(profileName, url);
@@ -276,7 +287,7 @@ export default function SubscriptionPage() {
   };
 
   const handleActivate = async (id: string) => {
-    const profile = profiles.find(p => p.id === id);
+    const profile = profiles.find((p) => p.id === id);
     if (!profile) return;
     if (profile.active) return;
 
@@ -307,7 +318,7 @@ export default function SubscriptionPage() {
   };
 
   // 加载 Sub-Store 状态和订阅列表
-  const loadSubStoreSubs = async () => {
+  const loadSubStoreSubs = useCallback(async () => {
     setLoadingSubs(true);
     try {
       const status = await ipc.getSubStoreStatus();
@@ -334,14 +345,14 @@ export default function SubscriptionPage() {
     } finally {
       setLoadingSubs(false);
     }
-  };
+  }, [toast]);
 
   // 当选择 Sub-Store 模式时自动加载订阅列表
   useEffect(() => {
     if (urlSource === 'substore' && activeTab === 'remote' && !editingProfile) {
       loadSubStoreSubs();
     }
-  }, [urlSource, activeTab, editingProfile]);
+  }, [urlSource, activeTab, editingProfile, loadSubStoreSubs]);
 
   // 当选择订阅时自动生成 URL
   useEffect(() => {
@@ -452,14 +463,19 @@ export default function SubscriptionPage() {
     <div className="space-y-6 pb-6 min-h-full flex flex-col">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">配置管理</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+            配置管理
+          </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             管理代理配置。支持远程订阅、本地文件导入和手动创建
           </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={resetForm} className="rounded-full bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm">
+            <Button
+              onClick={resetForm}
+              className="rounded-full bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm"
+            >
               <Plus className="w-4 h-4" />
               添加配置
             </Button>
@@ -481,15 +497,24 @@ export default function SubscriptionPage() {
             >
               {!editingProfile && (
                 <TabsList className="grid w-full grid-cols-3 mb-4 bg-gray-100 dark:bg-zinc-800 rounded-full p-1 h-10">
-                  <TabsTrigger value="remote" className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm text-xs">
+                  <TabsTrigger
+                    value="remote"
+                    className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm text-xs"
+                  >
                     <Globe className="w-3.5 h-3.5" />
                     远程订阅
                   </TabsTrigger>
-                  <TabsTrigger value="local" className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm text-xs">
+                  <TabsTrigger
+                    value="local"
+                    className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm text-xs"
+                  >
                     <FileText className="w-3.5 h-3.5" />
                     本地文件
                   </TabsTrigger>
-                  <TabsTrigger value="blank" className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm text-xs">
+                  <TabsTrigger
+                    value="blank"
+                    className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm text-xs"
+                  >
                     <File className="w-3.5 h-3.5" />
                     空白配置
                   </TabsTrigger>
@@ -520,10 +545,14 @@ export default function SubscriptionPage() {
                               name="urlSource"
                               value="manual"
                               checked={urlSource === 'manual'}
-                              onChange={(e) => setUrlSource(e.target.value as 'manual' | 'substore')}
+                              onChange={(e) =>
+                                setUrlSource(e.target.value as 'manual' | 'substore')
+                              }
                               className="w-4 h-4 text-blue-600"
                             />
-                            <span className="text-sm text-gray-700 dark:text-gray-300">直接输入 URL</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                              直接输入 URL
+                            </span>
                           </label>
                           <label className="flex items-center gap-2 cursor-pointer">
                             <input
@@ -531,10 +560,14 @@ export default function SubscriptionPage() {
                               name="urlSource"
                               value="substore"
                               checked={urlSource === 'substore'}
-                              onChange={(e) => setUrlSource(e.target.value as 'manual' | 'substore')}
+                              onChange={(e) =>
+                                setUrlSource(e.target.value as 'manual' | 'substore')
+                              }
                               className="w-4 h-4 text-blue-600"
                             />
-                            <span className="text-sm text-gray-700 dark:text-gray-300">从 Sub-Store 选择</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                              从 Sub-Store 选择
+                            </span>
                           </label>
                         </div>
                       </div>
@@ -549,9 +582,7 @@ export default function SubscriptionPage() {
                             onChange={(e) => setUrl(e.target.value)}
                             className="rounded-xl font-mono text-sm"
                           />
-                          <p className="text-xs text-gray-500">
-                            支持 MiHomo/Clash 格式的订阅链接
-                          </p>
+                          <p className="text-xs text-gray-500">支持 MiHomo/Clash 格式的订阅链接</p>
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -574,10 +605,10 @@ export default function SubscriptionPage() {
                                     <label
                                       key={sub.name}
                                       className={cn(
-                                        "flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all",
+                                        'flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all',
                                         selectedSub === sub.name
-                                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                                          : "border-gray-200 dark:border-zinc-700 hover:border-blue-300 dark:hover:border-blue-700"
+                                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                          : 'border-gray-200 dark:border-zinc-700 hover:border-blue-300 dark:hover:border-blue-700'
                                       )}
                                     >
                                       <input
@@ -609,9 +640,7 @@ export default function SubscriptionPage() {
                                       {url}
                                     </p>
                                   </div>
-                                  <p className="text-xs text-gray-500">
-                                    目标格式: ClashMeta
-                                  </p>
+                                  <p className="text-xs text-gray-500">目标格式: ClashMeta</p>
                                 </div>
                               )}
                             </>
@@ -631,7 +660,11 @@ export default function SubscriptionPage() {
                             onChange={(e) => setFilePath(e.target.value)}
                             className="rounded-xl font-mono text-sm"
                           />
-                          <Button variant="outline" className="shrink-0 rounded-xl" onClick={handleBrowse}>
+                          <Button
+                            variant="outline"
+                            className="shrink-0 rounded-xl"
+                            onClick={handleBrowse}
+                          >
                             浏览...
                           </Button>
                         </div>
@@ -654,7 +687,9 @@ export default function SubscriptionPage() {
             </Tabs>
 
             <DialogFooter>
-              <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="rounded-xl">取消</Button>
+              <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="rounded-xl">
+                取消
+              </Button>
               <Button
                 onClick={handleSave}
                 disabled={!canSave() || saving}
@@ -672,7 +707,9 @@ export default function SubscriptionPage() {
         <div className="flex flex-1 w-full flex-col items-center justify-center text-center py-12 px-6 text-gray-400 border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-[24px] bg-gray-50/50 dark:bg-zinc-900/50">
           <Globe className="w-12 h-12 mb-4 opacity-30" />
           <p className="font-medium text-gray-600 dark:text-gray-300">暂无配置</p>
-          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">点击右上角添加您的第一个配置</p>
+          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">
+            点击右上角添加您的第一个配置
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -681,112 +718,114 @@ export default function SubscriptionPage() {
             const typeInfo = getProfileTypeInfo(profile.profileType);
 
             return (
-            <BentoCard
-              key={profile.id}
-              className={cn(
-                "group relative",
-                profile.active
-                  ? "border-blue-500 dark:border-blue-500 bg-blue-50/20 dark:bg-blue-900/10"
-                  : "border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900",
-                isApplying && "opacity-70 pointer-events-none"
-              )}
-              onClick={() => handleActivate(profile.id)}
-              title={typeInfo.label}
-              icon={typeInfo.icon}
-              iconColor={typeInfo.color}
-              action={
-                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                  {profile.profileType === 'remote' && (
+              <BentoCard
+                key={profile.id}
+                className={cn(
+                  'group relative',
+                  profile.active
+                    ? 'border-blue-500 dark:border-blue-500 bg-blue-50/20 dark:bg-blue-900/10'
+                    : 'border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900',
+                  isApplying && 'opacity-70 pointer-events-none'
+                )}
+                onClick={() => handleActivate(profile.id)}
+                title={typeInfo.label}
+                icon={typeInfo.icon}
+                iconColor={typeInfo.color}
+                action={
+                  <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                    {profile.profileType === 'remote' && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                        title="更新订阅"
+                        onClick={() => handleRefresh(profile)}
+                        disabled={isApplying}
+                      >
+                        <RefreshCw className={cn('w-3.5 h-3.5', isApplying && 'animate-spin')} />
+                      </Button>
+                    )}
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
-                      title="更新订阅"
-                      onClick={() => handleRefresh(profile)}
+                      className="h-7 w-7 text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg"
+                      title="导出配置"
+                      onClick={() => handleExport(profile)}
                       disabled={isApplying}
                     >
-                      <RefreshCw className={cn("w-3.5 h-3.5", isApplying && "animate-spin")} />
+                      <Download className="w-3.5 h-3.5" />
                     </Button>
-                  )}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg"
-                    title="导出配置"
-                    onClick={() => handleExport(profile)}
-                    disabled={isApplying}
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg"
-                    title="编辑"
-                    onClick={() => handleEdit(profile)}
-                    disabled={isApplying}
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                    title="删除"
-                    onClick={() => handleDelete(profile.id)}
-                    disabled={isApplying}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              }
-            >
-             {isApplying && (
-               <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-zinc-900/50 z-20 backdrop-blur-sm rounded-[20px]">
-                 <div className="flex flex-col items-center gap-2">
-                   <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                   <span className="text-xs font-medium text-blue-500">正在应用...</span>
-                 </div>
-               </div>
-             )}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg"
+                      title="编辑"
+                      onClick={() => handleEdit(profile)}
+                      disabled={isApplying}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                      title="删除"
+                      onClick={() => handleDelete(profile.id)}
+                      disabled={isApplying}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                }
+              >
+                {isApplying && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-zinc-900/50 z-20 backdrop-blur-sm rounded-[20px]">
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                      <span className="text-xs font-medium text-blue-500">正在应用...</span>
+                    </div>
+                  </div>
+                )}
 
-             {profile.active && !isApplying && (
-               <div className="absolute top-4 right-4 z-0">
-                 <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
-               </div>
-             )}
+                {profile.active && !isApplying && (
+                  <div className="absolute top-4 right-4 z-0">
+                    <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
+                  </div>
+                )}
 
-             <div className="flex flex-col h-full justify-between gap-4">
-                <div>
-                   <h3 className="font-bold text-lg text-gray-900 dark:text-white line-clamp-1 mb-1">{profile.name}</h3>
-                   <div className="text-xs text-gray-500 dark:text-gray-400 font-mono break-all line-clamp-2 leading-relaxed opacity-70">
-                     {profile.profileType === 'remote' && profile.url}
-                     {profile.profileType === 'local' && '本地文件导入'}
-                     {profile.profileType === 'blank' && '手动创建的空白配置'}
-                   </div>
-                </div>
+                <div className="flex flex-col h-full justify-between gap-4">
+                  <div>
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white line-clamp-1 mb-1">
+                      {profile.name}
+                    </h3>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 font-mono break-all line-clamp-2 leading-relaxed opacity-70">
+                      {profile.profileType === 'remote' && profile.url}
+                      {profile.profileType === 'local' && '本地文件导入'}
+                      {profile.profileType === 'blank' && '手动创建的空白配置'}
+                    </div>
+                  </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-zinc-800/50">
-                   <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-zinc-800/50">
+                    <div className="flex items-center gap-1.5 text-xs text-gray-400">
                       <Clock className="w-3.5 h-3.5" />
                       <span>{formatDate(profile.updatedAt)}</span>
-                   </div>
-                   <div className="flex items-center gap-2">
-                      <span className={cn(
-                        "text-xs font-medium px-2 py-0.5 rounded-md",
-                        profile.active
-                          ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
-                          : "bg-gray-100 text-gray-500 dark:bg-zinc-800 dark:text-gray-400"
-                      )}>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          'text-xs font-medium px-2 py-0.5 rounded-md',
+                          profile.active
+                            ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+                            : 'bg-gray-100 text-gray-500 dark:bg-zinc-800 dark:text-gray-400'
+                        )}
+                      >
                         {profile.proxyCount} 节点
                       </span>
-                      <span className="text-xs text-gray-400">
-                        {profile.ruleCount} 规则
-                      </span>
-                   </div>
+                      <span className="text-xs text-gray-400">{profile.ruleCount} 规则</span>
+                    </div>
+                  </div>
                 </div>
-             </div>
-            </BentoCard>
+              </BentoCard>
             );
           })}
         </div>

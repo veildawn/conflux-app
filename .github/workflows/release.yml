@@ -8,11 +8,21 @@ on:
     inputs:
       tag_name:
         description: 'Tag name for release (e.g., v0.1.0)'
-        required: false
+        required: true
         type: string
 
 env:
   CARGO_TERM_COLOR: always
+  RELEASE_TAG: ${{ github.event.inputs.tag_name || github.ref_name }}
+  RELEASE_NAME: Conflux ${{ github.event.inputs.tag_name || github.ref_name }}
+  RELEASE_BODY: |
+    ## Changes
+    See the assets below to download and install.
+    
+    ### Installation
+    - **macOS ARM64 (Apple Silicon)**: Download `.dmg` file for M1/M2/M3 Macs
+    - **macOS x86_64 (Intel)**: Download `.dmg` file for Intel Macs
+    - **Windows x86_64**: Download `.msi` or `.exe` installer
 
 # Workflow-level permissions for GITHUB_TOKEN
 permissions:
@@ -175,20 +185,7 @@ jobs:
           # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
-          tagName: ${{ github.event.inputs.tag_name || github.ref_name }}
-          releaseName: 'Conflux ${{ github.event.inputs.tag_name || github.ref_name }}'
-          releaseBody: |
-            ## Changes
-            See the assets below to download and install.
-            
-            ### Installation
-            - **macOS ARM64 (Apple Silicon)**: Download `.dmg` file for M1/M2/M3 Macs
-            - **macOS x86_64 (Intel)**: Download `.dmg` file for Intel Macs
-            - **Windows x86_64**: Download `.msi` or `.exe` installer
-          releaseDraft: true
-          prerelease: false
           args: --target aarch64-apple-darwin -c src-tauri/tauri.macos.conf.json
-          includeUpdaterJson: true
 
       - name: Verify build artifacts
         run: |
@@ -209,6 +206,12 @@ jobs:
           echo ""
           echo "=== DMG files ==="
           find src-tauri/target -name "*.dmg" -exec ls -lh {} \; 2>/dev/null || echo "No DMG found"
+      - name: Upload macOS ARM64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-bundles
+          path: src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
 
   # Build for macOS x86_64 (Intel)
   build-macos-x86:
@@ -360,15 +363,7 @@ jobs:
           # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
-          tagName: ${{ github.event.inputs.tag_name || github.ref_name }}
-          releaseName: 'Conflux ${{ github.event.inputs.tag_name || github.ref_name }}'
-          releaseBody: |
-            ## Changes
-            See the assets below to download and install.
-          releaseDraft: true
-          prerelease: false
           args: --target x86_64-apple-darwin -c src-tauri/tauri.macos.conf.json
-          includeUpdaterJson: true
 
       - name: Verify build artifacts
         run: |
@@ -389,6 +384,12 @@ jobs:
           echo ""
           echo "=== DMG files ==="
           find src-tauri/target -name "*.dmg" -exec ls -lh {} \; 2>/dev/null || echo "No DMG found"
+      - name: Upload macOS x86_64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-x86_64-bundles
+          path: src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
 
   # Build for Windows x86_64
   build-windows-x86:
@@ -546,25 +547,20 @@ jobs:
           # TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           # TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.event.inputs.tag_name || github.ref_name }}
-          releaseName: 'Conflux ${{ github.event.inputs.tag_name || github.ref_name }}'
-          releaseBody: |
-            ## Changes
-            See the assets below to download and install.
-          releaseDraft: true
-          prerelease: false
           args: --target x86_64-pc-windows-msvc -c src-tauri/tauri.windows.conf.json
-          includeUpdaterJson: true
 
       - name: Verify build artifacts
         shell: bash
         run: |
           echo "=== Checking build artifacts ==="
-          echo "MSI files:"
-          find src-tauri/target -name "*.msi" -exec ls -lh {} \; 2>/dev/null || echo "No MSI found"
-          echo ""
           echo "NSIS installers:"
           find src-tauri/target -name "*-setup.exe" -exec ls -lh {} \; 2>/dev/null || echo "No NSIS installer found"
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64-bundles
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
 
   # Optional: Create a combined release after all builds complete
   finalize-release:
@@ -574,6 +570,23 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_NAME }}
+          body: ${{ env.RELEASE_BODY }}
+          draft: true
+          prerelease: false
+          target_commitish: ${{ github.sha }}
+          files: release-assets/**/*
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - name: Release Summary
         run: |
           echo "✅ All platform builds completed successfully!"
@@ -581,6 +594,6 @@ jobs:
           echo "📦 Built artifacts:"
           echo "  - macOS ARM64 (Apple Silicon): .dmg"
           echo "  - macOS x86_64 (Intel): .dmg"  
-          echo "  - Windows x86_64: .msi, .exe"
+          echo "  - Windows x86_64: NSIS installer (.exe)"
           echo ""
           echo "🔗 Release: https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.tag_name || github.ref_name }}"

@@ -33,18 +33,6 @@ impl MihomoManager {
         })
     }
 
-    /// 获取 API URL
-    #[allow(dead_code)]
-    pub fn api_url(&self) -> &str {
-        &self.api_url
-    }
-
-    /// 获取 API Secret
-    #[allow(dead_code)]
-    pub fn api_secret(&self) -> &str {
-        &self.api_secret
-    }
-
     /// 获取 PID 文件路径
     fn get_pid_file_path() -> Result<PathBuf> {
         let data_dir = get_app_data_dir()?;
@@ -364,7 +352,7 @@ impl MihomoManager {
 
         // 尝试获取锁并停止进程
         if let Ok(mut guard) = self.process.try_lock() {
-            if let Some(mut child) = guard.take() {
+            if let Some(child) = guard.take() {
                 let pid = child.id();
                 log::info!("Stopping MiHomo process (PID: {})", pid);
 

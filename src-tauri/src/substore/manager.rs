@@ -417,7 +417,7 @@ impl SubStoreManager {
     /// 同步停止进程（用于应用退出时）
     pub fn stop_sync(&self) {
         if let Ok(mut process_guard) = self.process.try_lock() {
-            if let Some(mut child) = process_guard.take() {
+            if let Some(child) = process_guard.take() {
                 let pid = child.id();
                 log::info!("Synchronously stopping Sub-Store process (PID: {})...", pid);
 

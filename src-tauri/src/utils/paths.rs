@@ -45,15 +45,6 @@ pub fn get_app_settings_path() -> Result<PathBuf> {
     Ok(config_dir.join("settings.json"))
 }
 
-/// 获取日志目录
-#[allow(dead_code)]
-pub fn get_logs_dir() -> Result<PathBuf> {
-    let data_dir = get_app_data_dir()?;
-    let logs_dir = data_dir.join("logs");
-    std::fs::create_dir_all(&logs_dir)?;
-    Ok(logs_dir)
-}
-
 // ============================================================================
 // MiHomo 二进制文件路径
 // ============================================================================

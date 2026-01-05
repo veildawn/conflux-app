@@ -12,7 +12,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Info,
-  Bug
+  Bug,
 } from 'lucide-react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { Button } from '@/components/ui/button';
@@ -67,8 +67,8 @@ function BentoCard({
   children,
   title,
   icon: Icon,
-  iconColor = "text-gray-500",
-  action
+  iconColor = 'text-gray-500',
+  action,
 }: {
   className?: string;
   children: React.ReactNode;
@@ -78,14 +78,16 @@ function BentoCard({
   action?: React.ReactNode;
 }) {
   return (
-    <div className={cn(
-      "bg-white dark:bg-zinc-900 rounded-[24px] shadow-sm border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden",
-      className
-    )}>
+    <div
+      className={cn(
+        'bg-white dark:bg-zinc-900 rounded-[24px] shadow-sm border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden',
+        className
+      )}
+    >
       {(title || Icon) && (
         <div className="flex justify-between items-center px-6 pt-5 pb-3 z-10 border-b border-gray-50 dark:border-zinc-800/50">
           <div className="flex items-center gap-2">
-            {Icon && <Icon className={cn("w-4 h-4", iconColor)} />}
+            {Icon && <Icon className={cn('w-4 h-4', iconColor)} />}
             {title && (
               <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 {title}
@@ -189,14 +191,14 @@ export default function Logs() {
         timestamp: formatTimestamp(),
       };
 
-      setLogs(prev => {
+      setLogs((prev) => {
         const newLogs = [...prev, entry];
         if (newLogs.length > MAX_LOGS) {
           return newLogs.slice(-MAX_LOGS);
         }
         return newLogs;
       });
-    }).then(unlisten => {
+    }).then((unlisten) => {
       unlistenEntryRef.current = unlisten;
     });
 
@@ -204,7 +206,7 @@ export default function Logs() {
     listen<boolean>('log-connected', (event) => {
       setIsConnected(event.payload);
       console.log('Log connection status:', event.payload);
-    }).then(unlisten => {
+    }).then((unlisten) => {
       unlistenConnectedRef.current = unlisten;
     });
 
@@ -227,7 +229,6 @@ export default function Logs() {
       startLogStream();
     } else {
       ipc.stopLogStream().catch(console.error);
-      setIsConnected(false);
     }
 
     return () => {
@@ -253,7 +254,7 @@ export default function Logs() {
 
   // 过滤日志 - 根据级别和搜索关键词
   const filteredLogs = useMemo(() => {
-    return logs.filter(log => {
+    return logs.filter((log) => {
       // 级别过滤：debug 显示所有，其他只显示对应级别
       if (filterLevel !== 'debug' && log.type !== filterLevel) {
         return false;
@@ -280,9 +281,9 @@ export default function Logs() {
 
   // 导出日志
   const handleExport = () => {
-    const content = logs.map(log =>
-      `[${log.timestamp}] [${log.type.toUpperCase()}] ${log.payload}`
-    ).join('\n');
+    const content = logs
+      .map((log) => `[${log.timestamp}] [${log.type.toUpperCase()}] ${log.payload}`)
+      .join('\n');
 
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -304,7 +305,7 @@ export default function Logs() {
   // 统计各级别日志数量（统计所有日志，不只是过滤后的）
   const logStats = useMemo(() => {
     const stats = { debug: 0, info: 0, warning: 0, error: 0 };
-    logs.forEach(log => {
+    logs.forEach((log) => {
       if (log.type in stats) {
         stats[log.type as keyof typeof stats]++;
       }
@@ -315,7 +316,7 @@ export default function Logs() {
   // 统计过滤后的日志数量（用于显示）
   const filteredStats = useMemo(() => {
     const stats = { debug: 0, info: 0, warning: 0, error: 0 };
-    filteredLogs.forEach(log => {
+    filteredLogs.forEach((log) => {
       if (log.type in stats) {
         stats[log.type as keyof typeof stats]++;
       }
@@ -333,14 +334,14 @@ export default function Logs() {
           <div className="flex items-center gap-2">
             {/* 日志统计 - 紧凑版 */}
             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 dark:bg-zinc-800/50 rounded-full">
-              {LOG_LEVELS.map(level => {
+              {LOG_LEVELS.map((level) => {
                 const total = logStats[level.value as keyof typeof logStats];
                 const filtered = filteredStats[level.value as keyof typeof filteredStats];
                 const showFiltered = total !== filtered;
 
                 return (
                   <div key={level.value} className="flex items-center gap-0.5">
-                    <span className={cn("text-xs font-semibold", level.color)}>
+                    <span className={cn('text-xs font-semibold', level.color)}>
                       {showFiltered ? `${filtered}/${total}` : total}
                     </span>
                     <span className="text-[9px] text-gray-400 uppercase">{level.label}</span>
@@ -354,10 +355,10 @@ export default function Logs() {
               size="sm"
               onClick={handleTogglePause}
               className={cn(
-                "rounded-full gap-1.5 h-8 px-3 border transition-all text-xs",
+                'rounded-full gap-1.5 h-8 px-3 border transition-all text-xs',
                 isPaused
-                  ? "bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400"
-                  : "bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
+                  ? 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400'
+                  : 'bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700'
               )}
             >
               {isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
@@ -432,10 +433,12 @@ export default function Logs() {
         {/* Status Bar */}
         <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-100 dark:border-zinc-800/50 bg-gray-50/50 dark:bg-zinc-900/50 shrink-0">
           <div className="flex items-center gap-1.5">
-            <div className={cn(
-              "w-1.5 h-1.5 rounded-full",
-              isConnected && !isPaused ? "bg-green-500 animate-pulse" : "bg-gray-400"
-            )} />
+            <div
+              className={cn(
+                'w-1.5 h-1.5 rounded-full',
+                isConnected && !isPaused ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+              )}
+            />
             <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">
               {!status.running
                 ? '代理未运行'
@@ -474,7 +477,9 @@ export default function Logs() {
               <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center mb-3">
                 <ScrollText className="w-6 h-6 opacity-40" />
               </div>
-              <p className="font-semibold text-sm text-gray-900 dark:text-white font-sans">代理未运行</p>
+              <p className="font-semibold text-sm text-gray-900 dark:text-white font-sans">
+                代理未运行
+              </p>
               <p className="text-xs mt-1 text-center max-w-xs text-gray-500 font-sans">
                 启动代理后将显示实时日志
               </p>
@@ -488,9 +493,7 @@ export default function Logs() {
                 {searchQuery ? '未找到匹配日志' : '暂无日志'}
               </p>
               <p className="text-xs mt-1 text-center max-w-xs text-gray-500 font-sans">
-                {searchQuery
-                  ? '请尝试更换搜索关键词'
-                  : '等待日志输出...'}
+                {searchQuery ? '请尝试更换搜索关键词' : '等待日志输出...'}
               </p>
             </div>
           ) : (
@@ -503,10 +506,12 @@ export default function Logs() {
                     className="group flex items-start gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-zinc-800/30 transition-colors"
                   >
                     {/* Icon */}
-                    <div className={cn(
-                      "w-4 h-4 rounded flex items-center justify-center shrink-0 mt-0.5",
-                      getLogColor(log.type)
-                    )}>
+                    <div
+                      className={cn(
+                        'w-4 h-4 rounded flex items-center justify-center shrink-0 mt-0.5',
+                        getLogColor(log.type)
+                      )}
+                    >
                       <Icon className="w-2.5 h-2.5" />
                     </div>
 
@@ -516,10 +521,12 @@ export default function Logs() {
                     </span>
 
                     {/* Level Badge */}
-                    <span className={cn(
-                      "text-[9px] font-medium px-1.5 py-0.5 rounded border shrink-0 uppercase tracking-wide",
-                      getLogBadgeStyle(log.type)
-                    )}>
+                    <span
+                      className={cn(
+                        'text-[9px] font-medium px-1.5 py-0.5 rounded border shrink-0 uppercase tracking-wide',
+                        getLogBadgeStyle(log.type)
+                      )}
+                    >
                       {log.type}
                     </span>
 
