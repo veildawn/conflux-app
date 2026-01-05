@@ -104,9 +104,7 @@ export default function ProxyGroups() {
 
   const openGroupWindow = async (name?: string) => {
     try {
-      const { WebviewWindow } = await (name
-        ? import('@tauri-apps/api/webviewWindow')
-        : import('@tauri-apps/api/webviewWindow'));
+      const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
       const label = buildGroupWindowLabel(name);
       const existing = await WebviewWindow.getByLabel(label);
       if (existing) {
@@ -116,7 +114,7 @@ export default function ProxyGroups() {
       }
 
       const newWindow = new WebviewWindow(label, {
-        url: `/proxy-group-edit${name ? `?name=${encodeURIComponent(name)}` : ''}`,
+        url: `/#/proxy-group-edit${name ? `?name=${encodeURIComponent(name)}` : ''}`,
         title: name ? `编辑策略组 - ${name}` : '添加策略组',
         width: 860,
         height: 700,
@@ -126,12 +124,15 @@ export default function ProxyGroups() {
         transparent: true,
         shadow: false,
       });
-      newWindow.once('tauri://error', (event) => {
-        console.error('Failed to create window', event);
-        toast({
-          title: '无法打开窗口',
-          description: formatErrorMessage(event) || '未知错误',
-          variant: 'destructive',
+
+      // 等待窗口创建完成或出错
+      await new Promise<void>((resolve, reject) => {
+        newWindow.once('tauri://created', () => {
+          resolve();
+        });
+        newWindow.once('tauri://error', (event) => {
+          console.error('Failed to create window', event);
+          reject(new Error(formatErrorMessage(event) || '窗口创建失败'));
         });
       });
     } catch (e) {
