@@ -117,7 +117,6 @@ export default function SubscriptionPage() {
   const [loading, setLoading] = useState(true);
 
   // 对话框状态
-  const [activeTab, setActiveTab] = useState<ProfileType>('remote');
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<ProfileMetadata | null>(null);
 
@@ -151,13 +150,6 @@ export default function SubscriptionPage() {
       unlisten.then((f) => f());
     };
   }, [loadProfiles]);
-
-  const normalizeExportPath = (path: string) => {
-    if (/\.[^/\\]+$/.test(path)) {
-      return path;
-    }
-    return `${path}.yaml`;
-  };
 
   const toWindowLabelSafe = (value: string) => {
     const encoded = encodeURIComponent(value);
@@ -273,12 +265,46 @@ export default function SubscriptionPage() {
     }
   };
 
-  // 判断保存按钮是否可用
-  const canSave = () => {
-    if (editingProfile) return !!name;
-    if (activeTab === 'remote') return !!url;
-    if (activeTab === 'local') return !!filePath;
-    return true; // blank
+  const handleActivate = async (id: string) => {
+    setApplyingId(id);
+    try {
+      await ipc.activateProfile(id);
+      await loadProfiles();
+      if (status.running) {
+        await fetchGroups();
+      }
+      toast({ title: '配置已激活' });
+    } catch (error) {
+      console.error('Failed to activate profile:', error);
+      toast({
+        title: '激活失败',
+        description: String(error),
+        variant: 'destructive',
+      });
+    } finally {
+      setApplyingId(null);
+    }
+  };
+
+  const handleExport = async (profile: ProfileMetadata) => {
+    try {
+      const savePath = await save({
+        title: '导出配置',
+        defaultPath: `${profile.name}.yaml`,
+        filters: [{ name: 'YAML', extensions: ['yaml', 'yml'] }],
+      });
+      if (!savePath) return;
+
+      await ipc.exportProfileConfig(profile.id, savePath);
+      toast({ title: '导出成功', description: `配置已导出到 ${savePath}` });
+    } catch (error) {
+      console.error('Failed to export profile:', error);
+      toast({
+        title: '导出失败',
+        description: String(error),
+        variant: 'destructive',
+      });
+    }
   };
 
   if (loading) {
