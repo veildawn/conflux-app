@@ -22,7 +22,8 @@
     "fetch:mihomo": "bash scripts/fetch-mihomo.sh",
     "fetch:node": "bash scripts/fetch-node.sh",
     "fetch:substore": "bash scripts/fetch-substore.sh",
-    "fetch:all": "pnpm run fetch:mihomo && pnpm run fetch:node && pnpm run fetch:substore"
+    "fetch:all": "pnpm run fetch:mihomo && pnpm run fetch:node && pnpm run fetch:substore",
+    "generate:icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
