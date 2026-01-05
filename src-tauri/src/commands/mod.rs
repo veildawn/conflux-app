@@ -43,7 +43,7 @@ pub fn require_active_subscription_with_proxies() -> Result<(), String> {
         .get_active_profile()
         .map_err(|e| e.to_string())?;
 
-    let Some((metadata, config)) = active else {
+    let Some((_metadata, config)) = active else {
         return Err("需要先激活订阅才能开启该功能。".to_string());
     };
 

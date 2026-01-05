@@ -368,61 +368,6 @@ impl Composer {
         }
     }
 
-    /// 验证配置有效性，返回警告列表
-    pub fn validate(config: &ProfileConfig) -> Vec<String> {
-        let mut warnings = Vec::new();
-
-        // 检查代理节点名称唯一性
-        let mut proxy_names = std::collections::HashSet::new();
-        for proxy in &config.proxies {
-            if !proxy_names.insert(&proxy.name) {
-                warnings.push(format!("Duplicate proxy name: {}", proxy.name));
-            }
-        }
-
-        // 收集所有有效的策略名称
-        let mut valid_targets: std::collections::HashSet<String> = std::collections::HashSet::new();
-        valid_targets.insert("DIRECT".to_string());
-        valid_targets.insert("REJECT".to_string());
-        valid_targets.insert("COMPATIBLE".to_string());
-        for proxy in &config.proxies {
-            valid_targets.insert(proxy.name.clone());
-        }
-        for group in &config.proxy_groups {
-            valid_targets.insert(group.name.clone());
-        }
-
-        // 检查代理组引用的节点是否存在
-        for group in &config.proxy_groups {
-            for proxy_name in &group.proxies {
-                if !valid_targets.contains(proxy_name) {
-                    warnings.push(format!(
-                        "Group '{}' references unknown proxy: {}",
-                        group.name, proxy_name
-                    ));
-                }
-            }
-        }
-
-        // 检查规则引用的 rule-provider 是否存在
-        for rule in &config.rules {
-            if rule.starts_with("RULE-SET,") {
-                let parts: Vec<&str> = rule.split(',').collect();
-                if parts.len() >= 2 {
-                    let provider_name = parts[1];
-                    if !config.rule_providers.contains_key(provider_name) {
-                        warnings.push(format!(
-                            "Rule references unknown provider: {}",
-                            provider_name
-                        ));
-                    }
-                }
-            }
-        }
-
-        warnings
-    }
-
     /// 过滤掉引用无效 provider 的规则
     pub fn filter_invalid_rules(config: &mut ProfileConfig) {
         let valid_providers: std::collections::HashSet<&String> =
@@ -538,42 +483,6 @@ rules:
         assert_eq!(Composer::guess_behavior("ChinaDomain"), "classical");
         assert_eq!(Composer::guess_behavior("custom-domain-list"), "domain");
         assert_eq!(Composer::guess_behavior("SomeRule"), "classical");
-    }
-
-    #[test]
-    fn test_validate_config() {
-        let config = ProfileConfig {
-            proxies: vec![ProxyConfig {
-                name: "test".to_string(),
-                proxy_type: "ss".to_string(),
-                server: "example.com".to_string(),
-                port: 8388,
-                cipher: None,
-                password: None,
-                uuid: None,
-                alter_id: None,
-                network: None,
-                tls: None,
-                skip_cert_verify: None,
-                sni: None,
-                udp: false,
-                extra: HashMap::new(),
-            }],
-            proxy_groups: vec![ProxyGroupConfig {
-                name: "PROXY".to_string(),
-                group_type: "select".to_string(),
-                proxies: vec!["test".to_string(), "unknown".to_string()],
-                use_providers: Vec::new(),
-                url: None,
-                interval: None,
-            }],
-            proxy_providers: HashMap::new(),
-            rule_providers: HashMap::new(),
-            rules: vec!["RULE-SET,missing-provider,DIRECT".to_string()],
-        };
-
-        let warnings = Composer::validate(&config);
-        assert_eq!(warnings.len(), 2);
     }
 
     #[test]

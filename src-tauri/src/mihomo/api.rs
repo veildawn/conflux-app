@@ -173,37 +173,6 @@ impl MihomoApi {
         }
     }
 
-    /// 设置 TUN 模式
-    pub async fn set_tun(&self, enabled: bool) -> Result<()> {
-        let url = format!("{}/configs", self.base_url);
-        let tun_config = if enabled {
-            json!({
-                "tun": {
-                    "enable": true,
-                    "stack": "system",
-                    "auto-route": true,
-                    "auto-detect-interface": true
-                }
-            })
-        } else {
-            json!({
-                "tun": {
-                    "enable": false
-                }
-            })
-        };
-
-        let request = self.client.patch(&url).json(&tun_config);
-        let response = self.auth_header(request).send().await?;
-
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            let error_text = response.text().await.unwrap_or_default();
-            Err(anyhow::anyhow!("Failed to set TUN mode: {}", error_text))
-        }
-    }
-
     /// 重载配置
     pub async fn reload_configs(&self, path: &str, force: bool) -> Result<()> {
         let url = format!("{}/configs", self.base_url);

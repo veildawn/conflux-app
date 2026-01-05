@@ -30,16 +30,6 @@ impl Workspace {
         })
     }
 
-    /// 获取 profiles 目录路径
-    pub fn profiles_dir(&self) -> &PathBuf {
-        &self.profiles_dir
-    }
-
-    /// 获取规则集目录路径
-    pub fn ruleset_dir(&self) -> &PathBuf {
-        &self.ruleset_dir
-    }
-
     /// 获取指定 Profile 的目录路径
     fn profile_dir(&self, id: &str) -> PathBuf {
         self.profiles_dir.join(id)
