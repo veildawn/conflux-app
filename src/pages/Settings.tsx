@@ -15,7 +15,7 @@ import { useToast } from '@/hooks/useToast';
 import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
 import { useProxyStore } from '@/stores/proxyStore';
-import type { MihomoConfig } from '@/types/config';
+import type { DnsConfig, MihomoConfig } from '@/types/config';
 
 function BentoCard({
   className,
@@ -317,7 +317,7 @@ export default function Settings() {
     }
   };
 
-  const handleConfigChange = async (updates: Partial<typeof config>) => {
+  const handleConfigChange = async (updates: Partial<MihomoConfig>) => {
     if (!config) return;
 
     const newConfig = { ...config, ...updates };
@@ -338,10 +338,10 @@ export default function Settings() {
   };
 
   const handleMixedPortChange = async (value: string) => {
-    const port = value === '' ? null : parseInt(value, 10);
+    const port = value === '' ? undefined : Number.parseInt(value, 10);
     try {
-      await ipc.setMixedPort(port as number | null);
-      setConfig({ ...config, 'mixed-port': port });
+      await ipc.setMixedPort(port ?? null);
+      setConfig((prev) => (prev ? { ...prev, 'mixed-port': port } : prev));
       toast({ title: '混合端口已更新' });
     } catch (error) {
       toast({ title: '更新失败', description: String(error), variant: 'destructive' });
@@ -351,7 +351,7 @@ export default function Settings() {
   const handleFindProcessModeChange = async (mode: string) => {
     try {
       await ipc.setFindProcessMode(mode);
-      setConfig({ ...config, 'find-process-mode': mode });
+      setConfig((prev) => (prev ? { ...prev, 'find-process-mode': mode } : prev));
       toast({ title: '进程查找模式已更新' });
     } catch (error) {
       toast({ title: '更新失败', description: String(error), variant: 'destructive' });
@@ -365,7 +365,7 @@ export default function Settings() {
       .filter(Boolean);
 
   // 中国大陆最佳 DNS 默认配置
-  const getDefaultDnsConfig = () => ({
+  const getDefaultDnsConfig = (): DnsConfig => ({
     enable: true,
     listen: '0.0.0.0:1053',
     'enhanced-mode': 'fake-ip',
@@ -415,14 +415,15 @@ export default function Settings() {
     'cache-algorithm': 'arc',
   });
 
-  const handleDnsConfigChange = async (updates: Record<string, unknown>) => {
+  const handleDnsConfigChange = async (updates: Partial<DnsConfig>) => {
     if (!config) return;
 
     // 如果是启用 DNS，且之前没有配置或配置为空，则填充默认配置
     if (updates.enable === true) {
       const currentDns = config.dns || {};
       const hasValidConfig =
-        currentDns.nameserver?.length > 0 || currentDns['default-nameserver']?.length > 0;
+        (currentDns.nameserver ?? []).length > 0 ||
+        (currentDns['default-nameserver'] ?? []).length > 0;
 
       if (!hasValidConfig) {
         // 使用默认配置
