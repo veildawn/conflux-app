@@ -10,7 +10,7 @@ set -euo pipefail
 # Determine script directory (works on bash/zsh/Git Bash)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-TARGET_DIR="${MIHOMO_TARGET_DIR:-$ROOT_DIR/src-tauri/resources}"
+TARGET_DIR="${MIHOMO_TARGET_DIR:-$ROOT_DIR/src-tauri/binaries}"
 REPO="${MIHOMO_REPO:-MetaCubeX/mihomo}"
 VERSION="${MIHOMO_VERSION:-latest}"
 PYTHON_BIN="${PYTHON_BIN:-}"
@@ -97,7 +97,7 @@ download_and_extract() {
   local asset_pattern="$1"
   local target_name="$2"
   local archive_type="$3"
-  
+
   local url
   local tmp_json_path
   tmp_json_path="$(python_path "$tmp_json")"
@@ -115,13 +115,13 @@ for asset in data.get('assets', []):
     echo "Warning: Asset '$asset_pattern' not found in release, skipping..." >&2
     return 0
   fi
-  
+
   local archive_path="$work_dir/$asset_pattern"
   local target_path="$TARGET_DIR/$target_name"
-  
+
   echo "Downloading $asset_pattern..."
   curl -fL --retry 3 --retry-delay 1 -o "$archive_path" "$url"
-  
+
   case "$archive_type" in
     gz)
       echo "  Extracting gzip archive..."
@@ -131,7 +131,7 @@ for asset in data.get('assets', []):
       echo "  Extracting zip archive..."
       local extract_dir="$work_dir/extracted_$$"
       mkdir -p "$extract_dir"
-      
+
       # Use unzip or 7z depending on availability
       if command -v unzip >/dev/null 2>&1; then
         unzip -q -o "$archive_path" -d "$extract_dir"
@@ -141,14 +141,14 @@ for asset in data.get('assets', []):
         echo "Error: Neither unzip nor 7z found for extracting zip files" >&2
         return 1
       fi
-      
+
       # Find the executable
       local extracted_file
       extracted_file=$(find "$extract_dir" -type f -name "*.exe" 2>/dev/null | head -1)
       if [[ -z "$extracted_file" ]]; then
         extracted_file=$(find "$extract_dir" -type f ! -name "*.txt" ! -name "*.md" 2>/dev/null | head -1)
       fi
-      
+
       if [[ -n "$extracted_file" ]]; then
         cp "$extracted_file" "$target_path"
       else
@@ -158,12 +158,12 @@ for asset in data.get('assets', []):
       rm -rf "$extract_dir"
       ;;
   esac
-  
+
   # Set executable permission for non-Windows binaries
   if [[ "$target_name" != *.exe ]]; then
     chmod 755 "$target_path" 2>/dev/null || true
   fi
-  
+
   echo "  -> $target_path ($(du -h "$target_path" 2>/dev/null | cut -f1 || echo "size unknown"))"
 }
 
@@ -177,19 +177,19 @@ echo "================================================"
 
 # Download based on MIHOMO_PLATFORM or all platforms
 if [[ -z "$MIHOMO_PLATFORM" || "$MIHOMO_PLATFORM" == "windows-amd64" ]]; then
-  download_and_extract "mihomo-windows-amd64-${release_tag}.zip" "mihomo-windows-amd64.exe" "zip"
+  download_and_extract "mihomo-windows-amd64-${release_tag}.zip" "mihomo-x86_64-pc-windows-msvc.exe" "zip"
 fi
 
 if [[ -z "$MIHOMO_PLATFORM" || "$MIHOMO_PLATFORM" == "darwin-arm64" ]]; then
-  download_and_extract "mihomo-darwin-arm64-${release_tag}.gz" "mihomo-darwin-arm64" "gz"
+  download_and_extract "mihomo-darwin-arm64-${release_tag}.gz" "mihomo-aarch64-apple-darwin" "gz"
 fi
 
 if [[ -z "$MIHOMO_PLATFORM" || "$MIHOMO_PLATFORM" == "darwin-amd64" ]]; then
-  download_and_extract "mihomo-darwin-amd64-${release_tag}.gz" "mihomo-darwin-amd64" "gz"
+  download_and_extract "mihomo-darwin-amd64-${release_tag}.gz" "mihomo-x86_64-apple-darwin" "gz"
 fi
 
 if [[ -z "$MIHOMO_PLATFORM" || "$MIHOMO_PLATFORM" == "linux-amd64" ]]; then
-  download_and_extract "mihomo-linux-amd64-${release_tag}.gz" "mihomo-linux-amd64" "gz"
+  download_and_extract "mihomo-linux-amd64-${release_tag}.gz" "mihomo-x86_64-unknown-linux-gnu" "gz"
 fi
 
 echo ""

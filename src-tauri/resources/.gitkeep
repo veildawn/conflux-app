@@ -1,13 +1,3 @@
 # Placeholder for resource files
-# MiHomo binaries should be placed here:
-# - mihomo-windows-amd64.exe (Windows)
-# - mihomo-darwin-arm64 (macOS Apple Silicon)
-# - mihomo-darwin-amd64 (macOS Intel)
-# - mihomo-linux-amd64 (Linux)
-#
-# Download from: https://github.com/MetaCubeX/mihomo/releases
-
-
-
-
+# This directory contains bundled resources like Sub-Store
 

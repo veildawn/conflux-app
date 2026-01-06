@@ -25,7 +25,14 @@
     "core:window:allow-create",
     "core:webview:allow-create-webview-window",
     "shell:allow-open",
-    "shell:allow-execute",
+    "shell:allow-kill",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        { "name": "binaries/mihomo", "sidecar": true },
+        { "name": "binaries/node", "sidecar": true }
+      ]
+    },
     "dialog:default"
   ]
 }
