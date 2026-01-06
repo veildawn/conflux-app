@@ -68,3 +68,4 @@ pub async fn get_system_proxy_status() -> Result<bool, String> {
     let enabled = *state.system_proxy_enabled.lock().await;
     Ok(enabled)
 }
+

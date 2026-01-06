@@ -128,3 +128,4 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     log::info!("App state initialized");
     Ok(state)
 }
+

@@ -44,8 +44,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         settings.ruleDatabases = DEFAULT_RULE_DATABASES;
       } else {
         // 确保所有默认数据库都在，如果有新的默认数据库加入，这里可以合并
-        const currentIds = new Set(settings.ruleDatabases.map(r => r.id));
-        const missingDatabases = DEFAULT_RULE_DATABASES.filter(r => !currentIds.has(r.id));
+        const currentIds = new Set(settings.ruleDatabases.map((r) => r.id));
+        const missingDatabases = DEFAULT_RULE_DATABASES.filter((r) => !currentIds.has(r.id));
         if (missingDatabases.length > 0) {
           settings.ruleDatabases = [...settings.ruleDatabases, ...missingDatabases];
         }
@@ -64,7 +64,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateSettings: async (newSettings: Partial<AppSettings>) => {
     const currentSettings = get().settings;
     const mergedSettings = { ...currentSettings, ...newSettings };
-    
+
     try {
       await ipc.saveAppSettings(mergedSettings);
       set({ settings: mergedSettings });
@@ -87,7 +87,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   updateRuleDatabase: async (id: string, updates: Partial<RuleDatabaseItem>) => {
     const { settings, updateSettings } = get();
-    const newDatabases = settings.ruleDatabases.map(db => 
+    const newDatabases = settings.ruleDatabases.map((db) =>
       db.id === id ? { ...db, ...updates } : db
     );
     await updateSettings({ ruleDatabases: newDatabases });
@@ -97,21 +97,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   checkRuleDatabaseUpdates: async () => {
     const { settings, ruleDatabaseUpdateChecked } = get();
     const databases = settings.ruleDatabases || [];
-    
+
     // 如果已经检查过或没有数据库，跳过
     if (ruleDatabaseUpdateChecked || databases.length === 0) {
       return;
     }
-    
+
     // 设置所有数据库为检查中状态
     const initialStatus: Record<string, RuleDatabaseUpdateStatus> = {};
-    databases.forEach(db => {
+    databases.forEach((db) => {
       initialStatus[db.id] = { hasUpdate: false, checking: true };
     });
     set({ ruleDatabaseUpdateStatus: initialStatus });
-    
+
     try {
-      const requests = databases.map(db => ({
+      const requests = databases.map((db) => ({
         url: db.url,
         currentEtag: db.etag,
         currentModified: db.remoteModified,
@@ -119,9 +119,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         githubRepo: db.githubRepo,
         assetName: db.assetName,
       }));
-      
+
       const results = await ipc.checkResourceUpdates(requests);
-      
+
       const newStatus: Record<string, RuleDatabaseUpdateStatus> = {};
       results.forEach((result, index) => {
         const db = databases[index];
@@ -131,23 +131,23 @@ export const useAppStore = create<AppState>((set, get) => ({
           error: result.error,
         };
       });
-      
-      set({ 
+
+      set({
         ruleDatabaseUpdateStatus: newStatus,
         ruleDatabaseUpdateChecked: true,
       });
-      
-      const updateCount = results.filter(r => r.hasUpdate && !r.error).length;
+
+      const updateCount = results.filter((r) => r.hasUpdate && !r.error).length;
       if (updateCount > 0) {
         console.log(`[RuleDatabase] ${updateCount} 个数据库有新版本可用`);
       }
     } catch (error) {
       console.error('Failed to check rule database updates:', error);
       const errorStatus: Record<string, RuleDatabaseUpdateStatus> = {};
-      databases.forEach(db => {
+      databases.forEach((db) => {
         errorStatus[db.id] = { hasUpdate: false, checking: false, error: '检查失败' };
       });
-      set({ 
+      set({
         ruleDatabaseUpdateStatus: errorStatus,
         ruleDatabaseUpdateChecked: true,
       });
@@ -156,11 +156,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // 更新单个规则数据库的更新状态
   setRuleDatabaseUpdateStatus: (id: string, status: RuleDatabaseUpdateStatus) => {
-    set(state => ({
+    set((state) => ({
       ruleDatabaseUpdateStatus: {
         ...state.ruleDatabaseUpdateStatus,
         [id]: status,
-      }
+      },
     }));
   },
 }));

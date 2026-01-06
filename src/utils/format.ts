@@ -76,7 +76,3 @@ export function formatDuration(ms: number): string {
   }
   return `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m`;
 }
-
-
-
-
