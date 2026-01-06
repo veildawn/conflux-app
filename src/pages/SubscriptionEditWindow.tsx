@@ -1,21 +1,32 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { emit } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
-import { Loader2, Globe, FileText, File, CheckCircle2 } from 'lucide-react';
+import {
+  Loader2,
+  Globe,
+  FileText,
+  File,
+  CheckCircle2,
+  ChevronRight,
+  ChevronLeft,
+  Save,
+  Search,
+  LayoutGrid,
+  AlertCircle,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/useToast';
 import { cn } from '@/utils/cn';
 import ipc from '@/services/ipc';
 import type { ProfileMetadata, ProfileType } from '@/types/config';
 
-// 拖拽忽略选择器，与其它窗口保持一致
+// 拖拽忽略选择器
 const dragIgnoreSelector = [
   '[data-no-drag]',
   '.no-drag',
@@ -36,23 +47,30 @@ const dragIgnoreSelector = [
   '.cursor-pointer',
 ].join(', ');
 
-export default function ProfileEditWindow() {
+const STEP_METADATA = {
+  type: { title: '选择类型', description: '选择配置文件的来源方式' },
+  config: { title: '配置详情', description: '填写订阅链接或文件路径' },
+};
+
+export default function SubscriptionEditWindow() {
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('id');
   const [loading, setLoading] = useState(!!editId);
   const { toast } = useToast();
 
-  // 窗口状态
-  const [activeTab, setActiveTab] = useState<ProfileType>('remote');
-  const [submitting, setSubmitting] = useState(false);
-  const [originalProfile, setOriginalProfile] = useState<ProfileMetadata | null>(null);
+  // Navigation State
+  const [step, setStep] = useState<'type' | 'config'>('type');
+  const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
 
-  // 表单状态
+  // Form State
+  const [activeTab, setActiveTab] = useState<ProfileType>('remote');
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [filePath, setFilePath] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [originalProfile, setOriginalProfile] = useState<ProfileMetadata | null>(null);
 
-  // Sub-Store 相关状态
+  // Sub-Store State
   const [urlSource, setUrlSource] = useState<'manual' | 'substore'>('manual');
   const [substoreSubs, setSubstoreSubs] = useState<
     { name: string; displayName?: string; icon?: string; url?: string }[]
@@ -63,8 +81,9 @@ export default function ProfileEditWindow() {
     running: boolean;
     api_url: string;
   } | null>(null);
+  const [subStoreSearch, setSubStoreSearch] = useState('');
 
-  // 初始化加载
+  // Initialization
   useEffect(() => {
     const fetchInitialData = async () => {
       if (!editId) {
@@ -80,6 +99,7 @@ export default function ProfileEditWindow() {
           setOriginalProfile(profile);
           setName(profile.name);
           setActiveTab(profile.profileType);
+          setStep('config'); // Skip type selection for editing
 
           if (profile.profileType === 'remote') {
             setUrl(profile.url || '');
@@ -97,16 +117,14 @@ export default function ProfileEditWindow() {
     fetchInitialData();
   }, [editId, toast]);
 
-  // 加载 Sub-Store 数据
+  // Load Sub-Store Data
   const loadSubStoreSubs = useCallback(async () => {
     setLoadingSubs(true);
     try {
       const status = await ipc.getSubStoreStatus();
       setSubstoreStatus(status);
 
-      if (!status.running) {
-        return;
-      }
+      if (!status.running) return;
 
       const subs = await ipc.getSubStoreSubs();
       setSubstoreSubs(subs);
@@ -117,14 +135,12 @@ export default function ProfileEditWindow() {
     }
   }, []);
 
-  // 自动加载 Sub-Store
   useEffect(() => {
     if (urlSource === 'substore' && activeTab === 'remote' && !editId) {
       loadSubStoreSubs();
     }
   }, [urlSource, activeTab, editId, loadSubStoreSubs]);
 
-  // 生成 Sub-Store URL
   useEffect(() => {
     if (urlSource === 'substore' && selectedSub && substoreStatus) {
       const generatedUrl = `${substoreStatus.api_url}/download/${encodeURIComponent(selectedSub)}?target=ClashMeta`;
@@ -137,34 +153,25 @@ export default function ProfileEditWindow() {
       const selected = await open({
         title: '选择配置文件',
         multiple: false,
-        filters: [
-          {
-            name: '配置文件',
-            extensions: ['yaml', 'yml', 'json', 'conf'],
-          },
-        ],
+        filters: [{ name: '配置文件', extensions: ['yaml', 'yml', 'json', 'conf'] }],
       });
-
-      if (selected) {
-        setFilePath(selected as string);
-      }
+      if (selected) setFilePath(selected as string);
     } catch (err) {
       console.error('Failed to open dialog:', err);
     }
   };
 
   const handleSubmit = async () => {
+    if (!canSave) return;
     setSubmitting(true);
     try {
       if (editId && originalProfile) {
-        // 编辑模式：目前只支持重命名
         const newName = name || originalProfile.name;
         if (newName !== originalProfile.name) {
           await ipc.renameProfile(editId, newName);
           toast({ title: '保存成功', description: '配置已更新' });
         }
       } else {
-        // 新增模式
         let profile: ProfileMetadata;
         const profileName =
           name ||
@@ -181,7 +188,6 @@ export default function ProfileEditWindow() {
         } else {
           profile = await ipc.createBlankProfile(profileName);
         }
-
         toast({ title: '创建成功', description: `配置 "${profile.name}" 已添加` });
       }
 
@@ -206,11 +212,29 @@ export default function ProfileEditWindow() {
     await getCurrentWindow().close();
   };
 
-  const canSave = () => {
+  const canSave = useMemo(() => {
     if (editId) return !!name;
     if (activeTab === 'remote') return !!url;
     if (activeTab === 'local') return !!filePath;
     return true;
+  }, [editId, name, activeTab, url, filePath]);
+
+  const filteredSubStoreSubs = useMemo(() => {
+    return substoreSubs.filter(
+      (sub) =>
+        (sub.name || '').toLowerCase().includes(subStoreSearch.toLowerCase()) ||
+        (sub.displayName || '').toLowerCase().includes(subStoreSearch.toLowerCase())
+    );
+  }, [substoreSubs, subStoreSearch]);
+
+  const nextStep = () => {
+    setDirection('forward');
+    setStep('config');
+  };
+
+  const prevStep = () => {
+    setDirection('backward');
+    setStep('type');
   };
 
   if (loading) {
@@ -223,290 +247,430 @@ export default function ProfileEditWindow() {
 
   return (
     <div
-      className="relative h-screen w-screen overflow-hidden rounded-xl border border-black/8 bg-[radial-gradient(circle_at_10%_20%,rgba(200,255,200,0.4)_0%,transparent_40%),radial-gradient(circle_at_90%_80%,rgba(180,220,255,0.6)_0%,transparent_40%),radial-gradient(circle_at_50%_50%,#f8f8fb_0%,#eef0f7_100%)] text-neutral-900"
+      className="relative h-screen w-screen overflow-hidden rounded-xl border border-black/5 bg-[radial-gradient(circle_at_10%_20%,rgba(230,240,255,0.7)_0%,transparent_40%),radial-gradient(circle_at_90%_80%,rgba(240,230,255,0.7)_0%,transparent_40%),radial-gradient(circle_at_50%_50%,#f8fafc_0%,#f1f5f9_100%)] text-neutral-900"
       onMouseDown={handleMouseDown}
     >
       {/* Background Blobs */}
       <div className="absolute inset-0 pointer-events-none rounded-xl overflow-hidden">
-        <div className="absolute left-0 top-32 h-64 w-64 rounded-full bg-emerald-100/30 blur-3xl" />
-        <div className="absolute right-10 top-1/2 h-72 w-72 -translate-y-1/2 rounded-full bg-blue-100/30 blur-3xl" />
+        <div className="absolute left-[-10%] top-[-10%] h-[50%] w-[50%] rounded-full bg-blue-100/40 blur-3xl" />
+        <div className="absolute right-[-10%] bottom-[-10%] h-[50%] w-[50%] rounded-full bg-indigo-100/40 blur-3xl" />
       </div>
 
-      <div className="relative h-full w-full flex flex-col p-8">
-        {/* Header */}
-        <div className="flex flex-col gap-2 mb-8">
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
-            {editId ? '编辑配置' : '添加配置'}
-          </h1>
-          <p className="text-sm text-neutral-500">
-            {editId ? '修改配置基本信息' : '选择配置来源：远程订阅、本地文件或空白配置'}
-          </p>
+      <div className="relative h-full w-full grid grid-cols-[240px_1fr]">
+        {/* Sidebar */}
+        <div className="flex flex-col bg-white/40 px-6 pt-10 pb-6 border-r border-black/5 backdrop-blur-3xl">
+          <div className="flex flex-col gap-2">
+            <div
+              className={cn(
+                'relative flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-all cursor-pointer',
+                step === 'type'
+                  ? 'bg-white/80 text-neutral-900 shadow-sm'
+                  : 'text-neutral-500 hover:bg-white/40'
+              )}
+              onClick={() => !editId && setStep('type')}
+            >
+              <div
+                className={cn(
+                  'flex h-6 w-6 items-center justify-center rounded-full border transition-colors',
+                  step === 'type'
+                    ? 'bg-blue-600 text-white border-transparent'
+                    : step === 'config'
+                      ? 'bg-emerald-500 text-white border-transparent'
+                      : 'border-black/10 text-neutral-400'
+                )}
+              >
+                {step === 'config' ? (
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                ) : (
+                  <span className="text-[10px]">1</span>
+                )}
+              </div>
+              <span>选择类型</span>
+              {step === 'type' && (
+                <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r bg-blue-500 shadow-sm" />
+              )}
+            </div>
+
+            <div
+              className={cn(
+                'relative flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-all',
+                step === 'config' ? 'bg-white/80 text-neutral-900 shadow-sm' : 'text-neutral-500'
+              )}
+            >
+              <div
+                className={cn(
+                  'flex h-6 w-6 items-center justify-center rounded-full border transition-colors',
+                  step === 'config'
+                    ? 'bg-blue-600 text-white border-transparent'
+                    : 'border-black/10 text-neutral-400'
+                )}
+              >
+                <span className="text-[10px]">2</span>
+              </div>
+              <span>配置详情</span>
+              {step === 'config' && (
+                <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r bg-blue-500 shadow-sm" />
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-1 -mx-1">
-          <Tabs
-            value={activeTab}
-            onValueChange={(v) => setActiveTab(v as ProfileType)}
-            className="w-full"
-          >
-            {!editId && (
-              <TabsList className="grid w-full grid-cols-3 mb-6 bg-white/40 border border-white/60 rounded-2xl p-1 h-12 shadow-sm">
-                <TabsTrigger
-                  value="remote"
-                  className="rounded-2xl gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600 transition-all data-[state=active]:border data-[state=active]:border-transparent bg-transparent border-transparent hover:bg-white/20"
-                >
-                  <Globe className="w-4 h-4" />
-                  远程订阅
-                </TabsTrigger>
-                <TabsTrigger
-                  value="local"
-                  className="rounded-2xl gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-orange-600 transition-all data-[state=active]:border data-[state=active]:border-transparent bg-transparent border-transparent hover:bg-white/20"
-                >
-                  <FileText className="w-4 h-4" />
-                  本地文件
-                </TabsTrigger>
-                <TabsTrigger
-                  value="blank"
-                  className="rounded-2xl gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-600 transition-all data-[state=active]:border data-[state=active]:border-transparent bg-transparent border-transparent hover:bg-white/20"
-                >
-                  <File className="w-4 h-4" />
-                  空白配置
-                </TabsTrigger>
-              </TabsList>
-            )}
-
-            <div className="space-y-6 bg-white/40 border border-white/60 rounded-2xl p-6 backdrop-blur-sm shadow-sm">
-              <div className="space-y-3">
-                <Label
-                  htmlFor="name"
-                  className="text-xs font-bold uppercase tracking-widest text-neutral-500"
-                >
-                  名称 {!editId && '(可选)'}
-                </Label>
-                <Input
-                  id="name"
-                  placeholder="例如：公司策略"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="h-11 rounded-xl bg-white/60 border-white/80 shadow-inner focus:ring-4 focus:ring-blue-500/10 transition-all"
-                />
+        <div className="relative flex flex-col overflow-hidden bg-white/20 backdrop-blur-2xl">
+          {/* Header */}
+          <div className="px-10 pt-10 pb-6 shrink-0">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-10 w-10 rounded-2xl bg-white shadow-sm flex items-center justify-center border border-white">
+                {step === 'type' ? (
+                  <LayoutGrid className="h-5 w-5 text-blue-600" />
+                ) : (
+                  <FileText className="h-5 w-5 text-blue-600" />
+                )}
               </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
+                  {STEP_METADATA[step].title}
+                </h1>
+                <p className="text-sm text-neutral-500">{STEP_METADATA[step].description}</p>
+              </div>
+            </div>
+          </div>
 
-              {!editId && (
-                <>
-                  <TabsContent value="remote" className="space-y-6 mt-0">
-                    <div className="space-y-3">
-                      <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500">
-                        订阅来源
-                      </Label>
-                      <div className="flex gap-6">
-                        <label className="flex items-center gap-2 cursor-pointer group">
-                          <div
-                            className={cn(
-                              'w-4 h-4 rounded-full border flex items-center justify-center transition-colors',
-                              urlSource === 'manual'
-                                ? 'border-blue-600 bg-blue-600'
-                                : 'border-gray-400 bg-transparent group-hover:border-blue-400'
-                            )}
-                          >
-                            {urlSource === 'manual' && (
-                              <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                            )}
-                          </div>
-                          <input
-                            type="radio"
-                            name="urlSource"
-                            value="manual"
-                            checked={urlSource === 'manual'}
-                            onChange={(e) => setUrlSource(e.target.value as 'manual' | 'substore')}
-                            className="hidden"
-                          />
-                          <span className="text-sm font-medium text-neutral-700">直接输入 URL</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer group">
-                          <div
-                            className={cn(
-                              'w-4 h-4 rounded-full border flex items-center justify-center transition-colors',
-                              urlSource === 'substore'
-                                ? 'border-blue-600 bg-blue-600'
-                                : 'border-gray-400 bg-transparent group-hover:border-blue-400'
-                            )}
-                          >
-                            {urlSource === 'substore' && (
-                              <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                            )}
-                          </div>
-                          <input
-                            type="radio"
-                            name="urlSource"
-                            value="substore"
-                            checked={urlSource === 'substore'}
-                            onChange={(e) => setUrlSource(e.target.value as 'manual' | 'substore')}
-                            className="hidden"
-                          />
-                          <span className="text-sm font-medium text-neutral-700">
-                            从 Sub-Store 选择
-                          </span>
-                        </label>
+          <div className="flex-1 overflow-y-auto px-10 pb-32 custom-scrollbar">
+            <div
+              className={cn(
+                'transition-all duration-500 ease-out',
+                direction === 'forward'
+                  ? 'animate-in fade-in slide-in-from-right-8'
+                  : 'animate-in fade-in slide-in-from-left-8'
+              )}
+            >
+              {step === 'type' && (
+                <div className="grid grid-cols-1 gap-4">
+                  <div
+                    className={cn(
+                      'group relative rounded-3xl border p-5 transition-all cursor-pointer overflow-hidden',
+                      activeTab === 'remote'
+                        ? 'bg-white/80 border-blue-500 shadow-md'
+                        : 'bg-white/40 border-transparent hover:bg-white/60'
+                    )}
+                    onClick={() => {
+                      setActiveTab('remote');
+                      nextStep();
+                    }}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div
+                        className={cn(
+                          'h-12 w-12 rounded-2xl flex items-center justify-center shadow-sm transition-colors',
+                          activeTab === 'remote'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white text-blue-600'
+                        )}
+                      >
+                        <Globe className="h-6 w-6" />
                       </div>
+                      <div className="flex-1">
+                        <h3 className="text-base font-bold text-neutral-900">远程订阅</h3>
+                        <p className="text-sm text-neutral-500 mt-0.5">
+                          从 URL 或 Sub-Store 导入配置
+                        </p>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-neutral-300 group-hover:text-blue-500 transition-colors" />
                     </div>
+                  </div>
 
-                    {urlSource === 'manual' ? (
-                      <div className="space-y-3">
-                        <Label
-                          htmlFor="url"
-                          className="text-xs font-bold uppercase tracking-widest text-neutral-500"
-                        >
-                          订阅链接
-                        </Label>
-                        <Input
-                          id="url"
-                          placeholder="https://example.com/subscribe/..."
-                          value={url}
-                          onChange={(e) => setUrl(e.target.value)}
-                          className="h-11 rounded-xl bg-white/60 border-white/80 shadow-inner font-mono text-sm"
-                        />
-                        <p className="text-xs text-neutral-500">支持 MiHomo/Clash 格式的订阅链接</p>
+                  <div
+                    className={cn(
+                      'group relative rounded-3xl border p-5 transition-all cursor-pointer overflow-hidden',
+                      activeTab === 'local'
+                        ? 'bg-white/80 border-orange-500 shadow-md'
+                        : 'bg-white/40 border-transparent hover:bg-white/60'
+                    )}
+                    onClick={() => {
+                      setActiveTab('local');
+                      nextStep();
+                    }}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div
+                        className={cn(
+                          'h-12 w-12 rounded-2xl flex items-center justify-center shadow-sm transition-colors',
+                          activeTab === 'local'
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-white text-orange-500'
+                        )}
+                      >
+                        <FileText className="h-6 w-6" />
                       </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {loadingSubs ? (
-                          <div className="flex items-center justify-center py-8">
-                            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                          </div>
-                        ) : substoreSubs.length === 0 ? (
-                          <div className="p-4 bg-amber-50/50 border border-amber-200/60 rounded-xl">
-                            <p className="text-sm text-amber-800">
-                              未找到 Sub-Store 订阅。请先在 Sub-Store 页面添加订阅。
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="space-y-3">
-                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500">
-                              选择订阅
-                            </Label>
-                            <div className="grid gap-2 max-h-[200px] overflow-y-auto p-1 custom-scrollbar">
-                              {substoreSubs.map((sub) => (
-                                <label
-                                  key={sub.name}
-                                  className={cn(
-                                    'flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer',
-                                    selectedSub === sub.name
-                                      ? 'border-blue-500 bg-blue-50/50 shadow-sm'
-                                      : 'border-transparent bg-white/40 hover:bg-white/60'
-                                  )}
-                                >
-                                  <input
-                                    type="radio"
-                                    name="sub"
-                                    value={sub.name}
-                                    checked={selectedSub === sub.name}
-                                    onChange={(e) => setSelectedSub(e.target.value)}
-                                    className="hidden"
-                                  />
+                      <div className="flex-1">
+                        <h3 className="text-base font-bold text-neutral-900">本地文件</h3>
+                        <p className="text-sm text-neutral-500 mt-0.5">
+                          从本地文件系统导入配置文件
+                        </p>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-neutral-300 group-hover:text-orange-500 transition-colors" />
+                    </div>
+                  </div>
+
+                  <div
+                    className={cn(
+                      'group relative rounded-3xl border p-5 transition-all cursor-pointer overflow-hidden',
+                      activeTab === 'blank'
+                        ? 'bg-white/80 border-emerald-500 shadow-md'
+                        : 'bg-white/40 border-transparent hover:bg-white/60'
+                    )}
+                    onClick={() => {
+                      setActiveTab('blank');
+                      nextStep();
+                    }}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div
+                        className={cn(
+                          'h-12 w-12 rounded-2xl flex items-center justify-center shadow-sm transition-colors',
+                          activeTab === 'blank'
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-white text-emerald-500'
+                        )}
+                      >
+                        <File className="h-6 w-6" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-base font-bold text-neutral-900">空白配置</h3>
+                        <p className="text-sm text-neutral-500 mt-0.5">
+                          创建一个空的配置，稍后手动添加
+                        </p>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-neutral-300 group-hover:text-emerald-500 transition-colors" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {step === 'config' && (
+                <div className="space-y-6">
+                  {/* Common Name Input */}
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="name"
+                      className="text-xs font-bold uppercase tracking-widest text-neutral-400 ml-1"
+                    >
+                      名称
+                    </Label>
+                    <Input
+                      id="name"
+                      placeholder="例如：My Profile"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="h-12 rounded-2xl bg-white/60 border-white/80 shadow-inner focus:ring-4 focus:ring-blue-500/10 transition-all font-medium"
+                      autoFocus
+                    />
+                  </div>
+
+                  {/* Remote Configuration */}
+                  {activeTab === 'remote' && (
+                    <div className="space-y-6">
+                      <div className="p-1 bg-white/40 border border-white/60 rounded-2xl flex p-1.5 gap-1">
+                        <button
+                          onClick={() => setUrlSource('manual')}
+                          className={cn(
+                            'flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all',
+                            urlSource === 'manual'
+                              ? 'bg-white shadow-sm text-blue-600'
+                              : 'text-neutral-500 hover:bg-white/50'
+                          )}
+                        >
+                          手动输入链接
+                        </button>
+                        <button
+                          onClick={() => setUrlSource('substore')}
+                          className={cn(
+                            'flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all',
+                            urlSource === 'substore'
+                              ? 'bg-white shadow-sm text-blue-600'
+                              : 'text-neutral-500 hover:bg-white/50'
+                          )}
+                        >
+                          Sub-Store 导入
+                        </button>
+                      </div>
+
+                      {urlSource === 'manual' ? (
+                        <div className="space-y-2 animate-in fade-in slide-in-from-top-4">
+                          <Label className="text-xs font-bold uppercase tracking-widest text-neutral-400 ml-1">
+                            订阅链接
+                          </Label>
+                          <Input
+                            placeholder="https://example.com/subscribe/..."
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value)}
+                            className="h-12 rounded-2xl bg-white/60 border-white/80 shadow-inner font-mono text-sm"
+                          />
+                        </div>
+                      ) : (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-top-4">
+                          {loadingSubs ? (
+                            <div className="flex flex-col items-center justify-center py-12 rounded-3xl border border-dashed border-neutral-200 bg-white/30">
+                              <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-2" />
+                              <span className="text-sm text-neutral-500">
+                                正在加载 Sub-Store 数据...
+                              </span>
+                            </div>
+                          ) : substoreSubs.length === 0 ? (
+                            <div className="p-6 bg-amber-50/50 border border-amber-200/50 rounded-3xl flex gap-3 items-start">
+                              <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                              <div>
+                                <h4 className="font-bold text-amber-900 text-sm">未发现订阅</h4>
+                                <p className="text-xs text-amber-700 mt-1">
+                                  请确保 Sub-Store 正在运行且已添加订阅。
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              <div className="relative">
+                                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                                <Input
+                                  placeholder="搜索订阅..."
+                                  value={subStoreSearch}
+                                  onChange={(e) => setSubStoreSearch(e.target.value)}
+                                  className="h-10 pl-9 rounded-xl bg-white/60 border-white/60"
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-3 max-h-[240px] overflow-y-auto p-1 custom-scrollbar">
+                                {filteredSubStoreSubs.map((sub) => (
                                   <div
+                                    key={sub.name}
+                                    onClick={() => setSelectedSub(sub.name)}
                                     className={cn(
-                                      'w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors',
+                                      'p-3 rounded-2xl border transition-all cursor-pointer flex items-center gap-3',
                                       selectedSub === sub.name
-                                        ? 'border-blue-500 bg-blue-500'
-                                        : 'border-gray-300'
+                                        ? 'bg-blue-50 border-blue-200 shadow-[0_0_0_2px_rgba(59,130,246,0.2)]'
+                                        : 'bg-white/40 border-transparent hover:bg-white/60 hover:shadow-sm'
                                     )}
                                   >
-                                    {selectedSub === sub.name && (
-                                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                                    )}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-medium text-sm text-neutral-900 truncate">
-                                      {sub.displayName || sub.name}
+                                    <div
+                                      className={cn(
+                                        'w-4 h-4 rounded-full border flex items-center justify-center transition-colors',
+                                        selectedSub === sub.name
+                                          ? 'border-blue-600 bg-blue-600'
+                                          : 'border-neutral-300'
+                                      )}
+                                    >
+                                      {selectedSub === sub.name && (
+                                        <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                      )}
                                     </div>
-                                    <div className="text-xs text-neutral-500 font-mono truncate">
-                                      {sub.name}
+                                    <div className="min-w-0">
+                                      <div className="font-semibold text-sm truncate text-neutral-900">
+                                        {sub.displayName || sub.name}
+                                      </div>
+                                      <div className="text-[10px] text-neutral-500 truncate">
+                                        {sub.name}
+                                      </div>
                                     </div>
                                   </div>
-                                </label>
-                              ))}
-                            </div>
-                            {selectedSub && url && (
-                              <div className="space-y-2 pt-2 animate-in fade-in slide-in-from-top-2">
-                                <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500">
-                                  生成的订阅链接
-                                </Label>
-                                <div className="p-3 bg-neutral-100/50 rounded-xl border border-neutral-200/50">
-                                  <p className="text-xs font-mono text-neutral-600 break-all">
-                                    {url}
-                                  </p>
-                                </div>
+                                ))}
                               </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </TabsContent>
+                              {url && (
+                                <div className="p-3 bg-neutral-100/50 rounded-xl border border-neutral-200/50 text-[10px] font-mono text-neutral-500 break-all">
+                                  {url}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                  <TabsContent value="local" className="space-y-6 mt-0">
-                    <div className="space-y-3">
-                      <Label
-                        htmlFor="filepath"
-                        className="text-xs font-bold uppercase tracking-widest text-neutral-500"
-                      >
+                  {/* Local Configuration */}
+                  {activeTab === 'local' && (
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-widest text-neutral-400 ml-1">
                         文件路径
                       </Label>
                       <div className="flex gap-2">
                         <Input
-                          id="filepath"
                           placeholder="/path/to/config.yaml"
                           value={filePath}
                           onChange={(e) => setFilePath(e.target.value)}
-                          className="h-11 rounded-xl bg-white/60 border-white/80 shadow-inner font-mono text-sm"
+                          className="h-12 rounded-2xl bg-white/60 border-white/80 shadow-inner font-mono text-sm"
                         />
                         <Button
-                          variant="outline"
-                          className="shrink-0 h-11 px-4 rounded-xl border-white/60 bg-white/40 hover:bg-white/60"
                           onClick={handleBrowse}
+                          variant="secondary"
+                          className="h-12 px-6 rounded-2xl border border-white/60 bg-white/40 hover:bg-white/60"
                         >
-                          浏览...
+                          浏览
                         </Button>
                       </div>
-                      <p className="text-xs text-neutral-500">
-                        导入后配置内容将独立保存，不会同步源文件的修改
-                      </p>
                     </div>
-                  </TabsContent>
+                  )}
 
-                  <TabsContent value="blank" className="space-y-6 mt-0">
-                    <div className="p-4 bg-emerald-50/50 border border-emerald-100/60 rounded-xl flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
-                      <p className="text-sm text-emerald-800 leading-relaxed">
-                        创建一个空白配置，您可以之后在策略页面手动添加策略，或在规则页面添加规则。适合需要从零开始构建个性化配置的高级用户。
-                      </p>
+                  {/* Blank Configuration */}
+                  {activeTab === 'blank' && (
+                    <div className="p-6 bg-emerald-50/50 border border-emerald-100/50 rounded-3xl flex gap-4 items-center">
+                      <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-emerald-900 text-sm">已准备就绪</h4>
+                        <p className="text-xs text-emerald-700 mt-1">
+                          创建后您可以手动添加策略组和规则。
+                        </p>
+                      </div>
                     </div>
-                  </TabsContent>
-                </>
+                  )}
+                </div>
               )}
             </div>
-          </Tabs>
-        </div>
+          </div>
 
-        {/* Footer */}
-        <div className="mt-auto pt-6 flex items-center justify-end gap-3 border-t border-black/5">
-          <Button
-            variant="ghost"
-            onClick={handleClose}
-            className="h-10 px-6 rounded-full hover:bg-black/5"
-          >
-            取消
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!canSave() || submitting}
-            className="h-10 px-8 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 gap-2"
-          >
-            {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {editId ? '保存修改' : '确认添加'}
-          </Button>
+          {/* Footer Actions */}
+          <div className="absolute bottom-6 left-10 right-10 z-50">
+            <div className="flex items-center justify-between">
+              <Button
+                variant="ghost"
+                onClick={handleClose}
+                className="h-12 px-6 rounded-full bg-white/40 text-neutral-700 border border-white/60 hover:bg-white/70"
+              >
+                取消
+              </Button>
+
+              <div className="flex gap-3">
+                {step === 'config' && !editId && (
+                  <Button
+                    variant="ghost"
+                    onClick={prevStep}
+                    className="h-12 px-6 rounded-2xl bg-white/40 hover:bg-white/60 border border-transparent hover:border-white/60 gap-2"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    上一步
+                  </Button>
+                )}
+
+                {step === 'type' ? null : ( // Step 1: No "Next" button needed, clicking card advances
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={!canSave || submitting}
+                    className={cn(
+                      'h-12 px-8 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 gap-2 font-semibold transition-all',
+                      submitting && 'opacity-80'
+                    )}
+                  >
+                    {submitting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    {editId ? '保存修改' : '确认添加'}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

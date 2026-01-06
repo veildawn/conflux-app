@@ -23,7 +23,7 @@ use tauri::{
     image::Image,
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::TrayIconBuilder,
-    AppHandle, Manager, RunEvent,
+    AppHandle, Emitter, Manager, RunEvent,
 };
 
 use crate::tray_menu::TrayMenuState;
@@ -79,7 +79,9 @@ fn copy_to_clipboard(text: &str) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     {
         let stdin = child.stdin.as_mut().ok_or("Failed to open pbcopy stdin")?;
-        stdin.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+        stdin
+            .write_all(text.as_bytes())
+            .map_err(|e| e.to_string())?;
     }
     child.wait().map_err(|e| e.to_string())?;
     Ok(())
@@ -101,7 +103,9 @@ fn copy_to_clipboard(text: &str) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     {
         let stdin = child.stdin.as_mut().ok_or("Failed to open clip stdin")?;
-        stdin.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+        stdin
+            .write_all(text.as_bytes())
+            .map_err(|e| e.to_string())?;
     }
     child.wait().map_err(|e| e.to_string())?;
     Ok(())
@@ -128,8 +132,13 @@ fn copy_to_clipboard(text: &str) -> Result<(), String> {
     };
 
     {
-        let stdin = child.stdin.as_mut().ok_or("Failed to open clipboard stdin")?;
-        stdin.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+        let stdin = child
+            .stdin
+            .as_mut()
+            .ok_or("Failed to open clipboard stdin")?;
+        stdin
+            .write_all(text.as_bytes())
+            .map_err(|e| e.to_string())?;
     }
     child.wait().map_err(|e| e.to_string())?;
     Ok(())
@@ -248,14 +257,8 @@ async fn run_tray_traffic_loop(app_handle: AppHandle) {
         interval.tick().await;
         let status = commands::proxy::get_proxy_status().await.ok();
         let running = status.as_ref().map(|s| s.running).unwrap_or(false);
-        let system_proxy = status
-            .as_ref()
-            .map(|s| s.system_proxy)
-            .unwrap_or(false);
-        let enhanced_mode = status
-            .as_ref()
-            .map(|s| s.enhanced_mode)
-            .unwrap_or(false);
+        let system_proxy = status.as_ref().map(|s| s.system_proxy).unwrap_or(false);
+        let enhanced_mode = status.as_ref().map(|s| s.enhanced_mode).unwrap_or(false);
         let mode = status
             .as_ref()
             .map(|s| match s.mode.as_str() {
@@ -323,14 +326,8 @@ async fn run_tray_traffic_loop(app_handle: AppHandle) {
         interval.tick().await;
         let status = commands::proxy::get_proxy_status().await.ok();
         let running = status.as_ref().map(|s| s.running).unwrap_or(false);
-        let system_proxy = status
-            .as_ref()
-            .map(|s| s.system_proxy)
-            .unwrap_or(false);
-        let enhanced_mode = status
-            .as_ref()
-            .map(|s| s.enhanced_mode)
-            .unwrap_or(false);
+        let system_proxy = status.as_ref().map(|s| s.system_proxy).unwrap_or(false);
+        let enhanced_mode = status.as_ref().map(|s| s.enhanced_mode).unwrap_or(false);
         let show_text = running && (system_proxy || enhanced_mode);
 
         if !show_text {
@@ -660,37 +657,118 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            if let RunEvent::Exit = event {
-                log::info!("Application is exiting, cleaning up...");
+            match event {
+                RunEvent::Resumed => {
+                    // 系统从休眠中唤醒，检查 mihomo 状态
+                    log::info!("System resumed from sleep, checking MiHomo status...");
 
-                // 清理子进程 - 使用同步方式，避免异步锁导致卡死
-                if let Some(app_state) = app_handle.try_state::<commands::AppState>() {
-                    // 清理 Sub-Store 进程
-                    log::info!("Stopping Sub-Store service...");
-                    if let Ok(manager) = app_state.substore_manager.try_lock() {
-                        manager.stop_sync();
-                        log::info!("Sub-Store stopped successfully");
-                    } else {
-                        log::warn!("Could not acquire Sub-Store lock, using pkill fallback");
-                        // 使用 pkill 作为后备方案
-                        #[cfg(unix)]
-                        {
-                            let _ = std::process::Command::new("pkill")
-                                .args(["-9", "-f", "run-substore.js"])
-                                .output();
+                    let app = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        // 等待一小段时间让系统网络恢复
+                        tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+
+                        if let Some(app_state) = app.try_state::<commands::AppState>() {
+                            // 检查 mihomo 进程是否在运行
+                            if !app_state.mihomo_manager.is_running().await {
+                                log::info!(
+                                    "MiHomo was not running before sleep, skipping recovery"
+                                );
+                                return;
+                            }
+
+                            // 先尝试健康检查，看 API 是否正常响应
+                            log::info!("Performing health check on MiHomo...");
+                            if app_state.mihomo_manager.check_health().await.is_ok() {
+                                log::info!(
+                                    "MiHomo is healthy after system resume, no action needed"
+                                );
+                                let _ = app.emit("system-resumed", ());
+                                return;
+                            }
+
+                            // API 无响应，尝试重新加载配置
+                            log::warn!(
+                                "MiHomo health check failed, attempting config reload..."
+                            );
+                            let config_path = app_state.config_manager.mihomo_config_path();
+                            if let Some(path_str) = config_path.to_str() {
+                                if app_state
+                                    .mihomo_api
+                                    .reload_configs(path_str, true)
+                                    .await
+                                    .is_ok()
+                                {
+                                    log::info!("Config reload successful after system resume");
+                                    if let Ok(status) =
+                                        commands::proxy::get_proxy_status().await
+                                    {
+                                        app.state::<TrayMenuState>().sync_from_status(&status);
+                                        let _ = app.emit("proxy-status-changed", &status);
+                                    }
+                                    let _ = app.emit("system-resumed", ());
+                                    return;
+                                }
+                            }
+
+                            // 重新加载失败，最后尝试重启进程
+                            log::warn!("Config reload failed, restarting MiHomo process...");
+                            match app_state.mihomo_manager.restart().await {
+                                Ok(_) => {
+                                    log::info!(
+                                        "MiHomo restarted successfully after system resume"
+                                    );
+                                    if let Ok(status) =
+                                        commands::proxy::get_proxy_status().await
+                                    {
+                                        app.state::<TrayMenuState>().sync_from_status(&status);
+                                        let _ = app.emit("proxy-status-changed", &status);
+                                    }
+                                    let _ = app.emit("system-resumed", ());
+                                }
+                                Err(e) => {
+                                    log::error!(
+                                        "Failed to restart MiHomo after system resume: {}",
+                                        e
+                                    );
+                                    let _ = app.emit("mihomo-restart-failed", e.to_string());
+                                }
+                            }
                         }
+                    });
+                }
+                RunEvent::Exit => {
+                    log::info!("Application is exiting, cleaning up...");
+
+                    // 清理子进程 - 使用同步方式，避免异步锁导致卡死
+                    if let Some(app_state) = app_handle.try_state::<commands::AppState>() {
+                        // 清理 Sub-Store 进程
+                        log::info!("Stopping Sub-Store service...");
+                        if let Ok(manager) = app_state.substore_manager.try_lock() {
+                            manager.stop_sync();
+                            log::info!("Sub-Store stopped successfully");
+                        } else {
+                            log::warn!("Could not acquire Sub-Store lock, using pkill fallback");
+                            // 使用 pkill 作为后备方案
+                            #[cfg(unix)]
+                            {
+                                let _ = std::process::Command::new("pkill")
+                                    .args(["-9", "-f", "run-substore.js"])
+                                    .output();
+                            }
+                        }
+
+                        // 清理 MiHomo 进程
+                        log::info!("Stopping MiHomo service...");
+                        app_state.mihomo_manager.stop_sync();
+                        log::info!("MiHomo stopped successfully");
+                    } else {
+                        // 如果没有 app_state，直接使用 cleanup 方法
+                        mihomo::MihomoManager::cleanup_stale_processes();
                     }
 
-                    // 清理 MiHomo 进程
-                    log::info!("Stopping MiHomo service...");
-                    app_state.mihomo_manager.stop_sync();
-                    log::info!("MiHomo stopped successfully");
-                } else {
-                    // 如果没有 app_state，直接使用 cleanup 方法
-                    mihomo::MihomoManager::cleanup_stale_processes();
+                    log::info!("Cleanup completed on exit");
                 }
-
-                log::info!("Cleanup completed on exit");
+                _ => {}
             }
         });
 }
