@@ -732,7 +732,7 @@ export default function Providers() {
           <p className="font-medium text-gray-600 dark:text-gray-300">
             暂无{activeTab === 'proxy' ? '代理' : '规则'}源
           </p>
-          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">click上方按钮添加新的资源</p>
+          <p className="text-sm mt-1 text-gray-500 dark:text-gray-400">点击上方按钮添加新的资源</p>
         </div>
       ) : activeTab === 'proxy' ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
