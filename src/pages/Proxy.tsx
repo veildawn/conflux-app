@@ -114,48 +114,30 @@ export default function Proxy() {
     }
   };
 
+  // 获取策略组（带模式过滤）
   useEffect(() => {
     if (status.running) {
-      fetchGroups();
+      fetchGroups(status.mode);
       loadProxyServers();
     }
-  }, [status.running, fetchGroups]);
-
-  // 根据模式过滤策略组
-  const filteredGroups = useMemo(() => {
-    if (!groups.length) return [];
-
-    // 直连模式：不显示策略组
-    if (status.mode === 'direct') {
-      return [];
-    }
-
-    // 全局模式：只显示 GLOBAL
-    if (status.mode === 'global') {
-      const globalGroup = groups.find((g) => g.name === 'GLOBAL');
-      return globalGroup ? [globalGroup] : [];
-    }
-
-    // 规则模式：显示除 GLOBAL 外的所有策略组
-    return groups.filter((g) => g.name !== 'GLOBAL');
-  }, [groups, status.mode]);
+  }, [status.running, status.mode, fetchGroups]);
 
   // 分类策略组
   const { mainGroup, strategyGroups } = useMemo(() => {
-    if (!filteredGroups.length) return { mainGroup: null, strategyGroups: [] };
+    if (!groups.length) return { mainGroup: null, strategyGroups: [] };
 
-    let main = filteredGroups.find((g) => ['Proxy', '节点选择', 'PROXY'].includes(g.name));
+    let main = groups.find((g) => ['Proxy', '节点选择', 'PROXY'].includes(g.name));
     if (!main) {
-      main = filteredGroups.find((g) => g.name === 'GLOBAL');
+      main = groups.find((g) => g.name === 'GLOBAL');
     }
     if (!main) {
-      main = filteredGroups.find((g) => g.type === 'Selector');
+      main = groups.find((g) => g.type === 'Selector');
     }
 
-    const strategies = filteredGroups.filter((g) => g.name !== main?.name);
+    const strategies = groups.filter((g) => g.name !== main?.name);
 
     return { mainGroup: main, strategyGroups: strategies };
-  }, [filteredGroups]);
+  }, [groups]);
 
   const groupCards = useMemo(() => {
     const list: ProxyGroup[] = [];
@@ -367,20 +349,20 @@ export default function Proxy() {
       );
     }
 
-    // 直连模式：显示友好提示
-    if (status.mode === 'direct') {
-      return (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400 border border-dashed border-gray-200 dark:border-zinc-800 rounded-[20px] bg-gray-50/50 dark:bg-zinc-900/50">
-          <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-4">
-            <Activity className="w-8 h-8 text-emerald-500 dark:text-emerald-400" />
-          </div>
-          <p className="font-semibold text-gray-600 dark:text-gray-300">直连模式</p>
-          <p className="text-sm mt-1">所有流量直接连接，不经过代理</p>
-        </div>
-      );
-    }
-
     if (groups.length === 0 && proxyServers.length === 0) {
+      // 直连模式：显示友好提示
+      if (status.mode === 'direct') {
+        return (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-400 border border-dashed border-gray-200 dark:border-zinc-800 rounded-[20px] bg-gray-50/50 dark:bg-zinc-900/50">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-4">
+              <Activity className="w-8 h-8 text-emerald-500 dark:text-emerald-400" />
+            </div>
+            <p className="font-semibold text-gray-600 dark:text-gray-300">直连模式</p>
+            <p className="text-sm mt-1">所有流量直接连接，不经过代理</p>
+          </div>
+        );
+      }
+
       return (
         <div className="flex flex-col items-center justify-center py-20 text-gray-400 border border-dashed border-gray-200 dark:border-zinc-800 rounded-[20px] bg-gray-50/50 dark:bg-zinc-900/50">
           <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center mb-4">

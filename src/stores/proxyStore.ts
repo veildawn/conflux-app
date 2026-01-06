@@ -34,7 +34,7 @@ interface ProxyState {
   stop: () => Promise<void>;
   restart: () => Promise<void>;
   switchMode: (mode: ProxyMode) => Promise<void>;
-  fetchGroups: () => Promise<void>;
+  fetchGroups: (mode?: string) => Promise<void>;
   selectProxy: (group: string, name: string) => Promise<void>;
   testDelay: (name: string) => Promise<number>;
   fetchTraffic: () => Promise<void>;
@@ -122,8 +122,8 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
     try {
       await ipc.stopProxy();
       await get().fetchStatus();
-      set({ 
-        groups: [], 
+      set({
+        groups: [],
         traffic: { up: 0, down: 0 },
         trafficHistory: [],
         connections: [],
@@ -168,9 +168,9 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
     }
   },
 
-  fetchGroups: async () => {
+  fetchGroups: async (mode?: string) => {
     try {
-      const groups = await ipc.getProxies();
+      const groups = await ipc.getProxies(mode);
       set({ groups, error: null });
     } catch (error) {
       console.error('Failed to fetch proxy groups:', error);
@@ -183,9 +183,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
       await ipc.selectProxy(group, name);
       // 更新本地状态
       set((state) => ({
-        groups: state.groups.map((g) =>
-          g.name === group ? { ...g, now: name } : g
-        ),
+        groups: state.groups.map((g) => (g.name === group ? { ...g, now: name } : g)),
       }));
     } catch (error) {
       console.error('Failed to select proxy:', error);
@@ -208,12 +206,12 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
     try {
       const traffic = await ipc.getTraffic();
       const now = Date.now();
-      
+
       set((state) => {
         // 添加到历史记录
         const newHistory = [
           ...state.trafficHistory,
-          { time: now, up: traffic.up, down: traffic.down }
+          { time: now, up: traffic.up, down: traffic.down },
         ];
         // 保留最近的记录点
         if (newHistory.length > MAX_TRAFFIC_HISTORY) {
@@ -230,14 +228,14 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
   fetchConnections: async () => {
     try {
       const response = await ipc.getConnections();
-      
+
       set({
         connections: response.connections || [],
         connectionStats: {
           totalConnections: response.connections ? response.connections.length : 0,
           downloadTotal: response.downloadTotal,
           uploadTotal: response.uploadTotal,
-        }
+        },
       });
     } catch (error) {
       console.debug('Failed to fetch connections:', error);
@@ -253,7 +251,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         connectionStats: {
           ...state.connectionStats,
           totalConnections: state.connectionStats.totalConnections - 1,
-        }
+        },
       }));
     } catch (error) {
       console.error('Failed to close connection:', error);
@@ -269,7 +267,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         connectionStats: {
           ...get().connectionStats,
           totalConnections: 0,
-        }
+        },
       });
     } catch (error) {
       console.error('Failed to close all connections:', error);
@@ -375,5 +373,5 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
     } finally {
       set({ loading: false });
     }
-  }
+  },
 }));
