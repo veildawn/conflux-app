@@ -128,15 +128,26 @@ pub struct DnsConfig {
     pub fake_ip_range: Option<String>,
 
     /// Fake IP 过滤模式: blacklist, whitelist
-    #[serde(rename = "fake-ip-filter-mode", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "fake-ip-filter-mode",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub fake_ip_filter_mode: Option<String>,
 
     /// Fake IP 过滤列表
-    #[serde(rename = "fake-ip-filter", default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        rename = "fake-ip-filter",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub fake_ip_filter: Vec<String>,
 
     /// 默认 DNS 服务器（用于解析 DNS 服务器域名）
-    #[serde(rename = "default-nameserver", default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        rename = "default-nameserver",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub default_nameserver: Vec<String>,
 
     /// 主 DNS 服务器
@@ -262,9 +273,7 @@ impl Default for MihomoConfig {
                 name: "PROXY".to_string(),
                 group_type: "select".to_string(),
                 proxies: vec!["DIRECT".to_string()],
-                use_providers: Vec::new(),
-                url: None,
-                interval: None,
+                ..Default::default()
             }],
             proxy_providers: std::collections::HashMap::new(),
             rule_providers: std::collections::HashMap::new(),
@@ -314,16 +323,21 @@ pub struct ProxyConfig {
     #[serde(default)]
     pub udp: bool,
 
-    #[serde(flatten, default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    #[serde(
+        flatten,
+        default,
+        skip_serializing_if = "std::collections::HashMap::is_empty"
+    )]
     pub extra: std::collections::HashMap<String, serde_yaml::Value>,
 }
 
 /// 代理组配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProxyGroupConfig {
     pub name: String,
     #[serde(rename = "type")]
     pub group_type: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub proxies: Vec<String>,
     #[serde(rename = "use", default, skip_serializing_if = "Vec::is_empty")]
     pub use_providers: Vec<String>,
@@ -333,6 +347,57 @@ pub struct ProxyGroupConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interval: Option<u32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lazy: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout: Option<u32>,
+
+    #[serde(rename = "max-failed-times", skip_serializing_if = "Option::is_none")]
+    pub max_failed_times: Option<u32>,
+
+    #[serde(rename = "disable-udp", skip_serializing_if = "Option::is_none")]
+    pub disable_udp: Option<bool>,
+
+    #[serde(rename = "include-all", skip_serializing_if = "Option::is_none")]
+    pub include_all: Option<bool>,
+
+    #[serde(
+        rename = "include-all-proxies",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub include_all_proxies: Option<bool>,
+
+    #[serde(
+        rename = "include-all-providers",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub include_all_providers: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filter: Option<String>,
+
+    #[serde(rename = "exclude-filter", skip_serializing_if = "Option::is_none")]
+    pub exclude_filter: Option<String>,
+
+    #[serde(rename = "exclude-type", skip_serializing_if = "Option::is_none")]
+    pub exclude_type: Option<String>,
+
+    #[serde(rename = "expected-status", skip_serializing_if = "Option::is_none")]
+    pub expected_status: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hidden: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strategy: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tolerance: Option<u32>,
 }
 
 /// 代理提供者配置

@@ -161,9 +161,7 @@ impl ProfileConfig {
                 name: "PROXY".to_string(),
                 group_type: "select".to_string(),
                 proxies: vec!["DIRECT".to_string()],
-                use_providers: Vec::new(),
-                url: None,
-                interval: None,
+                ..Default::default()
             }],
             proxy_providers: HashMap::new(),
             rule_providers: HashMap::new(),

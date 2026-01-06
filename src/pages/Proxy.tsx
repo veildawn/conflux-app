@@ -1,14 +1,14 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Server, 
-  Zap, 
-  RefreshCw, 
-  Globe, 
-  Shield, 
-  Activity, 
-  AlertCircle, 
-  ExternalLink 
+import {
+  Server,
+  Zap,
+  RefreshCw,
+  Globe,
+  Shield,
+  Activity,
+  AlertCircle,
+  ExternalLink,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/button';
@@ -56,17 +56,18 @@ const getGroupTypeLabel = (group: ProxyGroup) => {
 
 export default function Proxy() {
   const navigate = useNavigate();
-  const { status, groups, fetchGroups, selectProxy, testDelay, switchMode, loading } = useProxyStore(
-    useShallow((state) => ({
-      status: state.status,
-      groups: state.groups,
-      fetchGroups: state.fetchGroups,
-      selectProxy: state.selectProxy,
-      testDelay: state.testDelay,
-      switchMode: state.switchMode,
-      loading: state.loading,
-    }))
-  );
+  const { status, groups, fetchGroups, selectProxy, testDelay, switchMode, loading } =
+    useProxyStore(
+      useShallow((state) => ({
+        status: state.status,
+        groups: state.groups,
+        fetchGroups: state.fetchGroups,
+        selectProxy: state.selectProxy,
+        testDelay: state.testDelay,
+        switchMode: state.switchMode,
+        loading: state.loading,
+      }))
+    );
   const { toast } = useToast();
   const [testingPolicies, setTestingPolicies] = useState<Set<string>>(new Set());
   const [delays, setDelays] = useState<Record<string, number>>({});
@@ -120,22 +121,41 @@ export default function Proxy() {
     }
   }, [status.running, fetchGroups]);
 
+  // 根据模式过滤策略组
+  const filteredGroups = useMemo(() => {
+    if (!groups.length) return [];
+
+    // 直连模式：不显示策略组
+    if (status.mode === 'direct') {
+      return [];
+    }
+
+    // 全局模式：只显示 GLOBAL
+    if (status.mode === 'global') {
+      const globalGroup = groups.find((g) => g.name === 'GLOBAL');
+      return globalGroup ? [globalGroup] : [];
+    }
+
+    // 规则模式：显示除 GLOBAL 外的所有策略组
+    return groups.filter((g) => g.name !== 'GLOBAL');
+  }, [groups, status.mode]);
+
   // 分类策略组
   const { mainGroup, strategyGroups } = useMemo(() => {
-    if (!groups.length) return { mainGroup: null, strategyGroups: [] };
+    if (!filteredGroups.length) return { mainGroup: null, strategyGroups: [] };
 
-    let main = groups.find(g => ['Proxy', '节点选择', 'PROXY'].includes(g.name));
+    let main = filteredGroups.find((g) => ['Proxy', '节点选择', 'PROXY'].includes(g.name));
     if (!main) {
-      main = groups.find(g => g.name === 'GLOBAL');
+      main = filteredGroups.find((g) => g.name === 'GLOBAL');
     }
     if (!main) {
-      main = groups.find(g => g.type === 'Selector');
+      main = filteredGroups.find((g) => g.type === 'Selector');
     }
 
-    const strategies = groups.filter(g => g.name !== main?.name && g.name !== 'GLOBAL');
+    const strategies = filteredGroups.filter((g) => g.name !== main?.name);
 
     return { mainGroup: main, strategyGroups: strategies };
-  }, [groups]);
+  }, [filteredGroups]);
 
   const groupCards = useMemo(() => {
     const list: ProxyGroup[] = [];
@@ -327,7 +347,7 @@ export default function Proxy() {
       return (
         <div className="flex flex-col items-center justify-center py-20 text-gray-400 border border-dashed border-gray-200 dark:border-zinc-800 rounded-[20px] bg-gray-50/50 dark:bg-zinc-900/50">
           <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center mb-4">
-             <Server className="w-8 h-8 opacity-40" />
+            <Server className="w-8 h-8 opacity-40" />
           </div>
           <p className="font-semibold text-gray-600 dark:text-gray-300">服务未启动</p>
           <p className="text-sm mt-1">请先启动核心服务</p>
@@ -347,17 +367,30 @@ export default function Proxy() {
       );
     }
 
+    // 直连模式：显示友好提示
+    if (status.mode === 'direct') {
+      return (
+        <div className="flex flex-col items-center justify-center py-20 text-gray-400 border border-dashed border-gray-200 dark:border-zinc-800 rounded-[20px] bg-gray-50/50 dark:bg-zinc-900/50">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-4">
+            <Activity className="w-8 h-8 text-emerald-500 dark:text-emerald-400" />
+          </div>
+          <p className="font-semibold text-gray-600 dark:text-gray-300">直连模式</p>
+          <p className="text-sm mt-1">所有流量直接连接，不经过代理</p>
+        </div>
+      );
+    }
+
     if (groups.length === 0 && proxyServers.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center py-20 text-gray-400 border border-dashed border-gray-200 dark:border-zinc-800 rounded-[20px] bg-gray-50/50 dark:bg-zinc-900/50">
           <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center mb-4">
-             <Server className="w-8 h-8 opacity-40" />
+            <Server className="w-8 h-8 opacity-40" />
           </div>
           <p className="font-semibold text-gray-600 dark:text-gray-300">暂无代理</p>
           <p className="text-sm mt-1">当前订阅中没有可用的代理策略</p>
-          <Button 
-            variant="outline" 
-            onClick={() => navigate('/subscription')} 
+          <Button
+            variant="outline"
+            onClick={() => navigate('/subscription')}
             className="mt-6 rounded-full gap-2"
           >
             <ExternalLink className="w-4 h-4" />
@@ -370,7 +403,9 @@ export default function Proxy() {
     return (
       <div className="space-y-6">
         <div className="space-y-3">
-          <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 px-1 uppercase tracking-wider">策略组</h2>
+          <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 px-1 uppercase tracking-wider">
+            策略组
+          </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {groupCards.map((group) => renderGroupCard(group))}
           </div>
@@ -391,25 +426,25 @@ export default function Proxy() {
 
         {/* 模式切换 */}
         {status.running && (
-           <div className="bg-gray-100 dark:bg-zinc-800 p-1 rounded-full border border-gray-200 dark:border-zinc-700 inline-flex">
+          <div className="bg-gray-100 dark:bg-zinc-800 p-1 rounded-full border border-gray-200 dark:border-zinc-700 inline-flex">
             <Tabs value={status.mode} onValueChange={handleModeChange} className="w-full md:w-auto">
               <TabsList className="bg-transparent h-8 p-0 gap-1">
-                <TabsTrigger 
-                  value="rule" 
+                <TabsTrigger
+                  value="rule"
                   className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 rounded-full transition-all text-xs h-full"
                 >
                   <Shield className="w-3.5 h-3.5 mr-1.5" />
                   规则
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="global" 
+                <TabsTrigger
+                  value="global"
                   className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 rounded-full transition-all text-xs h-full"
                 >
                   <Globe className="w-3.5 h-3.5 mr-1.5" />
                   全局
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="direct" 
+                <TabsTrigger
+                  value="direct"
                   className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 rounded-full transition-all text-xs h-full"
                 >
                   <Activity className="w-3.5 h-3.5 mr-1.5" />
@@ -417,7 +452,7 @@ export default function Proxy() {
                 </TabsTrigger>
               </TabsList>
             </Tabs>
-           </div>
+          </div>
         )}
       </div>
 
