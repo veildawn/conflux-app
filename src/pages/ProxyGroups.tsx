@@ -148,7 +148,7 @@ export default function ProxyGroups() {
       .filter((group) => group.name !== name)
       .map((group) => ({
         ...group,
-        proxies: group.proxies.filter((proxy) => proxy !== name),
+        proxies: (group.proxies || []).filter((proxy) => proxy !== name),
       }));
 
     const newConfig: ProfileConfig = {
