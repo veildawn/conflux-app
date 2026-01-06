@@ -132,7 +132,7 @@ export interface ProxyGroupConfig {
 /**
  * 规则类型
  */
-export type RuleType = 
+export type RuleType =
   | 'DOMAIN'
   | 'DOMAIN-SUFFIX'
   | 'DOMAIN-KEYWORD'
@@ -151,10 +151,20 @@ export type RuleType =
 /**
  * 规则类型配置
  */
-export const RULE_TYPES: { value: RuleType; label: string; description: string; hasPayload: boolean }[] = [
+export const RULE_TYPES: {
+  value: RuleType;
+  label: string;
+  description: string;
+  hasPayload: boolean;
+}[] = [
   { value: 'DOMAIN', label: '域名', description: '完整域名匹配', hasPayload: true },
   { value: 'DOMAIN-SUFFIX', label: '域名后缀', description: '匹配域名后缀', hasPayload: true },
-  { value: 'DOMAIN-KEYWORD', label: '域名关键词', description: '匹配域名中的关键词', hasPayload: true },
+  {
+    value: 'DOMAIN-KEYWORD',
+    label: '域名关键词',
+    description: '匹配域名中的关键词',
+    hasPayload: true,
+  },
   { value: 'GEOIP', label: 'GeoIP', description: '根据 IP 地理位置匹配', hasPayload: true },
   { value: 'GEOSITE', label: 'GeoSite', description: '根据域名分类匹配', hasPayload: true },
   { value: 'IP-CIDR', label: 'IP-CIDR', description: '匹配 IPv4 CIDR', hasPayload: true },
@@ -176,17 +186,19 @@ export type PolicyType = 'DIRECT' | 'REJECT' | 'PROXY' | string;
 /**
  * 解析规则字符串
  */
-export function parseRule(ruleStr: string): { type: RuleType; payload: string; policy: string } | null {
+export function parseRule(
+  ruleStr: string
+): { type: RuleType; payload: string; policy: string } | null {
   const parts = ruleStr.split(',');
   if (parts.length < 2) return null;
-  
+
   const type = parts[0] as RuleType;
-  
+
   // MATCH 规则只有策略，没有 payload
   if (type === 'MATCH') {
     return { type, payload: '', policy: parts[1] };
   }
-  
+
   if (parts.length < 3) return null;
   return { type, payload: parts[1], policy: parts[2] };
 }

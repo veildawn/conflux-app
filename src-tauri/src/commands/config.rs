@@ -957,3 +957,4 @@ pub async fn apply_subscription(
         rules_count,
     })
 }
+
