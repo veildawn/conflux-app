@@ -21,13 +21,8 @@
   },
   "bundle": {
     "targets": ["dmg"],
-    "resources": [
-      "resources/mihomo-*",
-      "resources/sub-store"
-    ],
-    "externalBin": [
-      "binaries/node"
-    ],
+    "resources": ["resources/sub-store"],
+    "externalBin": ["binaries/node", "binaries/mihomo"],
     "macOS": {
       "minimumSystemVersion": "10.15",
       "frameworks": [],

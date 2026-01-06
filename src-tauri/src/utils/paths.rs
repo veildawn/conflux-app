@@ -49,22 +49,22 @@ pub fn get_app_settings_path() -> Result<PathBuf> {
 // MiHomo 二进制文件路径
 // ============================================================================
 
-/// 获取 MiHomo 二进制文件名（根据当前平台和架构）
+/// 获取 MiHomo 二进制文件名（根据当前平台和架构，使用 Tauri sidecar 命名规则）
 pub fn get_mihomo_binary_name() -> &'static str {
     #[cfg(target_os = "windows")]
     {
-        "mihomo-windows-amd64.exe"
+        "mihomo-x86_64-pc-windows-msvc.exe"
     }
 
     #[cfg(target_os = "macos")]
     {
         #[cfg(target_arch = "aarch64")]
         {
-            "mihomo-darwin-arm64"
+            "mihomo-aarch64-apple-darwin"
         }
         #[cfg(target_arch = "x86_64")]
         {
-            "mihomo-darwin-amd64"
+            "mihomo-x86_64-apple-darwin"
         }
         #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
         {
@@ -76,15 +76,15 @@ pub fn get_mihomo_binary_name() -> &'static str {
     {
         #[cfg(target_arch = "x86_64")]
         {
-            "mihomo-linux-amd64"
+            "mihomo-x86_64-unknown-linux-gnu"
         }
         #[cfg(target_arch = "aarch64")]
         {
-            "mihomo-linux-arm64"
+            "mihomo-aarch64-unknown-linux-gnu"
         }
         #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
         {
-            "mihomo-linux-amd64" // fallback
+            "mihomo-x86_64-unknown-linux-gnu" // fallback
         }
     }
 }
@@ -93,128 +93,44 @@ pub fn get_mihomo_binary_name() -> &'static str {
 ///
 /// 查找优先级：
 /// 1. 用户数据目录 - 支持用户手动更新 mihomo
-/// 2. 打包后的资源目录 - 根据平台计算
+/// 2. Sidecar 路径 - Tauri externalBin 打包后的位置
 /// 3. 开发环境路径 - 支持 `cargo run` 和 `pnpm tauri dev`
-///
-/// # 各平台打包后的目录结构
-///
-/// ## macOS (.app bundle)
-/// ```text
-/// Conflux.app/
-/// └── Contents/
-///     ├── MacOS/
-///     │   └── Conflux                    <- current_exe
-///     └── Resources/
-///         └── resources/                 <- tauri bundle.resources
-///             └── mihomo-darwin-arm64
-/// ```
-///
-/// ## Windows (NSIS installer)
-/// ```text
-/// C:\Program Files\Conflux\
-/// ├── Conflux.exe                        <- current_exe
-/// └── resources/                         <- tauri bundle.resources
-///     └── mihomo-windows-amd64.exe
-/// ```
-///
-/// ## Linux (AppImage / deb)
-/// ```text
-/// AppImage 解压后:
-/// /tmp/.mount_XXX/
-/// ├── conflux                            <- current_exe
-/// └── resources/
-///     └── mihomo-linux-amd64
-///
-/// deb 安装后:
-/// /usr/bin/conflux                       <- current_exe (可能是 symlink)
-/// /usr/share/conflux/resources/          <- 资源目录
-///     └── mihomo-linux-amd64
-/// ```
-///
-/// ## 开发环境
-/// ```text
-/// conflux-app/
-/// └── src-tauri/
-///     ├── target/debug/
-///     │   └── Conflux                    <- current_exe
-///     └── resources/
-///         └── mihomo-xxx                 <- 源文件
-/// ```
 pub fn get_mihomo_binary_path() -> Result<PathBuf> {
     let binary_name = get_mihomo_binary_name();
     log::debug!("Looking for MiHomo binary: {}", binary_name);
 
+    // 首先尝试确保 mihomo 在用户数据目录
     if let Ok(data_path) = ensure_mihomo_in_data_dir() {
         if data_path.exists() {
             return Ok(data_path);
         }
     }
 
-    // ========================================================================
-    // 优先级 1: 用户数据目录
-    // 支持用户手动放置或更新 mihomo 二进制
-    // ========================================================================
+    // 用户数据目录
     let data_dir = get_app_data_dir()?;
     let user_binary_path = data_dir.join(binary_name);
     log::debug!("Checking user data path: {:?}", user_binary_path);
     if user_binary_path.exists() {
-        let bundled_path = find_bundled_binary(binary_name)?;
-        let dev_path = find_dev_binary(binary_name)?;
-        let source_path = bundled_path.or(dev_path);
-
-        if let Some(source_path) = source_path {
-            match should_refresh_binary(&source_path, &user_binary_path) {
-                Ok(true) => {
-                    if let Err(err) = std::fs::copy(&source_path, &user_binary_path) {
-                        log::warn!(
-                            "Failed to refresh MiHomo in data dir from {:?}: {}",
-                            source_path,
-                            err
-                        );
-                    } else {
-                        log::info!(
-                            "Refreshed MiHomo in data dir from {:?}",
-                            source_path
-                        );
-                    }
-                }
-                Ok(false) => {}
-                Err(err) => {
-                    log::warn!(
-                        "Failed to compare MiHomo binaries for refresh: {}",
-                        err
-                    );
-                }
-            }
-        }
-
         log::info!("Found MiHomo at user data path: {:?}", user_binary_path);
         return Ok(user_binary_path);
     }
 
-    // ========================================================================
-    // 优先级 2: 打包后的资源目录（根据平台计算）
-    // ========================================================================
-    if let Some(bundled_path) = find_bundled_binary(binary_name)? {
-        log::info!("Found MiHomo at bundled path: {:?}", bundled_path);
-        return Ok(bundled_path);
+    // Sidecar 路径（可执行文件同级目录）
+    if let Some(sidecar_path) = find_sidecar_binary(binary_name)? {
+        log::info!("Found MiHomo at sidecar path: {:?}", sidecar_path);
+        return Ok(sidecar_path);
     }
 
-    // ========================================================================
-    // 优先级 3: 开发环境路径
-    // ========================================================================
+    // 开发环境路径
     if let Some(dev_path) = find_dev_binary(binary_name)? {
         log::info!("Found MiHomo at dev path: {:?}", dev_path);
         return Ok(dev_path);
     }
 
-    // ========================================================================
     // 未找到，记录所有尝试过的路径
-    // ========================================================================
     log_search_paths(binary_name)?;
 
     // 返回用户数据目录路径作为默认值（即使不存在）
-    // 这样错误信息会指示用户将文件放到这个位置
     Ok(user_binary_path)
 }
 
@@ -224,18 +140,15 @@ pub fn ensure_mihomo_in_data_dir() -> Result<PathBuf> {
     let data_dir = get_app_data_dir()?;
     let user_binary_path = data_dir.join(binary_name);
 
-    let bundled_path = find_bundled_binary(binary_name)?;
+    let sidecar_path = find_sidecar_binary(binary_name)?;
     let dev_path = find_dev_binary(binary_name)?;
-    let source_path = bundled_path.or(dev_path);
+    let source_path = sidecar_path.or(dev_path);
 
     if user_binary_path.exists() {
         if let Some(source_path) = source_path {
             if should_refresh_binary(&source_path, &user_binary_path)? {
                 std::fs::copy(&source_path, &user_binary_path)?;
-                log::info!(
-                    "Refreshed MiHomo in data dir from {:?}",
-                    source_path
-                );
+                log::info!("Refreshed MiHomo in data dir from {:?}", source_path);
             }
         }
         return Ok(user_binary_path);
@@ -243,10 +156,7 @@ pub fn ensure_mihomo_in_data_dir() -> Result<PathBuf> {
 
     if let Some(source_path) = source_path {
         std::fs::copy(&source_path, &user_binary_path)?;
-        log::info!(
-            "Copied MiHomo to data dir from {:?}",
-            source_path
-        );
+        log::info!("Copied MiHomo to data dir from {:?}", source_path);
         return Ok(user_binary_path);
     }
 
@@ -255,8 +165,9 @@ pub fn ensure_mihomo_in_data_dir() -> Result<PathBuf> {
     ))
 }
 
-/// 查找打包后的二进制文件路径
-fn find_bundled_binary(binary_name: &str) -> Result<Option<PathBuf>> {
+/// 查找 Sidecar 二进制文件路径
+/// Tauri externalBin 会将二进制放在可执行文件同级目录
+fn find_sidecar_binary(binary_name: &str) -> Result<Option<PathBuf>> {
     let current_exe = std::env::current_exe()?;
     let exe_dir = current_exe
         .parent()
@@ -265,80 +176,21 @@ fn find_bundled_binary(binary_name: &str) -> Result<Option<PathBuf>> {
     log::debug!("Current exe: {:?}", current_exe);
     log::debug!("Exe directory: {:?}", exe_dir);
 
-    // ------------------------------------------------------------------------
-    // macOS: Conflux.app/Contents/MacOS/Conflux
-    //     -> Conflux.app/Contents/Resources/resources/
-    // ------------------------------------------------------------------------
-    #[cfg(target_os = "macos")]
-    {
-        // exe_dir = .../Conflux.app/Contents/MacOS
-        // 往上一级到 Contents，然后进入 Resources/resources
-        if let Some(contents_dir) = exe_dir.parent() {
-            let bundle_path = contents_dir
-                .join("Resources")
-                .join("resources")
-                .join(binary_name);
-            log::debug!("Checking macOS bundle path: {:?}", bundle_path);
-            if bundle_path.exists() {
-                return Ok(Some(bundle_path));
-            }
-        }
+    // Sidecar 位置：可执行文件同级目录
+    let sidecar_path = exe_dir.join(binary_name);
+    log::debug!("Checking sidecar path: {:?}", sidecar_path);
+    if sidecar_path.exists() {
+        return Ok(Some(sidecar_path));
     }
 
-    // ------------------------------------------------------------------------
-    // Windows: Conflux/Conflux.exe -> Conflux/resources/
-    // ------------------------------------------------------------------------
-    #[cfg(target_os = "windows")]
-    {
-        // 方式 1: exe 同级的 resources 目录
-        let resource_path = exe_dir.join("resources").join(binary_name);
-        log::debug!("Checking Windows resource path: {:?}", resource_path);
-        if resource_path.exists() {
-            return Ok(Some(resource_path));
-        }
-
-        // 方式 2: exe 同级目录直接放置
-        let same_dir_path = exe_dir.join(binary_name);
-        log::debug!("Checking Windows same dir path: {:?}", same_dir_path);
-        if same_dir_path.exists() {
-            return Ok(Some(same_dir_path));
-        }
-    }
-
-    // ------------------------------------------------------------------------
-    // Linux: 多种安装方式
-    // ------------------------------------------------------------------------
+    // Linux 特殊处理：系统安装路径
     #[cfg(target_os = "linux")]
     {
-        // 方式 1: AppImage 或便携版 - exe 同级的 resources 目录
-        let resource_path = exe_dir.join("resources").join(binary_name);
-        log::debug!("Checking Linux resource path: {:?}", resource_path);
-        if resource_path.exists() {
-            return Ok(Some(resource_path));
-        }
-
-        // 方式 2: deb/rpm 安装 - /usr/share/conflux/resources/
-        let system_path = PathBuf::from("/usr/share/conflux/resources").join(binary_name);
+        let system_path = PathBuf::from("/usr/bin").join(binary_name);
         log::debug!("Checking Linux system path: {:?}", system_path);
         if system_path.exists() {
             return Ok(Some(system_path));
         }
-
-        // 方式 3: 本地安装 - ~/.local/share/conflux/resources/
-        if let Some(data_dir) = dirs::data_local_dir() {
-            let local_path = data_dir.join("conflux").join("resources").join(binary_name);
-            log::debug!("Checking Linux local path: {:?}", local_path);
-            if local_path.exists() {
-                return Ok(Some(local_path));
-            }
-        }
-    }
-
-    // 通用: exe 同级的 resources 目录（所有平台的 fallback）
-    let generic_resource_path = exe_dir.join("resources").join(binary_name);
-    log::debug!("Checking generic resource path: {:?}", generic_resource_path);
-    if generic_resource_path.exists() {
-        return Ok(Some(generic_resource_path));
     }
 
     Ok(None)
@@ -351,22 +203,15 @@ fn find_dev_binary(binary_name: &str) -> Result<Option<PathBuf>> {
         .parent()
         .ok_or_else(|| anyhow::anyhow!("Cannot get executable directory"))?;
 
-    // ------------------------------------------------------------------------
-    // 开发环境路径 1: 从 target/debug 或 target/release 往上找
-    // target/debug/Conflux -> target/debug -> target -> src-tauri -> src-tauri/resources
-    // ------------------------------------------------------------------------
-    // exe_dir = src-tauri/target/debug 或 src-tauri/target/{triple}/debug
+    // 开发环境路径：从 target/debug 往上找到 src-tauri/binaries
     if let Some(target_dir) = exe_dir.parent() {
-        // 检查是否是 target/{triple}/debug 结构（交叉编译）
         let src_tauri_candidates = [
-            target_dir.parent(), // target/debug -> target -> src-tauri (标准编译)
-            target_dir
-                .parent()
-                .and_then(|p| p.parent()), // target/{triple}/debug -> target/{triple} -> target -> src-tauri (交叉编译)
+            target_dir.parent(),
+            target_dir.parent().and_then(|p| p.parent()),
         ];
 
         for src_tauri in src_tauri_candidates.into_iter().flatten() {
-            let dev_path = src_tauri.join("resources").join(binary_name);
+            let dev_path = src_tauri.join("binaries").join(binary_name);
             log::debug!("Checking dev path: {:?}", dev_path);
             if dev_path.exists() {
                 return Ok(Some(dev_path));
@@ -374,12 +219,9 @@ fn find_dev_binary(binary_name: &str) -> Result<Option<PathBuf>> {
         }
     }
 
-    // ------------------------------------------------------------------------
-    // 开发环境路径 2: 从当前工作目录查找
-    // pnpm tauri dev 时，CWD 通常是项目根目录
-    // ------------------------------------------------------------------------
+    // 从当前工作目录查找
     if let Ok(cwd) = std::env::current_dir() {
-        let cwd_path = cwd.join("src-tauri").join("resources").join(binary_name);
+        let cwd_path = cwd.join("src-tauri").join("binaries").join(binary_name);
         log::debug!("Checking CWD path: {:?}", cwd_path);
         if cwd_path.exists() {
             return Ok(Some(cwd_path));
@@ -431,38 +273,13 @@ fn log_search_paths(binary_name: &str) -> Result<()> {
         binary_name
     );
     log::error!("  - User data: {:?}", data_dir.join(binary_name));
-
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(contents_dir) = exe_dir.parent() {
-            log::error!(
-                "  - macOS bundle: {:?}",
-                contents_dir
-                    .join("Resources")
-                    .join("resources")
-                    .join(binary_name)
-            );
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        log::error!(
-            "  - Windows resources: {:?}",
-            exe_dir.join("resources").join(binary_name)
-        );
-        log::error!("  - Windows same dir: {:?}", exe_dir.join(binary_name));
-    }
+    log::error!("  - Sidecar path: {:?}", exe_dir.join(binary_name));
 
     #[cfg(target_os = "linux")]
     {
         log::error!(
-            "  - Linux resources: {:?}",
-            exe_dir.join("resources").join(binary_name)
-        );
-        log::error!(
             "  - Linux system: {:?}",
-            PathBuf::from("/usr/share/conflux/resources").join(binary_name)
+            PathBuf::from("/usr/bin").join(binary_name)
         );
     }
 
@@ -471,7 +288,7 @@ fn log_search_paths(binary_name: &str) -> Result<()> {
         if let Some(src_tauri) = target_dir.parent() {
             log::error!(
                 "  - Dev path: {:?}",
-                src_tauri.join("resources").join(binary_name)
+                src_tauri.join("binaries").join(binary_name)
             );
         }
     }
@@ -503,18 +320,18 @@ mod tests {
 
         #[cfg(target_os = "macos")]
         {
-            assert!(name.starts_with("mihomo-darwin-"));
+            assert!(name.starts_with("mihomo-") && name.contains("apple-darwin"));
         }
 
         #[cfg(target_os = "windows")]
         {
-            assert!(name.starts_with("mihomo-windows-"));
+            assert!(name.starts_with("mihomo-") && name.contains("windows"));
             assert!(name.ends_with(".exe"));
         }
 
         #[cfg(target_os = "linux")]
         {
-            assert!(name.starts_with("mihomo-linux-"));
+            assert!(name.starts_with("mihomo-") && name.contains("linux"));
         }
     }
 

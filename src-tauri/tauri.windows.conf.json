@@ -24,8 +24,8 @@
       "icons/256x256-win.png",
       "icons/icon-win.ico"
     ],
-    "resources": ["resources/mihomo-*", "resources/sub-store"],
-    "externalBin": ["binaries/node"],
+    "resources": ["resources/sub-store"],
+    "externalBin": ["binaries/node", "binaries/mihomo"],
     "windows": {
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
