@@ -68,7 +68,7 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     let api_secret = config.secret.clone();
     let api_url = format!("http://{}", config.external_controller);
 
-    let mihomo_manager = Arc::new(MihomoManager::new(app.clone(), api_secret.clone())?);
+    let mihomo_manager = Arc::new(MihomoManager::new(api_secret.clone())?);
     let mihomo_api = Arc::new(MihomoApi::new(api_url.clone(), api_secret.clone()));
     let log_streamer = Arc::new(LogStreamer::new(api_url, api_secret));
 
