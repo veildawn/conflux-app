@@ -714,7 +714,7 @@ export const ipc = {
       if (oldName !== group.name) {
         nextGroups = nextGroups.map((item) => ({
           ...item,
-          proxies: item.proxies.map((proxy) => (proxy === oldName ? group.name : proxy)),
+          proxies: (item.proxies || []).map((proxy) => (proxy === oldName ? group.name : proxy)),
         }));
         // Simple regex based replacement for rules might be dangerous, but if we follow ProxyGroups.tsx logic:
         // It parses rules. I'll skip complex rule parsing here for simplicity or duplicate it?
