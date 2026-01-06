@@ -65,9 +65,10 @@ export const ipc = {
 
   /**
    * 获取代理组列表
+   * @param mode 可选的模式过滤：'global' 只返回 GLOBAL，'rule' 返回除 GLOBAL 外的策略组，'direct' 返回空数组
    */
-  async getProxies(): Promise<ProxyGroup[]> {
-    return invoke('get_proxies');
+  async getProxies(mode?: string): Promise<ProxyGroup[]> {
+    return invoke('get_proxies', { mode });
   },
 
   /**

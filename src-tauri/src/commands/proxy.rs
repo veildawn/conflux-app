@@ -266,12 +266,23 @@ pub async fn switch_mode(app: AppHandle, mode: String) -> Result<(), String> {
 }
 
 /// 获取代理节点列表
+///
+/// 根据模式参数过滤返回的策略组：
+/// - `global`: 只返回 GLOBAL 策略组
+/// - `rule`: 返回除 GLOBAL 外的所有策略组
+/// - `direct`: 返回空数组
+/// - 不传或其他值: 返回所有策略组
 #[tauri::command]
-pub async fn get_proxies() -> Result<Vec<ProxyGroup>, String> {
+pub async fn get_proxies(mode: Option<String>) -> Result<Vec<ProxyGroup>, String> {
     let state = get_app_state();
 
     if !state.mihomo_manager.is_running().await {
         return Err("Proxy is not running".to_string());
+    }
+
+    // 直连模式不需要返回策略组
+    if mode.as_deref() == Some("direct") {
+        return Ok(vec![]);
     }
 
     let response = state
@@ -287,12 +298,21 @@ pub async fn get_proxies() -> Result<Vec<ProxyGroup>, String> {
         // 只返回代理组（select, url-test, fallback, load-balance）
         let group_types = ["Selector", "URLTest", "Fallback", "LoadBalance"];
         if group_types.contains(&info.proxy_type.as_str()) {
-            groups.push(ProxyGroup {
-                name: name.clone(),
-                group_type: info.proxy_type.clone(),
-                now: info.now.clone(),
-                all: info.all.clone(),
-            });
+            // 根据模式过滤
+            let should_include = match mode.as_deref() {
+                Some("global") => name == "GLOBAL",
+                Some("rule") => name != "GLOBAL",
+                _ => true, // 不传模式则返回全部
+            };
+
+            if should_include {
+                groups.push(ProxyGroup {
+                    name: name.clone(),
+                    group_type: info.proxy_type.clone(),
+                    now: info.now.clone(),
+                    all: info.all.clone(),
+                });
+            }
         }
     }
 
