@@ -108,7 +108,7 @@ export interface ProxyConfig {
 export interface ProxyGroupConfig {
   name: string;
   type: string;
-  proxies: string[];
+  proxies?: string[];
   use?: string[];
   url?: string;
   interval?: number;

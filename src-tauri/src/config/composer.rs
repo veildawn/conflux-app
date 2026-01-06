@@ -2,7 +2,9 @@ use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::time::Duration;
 
-use crate::models::{HealthCheck, ProfileConfig, ProxyConfig, ProxyGroupConfig, ProxyProvider, RuleProvider};
+use crate::models::{
+    HealthCheck, ProfileConfig, ProxyConfig, ProxyGroupConfig, ProxyProvider, RuleProvider,
+};
 
 /// 配置编排器
 /// 负责解析、验证和提取配置内容
@@ -11,8 +13,8 @@ pub struct Composer;
 impl Composer {
     /// 从 YAML 内容解析配置
     pub fn parse_yaml(content: &str) -> Result<ProfileConfig> {
-        let raw: serde_yaml::Value = serde_yaml::from_str(content)
-            .map_err(|e| anyhow!("Failed to parse YAML: {}", e))?;
+        let raw: serde_yaml::Value =
+            serde_yaml::from_str(content).map_err(|e| anyhow!("Failed to parse YAML: {}", e))?;
         Self::extract_config(&raw)
     }
 
@@ -36,10 +38,7 @@ impl Composer {
             .map_err(|e| anyhow!("Failed to fetch URL: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(anyhow!(
-                "Failed to fetch: HTTP {}",
-                response.status()
-            ));
+            return Err(anyhow!("Failed to fetch: HTTP {}", response.status()));
         }
 
         let content = response
@@ -133,17 +132,15 @@ impl Composer {
                 name: manual_group_name.to_string(),
                 group_type: "select".to_string(),
                 proxies: manual_proxies,
-                use_providers: Vec::new(),
-                url: None,
-                interval: None,
+                ..Default::default()
             },
             ProxyGroupConfig {
                 name: auto_group_name.to_string(),
                 group_type: "url-test".to_string(),
                 proxies: auto_proxies,
-                use_providers: Vec::new(),
                 url: Some("http://www.gstatic.com/generate_204".to_string()),
                 interval: Some(300),
+                ..Default::default()
             },
         ];
 
@@ -175,7 +172,10 @@ impl Composer {
                     Ok(proxy) => proxies.push(proxy),
                     Err(e) => {
                         // 记录警告但继续处理
-                        let name = item.get("name").and_then(|n| n.as_str()).unwrap_or("unknown");
+                        let name = item
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .unwrap_or("unknown");
                         log::warn!("Failed to parse proxy '{}': {}", name, e);
                     }
                 }
@@ -194,7 +194,10 @@ impl Composer {
                 match serde_yaml::from_value::<ProxyGroupConfig>(item.clone()) {
                     Ok(group) => groups.push(group),
                     Err(e) => {
-                        let name = item.get("name").and_then(|n| n.as_str()).unwrap_or("unknown");
+                        let name = item
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .unwrap_or("unknown");
                         log::warn!("Failed to parse proxy group '{}': {}", name, e);
                     }
                 }
@@ -252,9 +255,19 @@ impl Composer {
 
         let health_check = value.get("health-check").and_then(|hc| {
             let enable = hc.get("enable").and_then(|v| v.as_bool()).unwrap_or(true);
-            let url = hc.get("url").and_then(|v| v.as_str()).map(|s| s.to_string());
-            let interval = hc.get("interval").and_then(|v| v.as_u64()).map(|v| v as u32);
-            Some(HealthCheck { enable, url, interval })
+            let url = hc
+                .get("url")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let interval = hc
+                .get("interval")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32);
+            Some(HealthCheck {
+                enable,
+                url,
+                interval,
+            })
         });
 
         Ok(ProxyProvider {
@@ -422,10 +435,7 @@ impl Composer {
                             let new_path = ruleset_dir.join(&file_name);
                             provider.path = Some(new_path.to_string_lossy().to_string());
 
-                            log::info!(
-                                "Converted rule provider '{}' from file to http type",
-                                name
-                            );
+                            log::info!("Converted rule provider '{}' from file to http type", name);
                         } else {
                             log::warn!(
                                 "Rule provider '{}' has invalid path and no URL: {}",
