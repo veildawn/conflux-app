@@ -2,20 +2,16 @@ use anyhow::Result;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
-use tauri::AppHandle;
-use tauri_plugin_shell::process::CommandChild;
-use tauri_plugin_shell::ShellExt;
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
 
-use crate::utils::{get_app_data_dir, get_mihomo_config_path};
+use crate::utils::{ensure_mihomo_in_data_dir, get_app_data_dir, get_mihomo_config_path};
 
 /// MiHomo 进程管理器
 pub struct MihomoManager {
-    app_handle: AppHandle,
-    process: Arc<Mutex<Option<CommandChild>>>,
+    process: Arc<Mutex<Option<Child>>>,
     config_path: PathBuf,
     api_url: String,
     api_secret: String,
@@ -23,11 +19,10 @@ pub struct MihomoManager {
 
 impl MihomoManager {
     /// 创建新的 MiHomo 管理器
-    pub fn new(app: AppHandle, secret: String) -> Result<Self> {
+    pub fn new(secret: String) -> Result<Self> {
         let config_path = get_mihomo_config_path()?;
 
         Ok(Self {
-            app_handle: app,
             process: Arc::new(Mutex::new(None)),
             config_path,
             api_url: "http://127.0.0.1:9090".to_string(),
@@ -197,63 +192,45 @@ impl MihomoManager {
             log::debug!("Ensured config dir exists: {:?}", parent);
         }
 
+        // 确保 mihomo 二进制在数据目录（从 sidecar 或开发环境复制）
+        let mihomo_path = ensure_mihomo_in_data_dir()?;
+        log::info!("Using MiHomo binary at: {:?}", mihomo_path);
+
         let config_dir = self.config_path.parent().unwrap();
         let config_dir_str = config_dir.to_string_lossy().to_string();
         let config_path_str = self.config_path.to_string_lossy().to_string();
 
-        log::info!("Spawning MiHomo sidecar with CWD: {:?}", config_dir);
+        // 启动 mihomo 进程
+        #[cfg(windows)]
+        let child = {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            Command::new(&mihomo_path)
+                .current_dir(config_dir)
+                .args(["-d", &config_dir_str, "-f", &config_path_str])
+                .creation_flags(CREATE_NO_WINDOW)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?
+        };
 
-        // 使用 Tauri Sidecar API 启动 mihomo
-        let sidecar_command = self
-            .app_handle
-            .shell()
-            .sidecar("mihomo")
-            .map_err(|e| anyhow::anyhow!("Failed to create sidecar command: {}", e))?
+        #[cfg(not(windows))]
+        let child = Command::new(&mihomo_path)
             .current_dir(config_dir)
-            .args(["-d", &config_dir_str, "-f", &config_path_str]);
-
-        let (mut rx, child) = sidecar_command
+            .args(["-d", &config_dir_str, "-f", &config_path_str])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo sidecar: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?;
 
-        let pid = child.pid();
-        log::info!("MiHomo sidecar spawned with PID: {}", pid);
+        let pid = child.id();
+        log::info!("MiHomo spawned with PID: {}", pid);
 
         // 保存 PID 到文件，以便下次启动时清理
         if let Err(e) = self.save_pid(pid) {
             log::warn!("Failed to save PID file: {}", e);
         }
-
-        // 启动后台任务处理 sidecar 输出
-        tokio::spawn(async move {
-            use tauri_plugin_shell::process::CommandEvent;
-            while let Some(event) = rx.recv().await {
-                match event {
-                    CommandEvent::Stdout(line) => {
-                        if let Ok(s) = String::from_utf8(line) {
-                            log::debug!("[mihomo stdout] {}", s.trim());
-                        }
-                    }
-                    CommandEvent::Stderr(line) => {
-                        if let Ok(s) = String::from_utf8(line) {
-                            log::debug!("[mihomo stderr] {}", s.trim());
-                        }
-                    }
-                    CommandEvent::Error(err) => {
-                        log::error!("[mihomo error] {}", err);
-                    }
-                    CommandEvent::Terminated(payload) => {
-                        log::info!(
-                            "[mihomo] Process terminated with code: {:?}, signal: {:?}",
-                            payload.code,
-                            payload.signal
-                        );
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-        });
 
         // 稍微等待一下，让进程启动
         sleep(Duration::from_millis(500)).await;
@@ -304,13 +281,13 @@ impl MihomoManager {
     pub async fn stop(&self) -> Result<()> {
         let mut process_guard = self.process.lock().await;
 
-        if let Some(child) = process_guard.take() {
-            let pid = child.pid();
+        if let Some(mut child) = process_guard.take() {
+            let pid = child.id();
             log::info!("Stopping MiHomo process (PID: {})", pid);
 
-            // 使用 Tauri sidecar 的 kill 方法
+            // 使用进程句柄的 kill 方法
             if let Err(e) = child.kill() {
-                log::warn!("Failed to kill MiHomo process via sidecar API: {}", e);
+                log::warn!("Failed to kill MiHomo process: {}", e);
                 // 回退到直接通过 PID 杀死
                 Self::kill_process_by_pid(pid);
             }
@@ -334,8 +311,8 @@ impl MihomoManager {
 
         // 尝试获取锁并停止进程
         if let Ok(mut guard) = self.process.try_lock() {
-            if let Some(child) = guard.take() {
-                let pid = child.pid();
+            if let Some(mut child) = guard.take() {
+                let pid = child.id();
                 log::info!("Stopping MiHomo process (PID: {})", pid);
                 let _ = child.kill();
                 log::info!("MiHomo process killed (PID: {})", pid);
@@ -369,7 +346,7 @@ impl MihomoManager {
         let process_guard = self.process.lock().await;
         if let Some(child) = process_guard.as_ref() {
             // 检查进程是否还存在
-            let pid = child.pid();
+            let pid = child.id();
             if Self::is_pid_running(pid) {
                 return true;
             }
