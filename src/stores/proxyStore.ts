@@ -306,6 +306,17 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
     } catch (error) {
       logger.error('Failed to set TUN mode:', error);
       set({ error: String(error) });
+      // 失败时获取实际状态，确保 UI 显示正确
+      try {
+        const status = await ipc.getProxyStatus();
+        if (status) {
+          set((state) => ({
+            status: { ...state.status, ...status },
+          }));
+        }
+      } catch (fetchError) {
+        logger.error('Failed to fetch status after TUN mode error:', fetchError);
+      }
       throw error;
     } finally {
       set({ loading: false });
