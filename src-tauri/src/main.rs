@@ -757,9 +757,24 @@ fn main() {
                 RunEvent::Exit => {
                     log::info!("Application is exiting, cleaning up...");
 
-                    // 清理子进程 - 使用同步方式，避免异步锁导致卡死
+                    // 清理子进程和系统设置 - 使用同步方式，避免异步锁导致卡死
                     if let Some(app_state) = app_handle.try_state::<commands::AppState>() {
-                        // 清理 Sub-Store 进程
+                        // 1. 清理系统代理设置
+                        log::info!("Clearing system proxy settings...");
+                        if let Ok(enabled) = app_state.system_proxy_enabled.try_lock() {
+                            if *enabled {
+                                if let Err(e) = system::SystemProxy::clear_proxy() {
+                                    log::warn!("Failed to clear system proxy: {}", e);
+                                } else {
+                                    log::info!("System proxy cleared successfully");
+                                }
+                            }
+                        } else {
+                            // 无法获取锁时，保守地尝试清理
+                            let _ = system::SystemProxy::clear_proxy();
+                        }
+
+                        // 2. 清理 Sub-Store 进程
                         log::info!("Stopping Sub-Store service...");
                         if let Ok(manager) = app_state.substore_manager.try_lock() {
                             manager.stop_sync();
@@ -775,12 +790,23 @@ fn main() {
                             }
                         }
 
-                        // 清理 MiHomo 进程
+                        // 3. 清理 MiHomo 进程（包括服务模式）
                         log::info!("Stopping MiHomo service...");
                         app_state.mihomo_manager.stop_sync();
-                        log::info!("MiHomo stopped successfully");
+                        log::info!("MiHomo stopped via manager");
+                        
+                        // 4. 额外清理：确保所有 mihomo 进程都被终止
+                        // 包括通过 UAC 提权启动的和服务模式启动的
+                        mihomo::MihomoManager::cleanup_stale_processes();
+                        log::info!("All MiHomo processes cleaned up");
                     } else {
-                        // 如果没有 app_state，直接使用 cleanup 方法
+                        // 如果没有 app_state，直接使用 cleanup 方法清理所有进程
+                        log::warn!("App state not available, using fallback cleanup");
+                        
+                        // 保守地清理系统代理
+                        let _ = system::SystemProxy::clear_proxy();
+                        
+                        // 清理所有 mihomo 进程
                         mihomo::MihomoManager::cleanup_stale_processes();
                     }
 
