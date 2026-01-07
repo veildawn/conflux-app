@@ -200,7 +200,7 @@ export function WindowsServiceSection({ toast }: WindowsServiceSectionProps) {
     if (serviceStatus.mihomo_running) {
       return {
         color: 'bg-green-500',
-        text: `TUN 运行中 (PID: ${serviceStatus.mihomo_pid})`,
+        text: `服务运行中 (PID: ${serviceStatus.mihomo_pid})`,
         icon: CheckCircle2,
       };
     }

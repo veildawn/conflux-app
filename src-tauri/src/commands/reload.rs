@@ -315,24 +315,32 @@ pub async fn safe_restart_proxy(app: &AppHandle) -> Result<(), String> {
     }
 
     // 重启 mihomo
+    // restart() 内部已经包含了完整的健康检查（通过 API 验证），
+    // 如果 restart() 成功返回，说明 mihomo 已经正常运行
     state
         .mihomo_manager
         .restart()
         .await
         .map_err(|e| e.to_string())?;
 
-    // 等待健康检查
-    let mut healthy = false;
-    for _ in 0..10 {
-        sleep(Duration::from_millis(500)).await;
-        if state.mihomo_manager.is_running().await {
-            healthy = true;
-            break;
+    // 额外等待一小段时间让 mihomo 完全稳定
+    // 这对于 TUN 模式切换特别重要，因为网络栈需要时间初始化
+    sleep(Duration::from_millis(300)).await;
+
+    // 使用 API 健康检查而不是进程检测，因为 API 检查更可靠
+    // 进程检测可能因为 tasklist 延迟或进程名匹配问题而失败
+    let healthy = match state.mihomo_api.get_version().await {
+        Ok(_) => true,
+        Err(e) => {
+            log::warn!("API health check failed after restart: {}, retrying...", e);
+            // 如果第一次检查失败，等待更长时间后重试
+            sleep(Duration::from_millis(1000)).await;
+            state.mihomo_api.get_version().await.is_ok()
         }
-    }
+    };
 
     if !healthy {
-        return Err("代理核心重启后未能正常运行".to_string());
+        return Err("代理核心重启后 API 未能正常响应".to_string());
     }
 
     // 恢复系统代理

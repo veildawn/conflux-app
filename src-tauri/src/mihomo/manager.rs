@@ -518,41 +518,55 @@ impl MihomoManager {
             use crate::system::WinServiceManager;
             const CREATE_NO_WINDOW: u32 = 0x08000000;
             
-            // 检查是否需要 TUN 模式
-            if is_tun_enabled() {
-                log::info!("TUN mode enabled, checking service mode...");
+            let tun_enabled = is_tun_enabled();
+            let service_installed = WinServiceManager::is_installed().unwrap_or(false);
+            let service_running = WinServiceManager::is_running().unwrap_or(false);
+            
+            log::info!("Start check: tun_enabled={}, service_installed={}, service_running={}", 
+                       tun_enabled, service_installed, service_running);
+            
+            // 优先级 1：如果服务正在运行，通过服务启动（无论 TUN 是否启用）
+            if service_installed && service_running {
+                log::info!("Service is running, starting mihomo via service...");
+                log::info!("  mihomo_path: {:?}", mihomo_path);
+                log::info!("  config_dir: {}", config_dir_str);
+                log::info!("  config_path: {}", config_path_str);
                 
-                // 检查服务是否已安装
-                let service_installed = WinServiceManager::is_installed().unwrap_or(false);
-                let service_running = WinServiceManager::is_running().unwrap_or(false);
-                
-                if service_installed && service_running {
-                    // 服务已安装并运行，等待 IPC 就绪
-                    log::info!("Service is running, waiting for IPC to be ready...");
-                    log::info!("  mihomo_path: {:?}", mihomo_path);
-                    log::info!("  config_dir: {}", config_dir_str);
-                    log::info!("  config_path: {}", config_path_str);
-                    
-                    // 最多等待 5 秒
-                    for i in 0..10 {
-                        if is_service_ipc_ready() {
-                            log::info!("Service IPC ready after {} attempts", i + 1);
-                            return self.start_via_service(&mihomo_path, &config_dir_str, &config_path_str).await;
-                        }
-                        sleep(Duration::from_millis(500)).await;
+                // 等待 IPC 就绪
+                for i in 0..10 {
+                    if is_service_ipc_ready() {
+                        log::info!("Service IPC ready after {} attempts", i + 1);
+                        return self.start_via_service(&mihomo_path, &config_dir_str, &config_path_str).await;
                     }
-                    
-                    log::warn!("Service IPC not ready after 5 seconds, falling back to UAC elevation");
-                } else if service_installed {
-                    log::info!("Service is installed but not running, using UAC elevation...");
-                } else {
-                    log::info!("Service not installed, using UAC elevation...");
+                    sleep(Duration::from_millis(500)).await;
                 }
                 
-                // 服务不可用，使用 UAC 提权方式
+                log::warn!("Service IPC not ready after 5 seconds");
+                // 如果 TUN 启用但服务 IPC 不可用，回退到 UAC
+                if tun_enabled {
+                    log::info!("Falling back to UAC elevation for TUN mode...");
+                    Self::start_elevated(&mihomo_path, &config_dir_str, &config_path_str)?
+                } else {
+                    // TUN 未启用，可以普通模式启动
+                    log::info!("Service IPC not ready, starting in normal mode...");
+                    Command::new(&mihomo_path)
+                        .current_dir(config_dir)
+                        .args(["-d", &config_dir_str, "-f", &config_path_str])
+                        .creation_flags(CREATE_NO_WINDOW)
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .spawn()
+                        .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?
+                }
+            }
+            // 优先级 2：TUN 启用但服务未运行，使用 UAC 提权
+            else if tun_enabled {
+                log::info!("TUN mode enabled but service not running, using UAC elevation...");
                 Self::start_elevated(&mihomo_path, &config_dir_str, &config_path_str)?
-            } else {
-                // 普通模式，直接启动
+            }
+            // 优先级 3：普通模式，直接启动
+            else {
+                log::info!("Starting mihomo in normal mode...");
                 Command::new(&mihomo_path)
                     .current_dir(config_dir)
                     .args(["-d", &config_dir_str, "-f", &config_path_str])
@@ -960,6 +974,12 @@ impl MihomoManager {
             "has_handle={}, handle_pid={:?}, file_pid={:?}, is_running={}",
             has_handle, pid, pid_from_file, is_running
         )
+    }
+
+    /// 获取服务模式标志的引用（仅 Windows）
+    #[cfg(target_os = "windows")]
+    pub fn service_mode_flag(&self) -> &Arc<Mutex<bool>> {
+        &self.service_mode
     }
 }
 

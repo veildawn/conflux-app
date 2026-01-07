@@ -501,10 +501,23 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
                 *enhanced_mode = enabled;
             }
 
-            // 验证 mihomo 是否健康
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-            if !state.mihomo_manager.is_running().await {
-                log::error!("MiHomo crashed after TUN mode change, attempting recovery...");
+            // safe_restart_proxy 已经包含了完整的健康检查，这里使用 API 进行额外验证
+            // 通过 API 检查比进程检测更可靠，因为它确认了 mihomo 完全就绪
+            let api_healthy = match state.mihomo_api.get_version().await {
+                Ok(_) => {
+                    log::debug!("MiHomo API health check passed after TUN mode change");
+                    true
+                }
+                Err(e) => {
+                    log::warn!("MiHomo API health check failed: {}, will retry...", e);
+                    // 短暂等待后重试一次
+                    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+                    state.mihomo_api.get_version().await.is_ok()
+                }
+            };
+
+            if !api_healthy {
+                log::error!("MiHomo API not responding after TUN mode change, attempting recovery...");
 
                 // 回滚配置
                 if let Err(rollback_err) = backup.rollback() {
@@ -523,7 +536,7 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
                 }
 
                 sync_proxy_status(&app).await;
-                return Err("增强模式切换后代理核心崩溃，已尝试恢复".to_string());
+                return Err("增强模式切换后代理核心异常，已尝试恢复".to_string());
             }
 
             // 清理备份
