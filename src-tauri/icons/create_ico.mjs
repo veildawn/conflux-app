@@ -20,3 +20,5 @@ const buf = await pngToIco(inputs);
 fs.writeFileSync(path.join(__dirname, 'icon-win.ico'), buf);
 console.log('Generated icon-win.ico:', buf.length, 'bytes');
 
+
+

@@ -19,3 +19,5 @@ console.log('Generated tray-icon-win.png (256x256)');
 const img = await sharp(path.join(__dirname, 'tray-icon-win.png')).metadata();
 console.log('Verified:', img.width, 'x', img.height);
 
+
+
