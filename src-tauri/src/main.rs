@@ -381,6 +381,10 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .setup(|app| {
             if let Err(err) = crate::utils::ensure_mihomo_in_data_dir() {
                 log::warn!("Failed to initialize MiHomo binary in data dir: {}", err);
@@ -585,6 +589,8 @@ fn main() {
             commands::system::set_system_proxy,
             commands::system::clear_system_proxy,
             commands::system::get_system_proxy_status,
+            commands::system::get_autostart_enabled,
+            commands::system::set_autostart_enabled,
             // 流量命令
             commands::proxy::get_traffic,
             // 连接命令
@@ -608,6 +614,7 @@ fn main() {
             commands::proxy::set_mixed_port,
             commands::proxy::set_find_process_mode,
             commands::proxy::get_app_version,
+            commands::proxy::flush_fakeip_cache,
             // Provider 命令
             commands::proxy::get_proxy_providers,
             commands::proxy::update_proxy_provider,

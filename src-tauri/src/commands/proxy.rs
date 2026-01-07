@@ -821,3 +821,22 @@ pub async fn set_find_process_mode(_app: AppHandle, mode: String) -> Result<(), 
 pub async fn get_app_version() -> Result<String, String> {
     Ok(env!("CARGO_PKG_VERSION").to_string())
 }
+
+/// 清除 FakeIP 缓存
+#[tauri::command]
+pub async fn flush_fakeip_cache() -> Result<(), String> {
+    let state = get_app_state();
+
+    if !state.mihomo_manager.is_running().await {
+        return Err("Proxy is not running".to_string());
+    }
+
+    state
+        .mihomo_api
+        .flush_fakeip()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    log::info!("FakeIP cache flushed");
+    Ok(())
+}

@@ -9,6 +9,8 @@ import {
   Info,
   Zap,
   LayoutGrid,
+  Power,
+  Trash2,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
@@ -156,6 +158,8 @@ export default function Settings() {
   const [dnsDefaultNameserverInput, setDnsDefaultNameserverInput] = useState('');
   const [dnsFakeIpFilterInput, setDnsFakeIpFilterInput] = useState('');
   const [loading, setLoading] = useState(true);
+  const [autostart, setAutostart] = useState(false);
+  const [flushingFakeip, setFlushingFakeip] = useState(false);
 
   const controlBase =
     'bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-700 focus-visible:ring-offset-0 focus-visible:ring-1 focus-visible:ring-blue-500/50 h-7 text-xs shadow-none';
@@ -219,6 +223,28 @@ export default function Settings() {
   const handleTcpConcurrentToggle = (checked: boolean) =>
     setTcpConcurrent(checked).catch(console.error);
 
+  const handleAutostartToggle = async (checked: boolean) => {
+    try {
+      await ipc.setAutostartEnabled(checked);
+      setAutostart(checked);
+      toast({ title: checked ? '已启用开机自启动' : '已关闭开机自启动' });
+    } catch (error) {
+      toast({ title: '设置失败', description: String(error), variant: 'destructive' });
+    }
+  };
+
+  const handleFlushFakeip = async () => {
+    setFlushingFakeip(true);
+    try {
+      await ipc.flushFakeipCache();
+      toast({ title: 'FakeIP 缓存已清除' });
+    } catch (error) {
+      toast({ title: '清除失败', description: String(error), variant: 'destructive' });
+    } finally {
+      setFlushingFakeip(false);
+    }
+  };
+
   const loadConfig = useCallback(async () => {
     try {
       const mihomoConfig = await ipc.getConfig();
@@ -238,6 +264,11 @@ export default function Settings() {
         setCoreVersion((await ipc.getCoreVersion()).version || '未运行');
       } catch {
         setCoreVersion('未运行');
+      }
+      try {
+        setAutostart(await ipc.getAutostartEnabled());
+      } catch {
+        // Autostart not supported on this platform
       }
     } catch (error) {
       console.error('Failed to load versions:', error);
@@ -285,6 +316,17 @@ export default function Settings() {
           headers: { Accept: 'application/vnd.github+json' },
         }
       );
+
+      // 404 表示没有发布任何 release，视为已是最新版本
+      if (response.status === 404) {
+        setUpdateStatus('latest');
+        toast({
+          title: '已是最新版本',
+          description: '暂无可用的更新版本',
+        });
+        return;
+      }
+
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       const tag = String(data.tag_name || data.name || '').trim();
@@ -294,8 +336,11 @@ export default function Settings() {
       setUpdateUrl(releaseUrl);
 
       if (!latest) {
-        setUpdateStatus('error');
-        toast({ title: '无法识别最新版本', variant: 'destructive' });
+        setUpdateStatus('latest');
+        toast({
+          title: '已是最新版本',
+          description: '暂无可用的更新版本',
+        });
         return;
       }
       if (!appVersion) {
@@ -480,6 +525,21 @@ export default function Settings() {
               />
               <div className="h-px bg-gray-100 dark:bg-zinc-800 mx-5" />
               <SettingItem
+                icon={Power}
+                iconBgColor="bg-green-50 dark:bg-green-500/10"
+                iconColor="text-green-500"
+                title="开机自启动"
+                description="登录系统后自动启动应用"
+                action={
+                  <Switch
+                    checked={autostart}
+                    onCheckedChange={handleAutostartToggle}
+                    className="scale-90"
+                  />
+                }
+              />
+              <div className="h-px bg-gray-100 dark:bg-zinc-800 mx-5" />
+              <SettingItem
                 icon={ExternalLink}
                 iconBgColor="bg-gray-100 dark:bg-zinc-800"
                 iconColor="text-gray-500"
@@ -553,7 +613,7 @@ export default function Settings() {
                   />
                 </div>
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-sm text-gray-600 dark:text-gray-300">Allow LAN</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">局域网共享</span>
                   <Switch
                     checked={!!status.allow_lan}
                     onCheckedChange={handleAllowLanToggle}
@@ -717,6 +777,25 @@ export default function Settings() {
                             placeholder="域名列表，逗号分隔"
                             className={cn('w-full font-mono text-xs', controlBase)}
                           />
+                        </div>
+                        <div className="flex items-center justify-between pt-2">
+                          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            清除缓存
+                          </label>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleFlushFakeip}
+                            disabled={flushingFakeip || !status.running}
+                            className="h-7 text-xs"
+                          >
+                            {flushingFakeip ? (
+                              <RefreshCw className="w-3 h-3 animate-spin mr-1" />
+                            ) : (
+                              <Trash2 className="w-3 h-3 mr-1" />
+                            )}
+                            {flushingFakeip ? '清除中...' : '清除 FakeIP'}
+                          </Button>
                         </div>
                       </>
                     )}

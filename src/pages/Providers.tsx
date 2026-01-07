@@ -33,6 +33,12 @@ import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
 import { useToast } from '@/hooks/useToast';
 import type { ProfileConfig, ProxyProvider, RuleProvider } from '@/types/config';
+import {
+  validateDeleteProxyProvider,
+  validateDeleteRuleProvider,
+  formatDependencies,
+  type DeleteValidationResult,
+} from '@/utils/deleteValidation';
 
 // -----------------------------------------------------------------------------
 // UI Components
@@ -543,6 +549,7 @@ export default function Providers() {
     type: 'proxy' | 'rule';
     name: string;
   } | null>(null);
+  const [deleteValidation, setDeleteValidation] = useState<DeleteValidationResult | null>(null);
 
   // 加载活跃 Profile 配置
   const loadActiveProfile = useCallback(async () => {
@@ -602,8 +609,37 @@ export default function Providers() {
     }
   };
 
+  // 请求删除代理源（先校验依赖）
+  const handleRequestDeleteProxyProvider = (name: string) => {
+    if (!profileConfig) {
+      setDeleteConfirm({ type: 'proxy', name });
+      setDeleteValidation(null);
+      return;
+    }
+
+    const validation = validateDeleteProxyProvider(name, profileConfig);
+    setDeleteValidation(validation);
+    setDeleteConfirm({ type: 'proxy', name });
+  };
+
   const handleDeleteProxyProvider = async (name: string) => {
     if (!activeProfileId) return;
+
+    // 再次校验（防止并发修改）
+    if (profileConfig) {
+      const validation = validateDeleteProxyProvider(name, profileConfig);
+      if (!validation.canDelete) {
+        toast({
+          title: '无法删除',
+          description: validation.errorMessage,
+          variant: 'destructive',
+        });
+        setDeleteConfirm(null);
+        setDeleteValidation(null);
+        return;
+      }
+    }
+
     try {
       await ipc.deleteProxyProviderFromProfile(activeProfileId, name);
       await loadActiveProfile();
@@ -612,6 +648,7 @@ export default function Providers() {
       toast({ title: '删除失败', description: String(error), variant: 'destructive' });
     }
     setDeleteConfirm(null);
+    setDeleteValidation(null);
   };
 
   const handleAddRuleProvider = async (name: string, provider: RuleProvider) => {
@@ -638,8 +675,37 @@ export default function Providers() {
     }
   };
 
+  // 请求删除规则源（先校验依赖）
+  const handleRequestDeleteRuleProvider = (name: string) => {
+    if (!profileConfig) {
+      setDeleteConfirm({ type: 'rule', name });
+      setDeleteValidation(null);
+      return;
+    }
+
+    const validation = validateDeleteRuleProvider(name, profileConfig);
+    setDeleteValidation(validation);
+    setDeleteConfirm({ type: 'rule', name });
+  };
+
   const handleDeleteRuleProvider = async (name: string) => {
     if (!activeProfileId) return;
+
+    // 再次校验（防止并发修改）
+    if (profileConfig) {
+      const validation = validateDeleteRuleProvider(name, profileConfig);
+      if (!validation.canDelete) {
+        toast({
+          title: '无法删除',
+          description: validation.errorMessage,
+          variant: 'destructive',
+        });
+        setDeleteConfirm(null);
+        setDeleteValidation(null);
+        return;
+      }
+    }
+
     try {
       await ipc.deleteRuleProviderFromProfile(activeProfileId, name);
       await loadActiveProfile();
@@ -648,6 +714,7 @@ export default function Providers() {
       toast({ title: '删除失败', description: String(error), variant: 'destructive' });
     }
     setDeleteConfirm(null);
+    setDeleteValidation(null);
   };
 
   const currentList = activeTab === 'proxy' ? proxyProviderList : ruleProviderList;
@@ -761,7 +828,7 @@ export default function Providers() {
                     variant="ghost"
                     className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
                     title="删除"
-                    onClick={() => setDeleteConfirm({ type: 'proxy', name })}
+                    onClick={() => handleRequestDeleteProxyProvider(name)}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
@@ -836,7 +903,7 @@ export default function Providers() {
                     variant="ghost"
                     className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
                     title="删除"
-                    onClick={() => setDeleteConfirm({ type: 'rule', name })}
+                    onClick={() => handleRequestDeleteRuleProvider(name)}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
@@ -912,31 +979,67 @@ export default function Providers() {
       />
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+      <Dialog
+        open={!!deleteConfirm}
+        onOpenChange={() => {
+          setDeleteConfirm(null);
+          setDeleteValidation(null);
+        }}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>确认删除</DialogTitle>
+            <DialogTitle>
+              {deleteValidation?.canDelete === false ? '无法删除' : '确认删除'}
+            </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            确定要删除{deleteConfirm?.type === 'proxy' ? '代理源' : '规则源'} "{deleteConfirm?.name}
-            " 吗？此操作不可撤销。
-          </p>
+          {deleteValidation?.canDelete === false ? (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {deleteConfirm?.type === 'proxy' ? '代理源' : '规则源'} "{deleteConfirm?.name}"
+                正在被以下对象引用：
+              </p>
+              <ul className="text-sm text-amber-600 dark:text-amber-400 space-y-1 max-h-40 overflow-y-auto">
+                {formatDependencies(deleteValidation.dependencies).map((dep, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-amber-500 mt-0.5">•</span>
+                    <span>{dep}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-gray-500">
+                请先移除这些引用后再删除{deleteConfirm?.type === 'proxy' ? '代理源' : '规则源'}。
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              确定要删除{deleteConfirm?.type === 'proxy' ? '代理源' : '规则源'} "
+              {deleteConfirm?.name}" 吗？此操作不可撤销。
+            </p>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
-              取消
-            </Button>
             <Button
-              variant="destructive"
+              variant="outline"
               onClick={() => {
-                if (deleteConfirm?.type === 'proxy') {
-                  handleDeleteProxyProvider(deleteConfirm.name);
-                } else if (deleteConfirm?.type === 'rule') {
-                  handleDeleteRuleProvider(deleteConfirm.name);
-                }
+                setDeleteConfirm(null);
+                setDeleteValidation(null);
               }}
             >
-              删除
+              {deleteValidation?.canDelete === false ? '知道了' : '取消'}
             </Button>
+            {deleteValidation?.canDelete !== false && (
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (deleteConfirm?.type === 'proxy') {
+                    handleDeleteProxyProvider(deleteConfirm.name);
+                  } else if (deleteConfirm?.type === 'rule') {
+                    handleDeleteRuleProvider(deleteConfirm.name);
+                  }
+                }}
+              >
+                删除
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

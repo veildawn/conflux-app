@@ -295,4 +295,21 @@ impl MihomoApi {
             ))
         }
     }
+
+    /// 清除 FakeIP 缓存
+    pub async fn flush_fakeip(&self) -> Result<()> {
+        let url = format!("{}/cache/fakeip/flush", self.base_url);
+        let request = self.client.post(&url).json(&serde_json::json!({}));
+        let response = self.auth_header(request).send().await?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            let error_text = response.text().await.unwrap_or_default();
+            Err(anyhow::anyhow!(
+                "Failed to flush FakeIP cache: {}",
+                error_text
+            ))
+        }
+    }
 }

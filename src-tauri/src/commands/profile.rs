@@ -360,7 +360,7 @@ pub async fn delete_rule_from_profile(
     Ok(())
 }
 
-/// 添加 rule-provider 到 Profile
+/// 添加 rule-provider 到 Profile（如果已存在则更新）
 #[tauri::command]
 pub async fn add_rule_provider_to_profile(
     profile_id: String,
@@ -373,10 +373,7 @@ pub async fn add_rule_provider_to_profile(
         .get_profile(&profile_id)
         .map_err(|e| e.to_string())?;
 
-    if config.rule_providers.contains_key(&name) {
-        return Err(format!("Rule provider already exists: {}", name));
-    }
-
+    // 支持 upsert：如果已存在则更新，否则添加
     config.rule_providers.insert(name, provider);
     workspace
         .update_config(&profile_id, &config)
@@ -450,7 +447,7 @@ pub async fn update_profile_config(
 
 // ==================== Proxy Provider CRUD ====================
 
-/// 添加 proxy-provider 到 Profile
+/// 添加 proxy-provider 到 Profile（如果已存在则更新）
 #[tauri::command]
 pub async fn add_proxy_provider_to_profile(
     profile_id: String,
@@ -463,10 +460,7 @@ pub async fn add_proxy_provider_to_profile(
         .get_profile(&profile_id)
         .map_err(|e| e.to_string())?;
 
-    if config.proxy_providers.contains_key(&name) {
-        return Err(format!("Proxy provider already exists: {}", name));
-    }
-
+    // 支持 upsert：如果已存在则更新，否则添加
     config.proxy_providers.insert(name, provider);
     workspace
         .update_config(&profile_id, &config)
