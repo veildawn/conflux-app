@@ -1,148 +1,148 @@
-# Claude Development Guide for Conflux
+# Conflux Claude 开发指南
 
-Conflux is a modern cross-platform proxy management desktop application built with Tauri 2 + MiHomo. This guide helps Claude understand and work with the project effectively.
+Conflux 是一个基于 Tauri 2 + MiHomo 构建的现代化跨平台代理管理桌面应用。本指南帮助 Claude 理解并高效地参与项目开发。
 
-## Project Overview
+## 项目概述
 
-**Type**: Desktop Application (Tauri 2 + React)
-**Purpose**: Proxy management application with MiHomo core
-**Architecture**: Rust backend (Tauri) + React frontend
-**Language**: Primarily Chinese documentation/UI
+**类型**: 桌面应用 (Tauri 2 + React)
+**用途**: 基于 MiHomo 核心的代理管理应用
+**架构**: Rust 后端 (Tauri) + React 前端
+**语言**: 中文文档/界面
 
-## Technology Stack
+## 技术栈
 
-### Frontend
+### 前端
 
-- **React 19** with TypeScript 5
-- **Tailwind CSS 4** + **Radix UI** components
-- **Zustand** for state management
-- **Vite 7** for build tooling
-- **React Router DOM** for routing
+- **React 19** + TypeScript 5
+- **Tailwind CSS 4** + **Radix UI** 组件库
+- **Zustand** 状态管理
+- **Vite 7** 构建工具
+- **React Router DOM** 路由
 
-### Backend
+### 后端
 
-- **Tauri 2** desktop framework
-- **Rust 1.77+** with Tokio async runtime
-- **MiHomo** proxy core integration
-- System integration (tray, notifications)
+- **Tauri 2** 桌面框架
+- **Rust 1.77+** + Tokio 异步运行时
+- **MiHomo** 代理核心集成
+- 系统集成（托盘、通知）
 
-## Key Project Structure
+## 项目结构
 
 ```
 conflux/
-├── src/                    # React frontend
-│   ├── components/         # UI components
-│   ├── pages/              # Page components
-│   ├── services/           # IPC communication
-│   ├── stores/             # Zustand stores
-│   ├── types/              # TypeScript definitions
-│   └── utils/              # Frontend utilities
-├── src-tauri/              # Rust backend
+├── src/                    # React 前端
+│   ├── components/         # UI 组件
+│   ├── pages/              # 页面组件
+│   ├── services/           # IPC 通信
+│   ├── stores/             # Zustand 状态
+│   ├── types/              # TypeScript 类型定义
+│   └── utils/              # 前端工具函数
+├── src-tauri/              # Rust 后端
 │   ├── src/
-│   │   ├── commands/       # Tauri IPC commands
-│   │   ├── config/         # Configuration management
-│   │   ├── mihomo/         # MiHomo integration
-│   │   ├── models/         # Data models
-│   │   └── main.rs         # Entry point
-│   └── resources/          # MiHomo binaries
+│   │   ├── commands/       # Tauri IPC 命令
+│   │   ├── config/         # 配置管理
+│   │   ├── mihomo/         # MiHomo 集成
+│   │   ├── models/         # 数据模型
+│   │   └── main.rs         # 入口文件
+│   └── binaries/           # MiHomo 二进制文件
 ```
 
-## Development Commands
+## 开发命令
 
 ```bash
-# Install dependencies
+# 安装依赖
 pnpm install
 
-# Development mode (hot reload)
+# 开发模式（热重载）
 pnpm tauri dev
 
-# Build application
+# 构建应用
 pnpm tauri build
 
-# Frontend-only dev server
+# 仅前端开发服务器
 pnpm dev
 
-# Code quality
+# 代码质量
 pnpm lint          # ESLint
 pnpm type-check    # TypeScript
 pnpm format        # Prettier
 pnpm test          # Vitest
 
-# Fetch external dependencies
-pnpm run fetch:mihomo      # Download MiHomo binary
-pnpm run fetch:substore    # Download Sub-Store
-pnpm run fetch:all         # Download all
+# 下载外部依赖
+pnpm run fetch:mihomo      # 下载 MiHomo 二进制
+pnpm run fetch:substore    # 下载 Sub-Store
+pnpm run fetch:all         # 下载全部
 ```
 
-## Important Files to Know
+## 重要文件
 
-### Configuration
+### 配置文件
 
-- `package.json` - Node.js dependencies and scripts
-- `src-tauri/Cargo.toml` - Rust dependencies
-- `src-tauri/tauri.conf.json` - Tauri configuration
-- `vite.config.ts` - Frontend build configuration
+- `package.json` - Node.js 依赖和脚本
+- `src-tauri/Cargo.toml` - Rust 依赖
+- `src-tauri/tauri.conf.json` - Tauri 配置
+- `vite.config.ts` - 前端构建配置
 
-### Key Source Files
+### 核心源码
 
-- `src/App.tsx` - Main React application
-- `src/services/ipc.ts` - Frontend-backend communication
-- `src-tauri/src/main.rs` - Rust application entry
-- `src-tauri/src/commands/` - Backend API endpoints
+- `src/App.tsx` - React 主应用
+- `src/services/ipc.ts` - 前后端通信
+- `src-tauri/src/main.rs` - Rust 应用入口
+- `src-tauri/src/commands/` - 后端 API 端点
 
-## Development Workflow
+## 开发流程
 
-### 1. Frontend Development
+### 1. 前端开发
 
-- Use `pnpm dev` for frontend-only development
-- Use `pnpm tauri dev` for full-stack development
-- Frontend communicates with backend via Tauri IPC
+- 使用 `pnpm dev` 进行纯前端开发
+- 使用 `pnpm tauri dev` 进行全栈开发
+- 前端通过 Tauri IPC 与后端通信
 
-### 2. Backend Development
+### 2. 后端开发
 
-- Rust code in `src-tauri/src/`
-- Commands exposed to frontend via `#[tauri::command]`
-- Configuration management for proxy settings
+- Rust 代码位于 `src-tauri/src/`
+- 通过 `#[tauri::command]` 暴露命令给前端
+- 代理设置的配置管理
 
-### 3. IPC Communication
+### 3. IPC 通信
 
-- Frontend calls backend via `invoke()` functions
-- Types defined in `src/types/` and `src-tauri/src/models/`
-- Async communication pattern
+- 前端通过 `invoke()` 函数调用后端
+- 类型定义在 `src/types/` 和 `src-tauri/src/models/`
+- 异步通信模式
 
-## Key Features Being Developed
+## 功能开发进度
 
-### Current (Phase 1) ✅
+### 当前阶段 (Phase 1) ✅
 
-- MiHomo core integration
-- Basic proxy management
-- System tray integration
-- Configuration management
-- Node switching functionality
+- MiHomo 核心集成
+- 基础代理管理
+- 系统托盘集成
+- 配置管理
+- 节点切换功能
 
-### Planned (Phase 2)
+### 计划中 (Phase 2)
 
-- Subscription management
-- Advanced node management
-- Rule management
-- Connection management
-- Configuration editor
+- 订阅管理
+- 高级节点管理
+- 规则管理
+- 连接管理
+- 配置编辑器
 
-### Future (Phase 3)
+### 未来 (Phase 3)
 
-- Traffic statistics
-- TUN mode
-- System integration optimization
-- Auto-updater
+- 流量统计
+- TUN 模式
+- 系统集成优化
+- 自动更新
 
-## MiHomo Integration
+## MiHomo 集成
 
-- Binary downloaded to `src-tauri/binaries/`
-- Platform-specific binaries (Windows/macOS/Linux)
-- Controlled via Rust backend
-- REST API communication for status/control
+- 二进制文件下载到 `src-tauri/binaries/`
+- 平台特定二进制（Windows/macOS/Linux）
+- 通过 Rust 后端控制
+- REST API 通信用于状态/控制
 
-### Sidecar Binary Naming
+### Sidecar 二进制命名
 
 Tauri `externalBin` 打包后会简化文件名（去掉 target triple）：
 
@@ -155,58 +155,58 @@ Tauri `externalBin` 打包后会简化文件名（去掉 target triple）：
 
 `find_sidecar_binary()` 函数直接使用简化名称查找打包后的 sidecar。
 
-## Code Style & Conventions
+## 代码风格规范
 
 ### TypeScript/React
 
-- Functional components with hooks
-- TypeScript strict mode
-- Tailwind for styling
-- Radix UI for accessible components
+- 函数式组件 + Hooks
+- TypeScript 严格模式
+- Tailwind 样式
+- Radix UI 无障碍组件
 
 ### Rust
 
-- Standard Rust conventions
-- Async/await with Tokio
-- Error handling with `Result<T, E>`
-- Serde for JSON serialization
+- 标准 Rust 规范
+- Tokio 异步/等待
+- `Result<T, E>` 错误处理
+- Serde JSON 序列化
 
-## Testing
+## 测试
 
-- **Frontend**: Vitest for unit tests
-- **Backend**: Rust built-in test framework
-- **E2E**: Planned with Tauri testing tools
+- **前端**: Vitest 单元测试
+- **后端**: Rust 内置测试框架
+- **E2E**: 计划使用 Tauri 测试工具
 
-## Build & Distribution
+## 构建与分发
 
-- **Development**: `pnpm tauri dev`
-- **Production**: `pnpm tauri build`
-- **CI/CD**: GitHub Actions for multi-platform builds
-- **Platforms**: Windows (x64), macOS (ARM64/x64), Linux (x64)
+- **开发**: `pnpm tauri dev`
+- **生产**: `pnpm tauri build`
+- **CI/CD**: GitHub Actions 多平台构建
+- **平台**: Windows (x64), macOS (ARM64/x64), Linux (x64)
 
-## Common Tasks for Claude
+## Claude 常见任务
 
-1. **Adding new features**: Usually involves both frontend UI and backend commands
-2. **IPC communication**: Defining commands in Rust and calling from TypeScript
-3. **Configuration management**: Updating config models and persistence
-4. **UI development**: React components with Tailwind CSS
-5. **Bug fixes**: Check both frontend and backend logs
-6. **Dependencies**: Use `pnpm` for frontend, `cargo` for Rust
+1. **添加新功能**: 通常涉及前端 UI 和后端命令
+2. **IPC 通信**: 在 Rust 中定义命令，从 TypeScript 调用
+3. **配置管理**: 更新配置模型和持久化
+4. **UI 开发**: React 组件 + Tailwind CSS
+5. **Bug 修复**: 检查前端和后端日志
+6. **依赖管理**: 前端用 `pnpm`，Rust 用 `cargo`
 
-## Environment Requirements
+## 环境要求
 
 - **Node.js** >= 18.0.0
-- **pnpm** >= 8.0.0 (preferred package manager)
+- **pnpm** >= 8.0.0（推荐包管理器）
 - **Rust** >= 1.77.0
-- **Python 3** (for downloading MiHomo)
-- **System dependencies**: Per Tauri requirements
+- **Python 3**（用于下载 MiHomo）
+- **系统依赖**: 参考 Tauri 要求
 
-## Useful Resources
+## 参考资源
 
-- [Tauri 2 Documentation](https://v2.tauri.app/)
-- [MiHomo Documentation](https://wiki.metacubex.one/)
-- [Project README](README.md) - Comprehensive project information
+- [Tauri 2 文档](https://v2.tauri.app/)
+- [MiHomo 文档](https://wiki.metacubex.one/)
+- [项目 README](README.md) - 详细项目信息
 
 ---
 
-_This guide should be updated as the project evolves and new features are added._
+_本指南应随项目发展和新功能添加而更新。_
