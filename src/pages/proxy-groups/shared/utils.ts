@@ -1,5 +1,3 @@
-
-
 export type GroupFormData = {
   name: string;
   type: string;
@@ -65,30 +63,71 @@ export const STEP_METADATA = {
   type: {
     title: '策略组身份',
     description: '设置策略组的基本身份标识',
-    nextLabel: '选择节点',
+    nextLabel: '节点来源',
     index: 1,
   },
-  basic: {
-    title: '策略包含',
-    description: '挑选现有的节点、策略组或外部详情',
-    nextLabel: '行为配置',
+  source: {
+    title: '节点来源',
+    description: '选择如何获取代理节点',
+    nextLabel: '选择节点',
     index: 2,
+  },
+  proxies: {
+    title: '选择节点',
+    description: '手动挑选要包含的节点和代理源',
+    nextLabel: '行为配置',
+    index: 3,
   },
   behavior: {
     title: '行为控制',
     description: '配置测速间隔周期与负载参数',
     nextLabel: '高级设置',
-    index: 3,
+    index: 4,
   },
   advanced: {
     title: '高级选项',
     description: '特定的规则排除与显示设置',
     nextLabel: '保存策略',
-    index: 4,
+    index: 5,
   },
 } as const;
 
 export type StepKey = keyof typeof STEP_METADATA;
+
+/** 节点来源模式 */
+export type SourceMode = 'manual' | 'all-proxies' | 'all-providers' | 'all';
+
+export const SOURCE_MODE_OPTIONS: {
+  value: SourceMode;
+  title: string;
+  description: string;
+  icon: 'manual' | 'proxies' | 'providers' | 'all';
+}[] = [
+  {
+    value: 'manual',
+    title: '手动选择',
+    description: '自己挑选要包含的节点和代理源',
+    icon: 'manual',
+  },
+  {
+    value: 'all-proxies',
+    title: '包含所有手动代理',
+    description: '自动导入所有已定义的代理节点',
+    icon: 'proxies',
+  },
+  {
+    value: 'all-providers',
+    title: '包含所有代理源',
+    description: '自动导入所有代理源（proxy-providers）中的节点',
+    icon: 'providers',
+  },
+  {
+    value: 'all',
+    title: '包含全部',
+    description: '自动包含所有手动代理和所有代理源',
+    icon: 'all',
+  },
+];
 
 export const LOAD_BALANCE_STRATEGIES = [
   {

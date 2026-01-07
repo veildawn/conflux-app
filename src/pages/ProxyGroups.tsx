@@ -12,8 +12,12 @@ import {
 import { useToast } from '@/hooks/useToast';
 import { ipc } from '@/services/ipc';
 import { cn } from '@/utils/cn';
-import { parseRule } from '@/types/config';
 import type { ProfileConfig, ProxyGroupConfig } from '@/types/config';
+import {
+  validateDeleteProxyGroup,
+  formatDependencies,
+  type DeleteValidationResult,
+} from '@/utils/deleteValidation';
 
 import { ProxyGroupListItem } from './proxy-groups/shared/ProxyGroupListItem';
 
@@ -52,6 +56,7 @@ export default function ProxyGroups() {
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const [profileConfig, setProfileConfig] = useState<ProfileConfig | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<ProxyGroupConfig | null>(null);
+  const [deleteValidation, setDeleteValidation] = useState<DeleteValidationResult | null>(null);
 
   const loadActiveProfile = useCallback(async () => {
     setLoading(true);
@@ -89,17 +94,6 @@ export default function ProxyGroups() {
   const proxyGroups = useMemo(() => {
     const groups = profileConfig?.['proxy-groups'] || [];
     return [...groups].sort((a, b) => a.name.localeCompare(b.name));
-  }, [profileConfig]);
-
-  const ruleUsageMap = useMemo(() => {
-    const map = new Map<string, number>();
-    const rules = profileConfig?.rules || [];
-    for (const rule of rules) {
-      const parsed = parseRule(rule);
-      if (!parsed) continue;
-      map.set(parsed.policy, (map.get(parsed.policy) || 0) + 1);
-    }
-    return map;
   }, [profileConfig]);
 
   const openGroupWindow = async (name?: string) => {
@@ -141,8 +135,35 @@ export default function ProxyGroups() {
     }
   };
 
+  // 请求删除策略组（先校验依赖）
+  const handleRequestDeleteGroup = (group: ProxyGroupConfig) => {
+    if (!profileConfig) {
+      setDeleteConfirm(group);
+      setDeleteValidation(null);
+      return;
+    }
+
+    // 校验删除依赖
+    const validation = validateDeleteProxyGroup(group.name, profileConfig);
+    setDeleteValidation(validation);
+    setDeleteConfirm(group);
+  };
+
   const handleDeleteGroup = async (name: string) => {
     if (!activeProfileId || !profileConfig) return;
+
+    // 再次校验（防止并发修改）
+    const validation = validateDeleteProxyGroup(name, profileConfig);
+    if (!validation.canDelete) {
+      toast({
+        title: '无法删除',
+        description: validation.errorMessage,
+        variant: 'destructive',
+      });
+      setDeleteConfirm(null);
+      setDeleteValidation(null);
+      return;
+    }
 
     const nextGroups = (profileConfig['proxy-groups'] || [])
       .filter((group) => group.name !== name)
@@ -164,6 +185,8 @@ export default function ProxyGroups() {
       console.error('Failed to delete proxy group:', error);
       toast({ title: '删除失败', description: String(error), variant: 'destructive' });
     }
+    setDeleteConfirm(null);
+    setDeleteValidation(null);
   };
 
   return (
@@ -233,7 +256,7 @@ export default function ProxyGroups() {
                     group={group}
                     isRemote={false}
                     onEdit={() => openGroupWindow(group.name)}
-                    onDelete={() => setDeleteConfirm(group)}
+                    onDelete={() => handleRequestDeleteGroup(group)}
                     isLast={index === proxyGroups.length - 1}
                   />
                 ))}
@@ -243,35 +266,65 @@ export default function ProxyGroups() {
         </div>
       )}
 
-      <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+      <Dialog
+        open={!!deleteConfirm}
+        onOpenChange={() => {
+          setDeleteConfirm(null);
+          setDeleteValidation(null);
+        }}
+      >
         <DialogContent className="max-w-sm rounded-[24px]">
           <DialogHeader>
-            <DialogTitle>确认删除</DialogTitle>
+            <DialogTitle>
+              {deleteValidation?.canDelete === false ? '无法删除' : '确认删除'}
+            </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            确定要删除策略组 "{deleteConfirm?.name}" 吗？此操作不可撤销。
-            {(ruleUsageMap.get(deleteConfirm?.name || '') || 0) > 0 && (
-              <span className="block mt-2 text-xs text-amber-500">
-                该策略组仍被规则引用，请确认规则策略是否需要调整。
-              </span>
-            )}
-          </p>
+          {deleteValidation?.canDelete === false ? (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                策略组 "{deleteConfirm?.name}" 正在被以下对象引用：
+              </p>
+              <ul className="text-sm text-amber-600 dark:text-amber-400 space-y-1 max-h-40 overflow-y-auto">
+                {formatDependencies(deleteValidation.dependencies).map((dep, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-amber-500 mt-0.5">•</span>
+                    <span>{dep}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-gray-500">
+                请先修改相关规则的策略或移除其他策略组的引用后再删除。
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              确定要删除策略组 "{deleteConfirm?.name}" 吗？此操作不可撤销。
+            </p>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirm(null)} className="rounded-xl">
-              取消
-            </Button>
             <Button
-              variant="destructive"
+              variant="outline"
               onClick={() => {
-                if (deleteConfirm?.name) {
-                  handleDeleteGroup(deleteConfirm.name);
-                }
                 setDeleteConfirm(null);
+                setDeleteValidation(null);
               }}
               className="rounded-xl"
             >
-              删除
+              {deleteValidation?.canDelete === false ? '知道了' : '取消'}
             </Button>
+            {deleteValidation?.canDelete !== false && (
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (deleteConfirm?.name) {
+                    handleDeleteGroup(deleteConfirm.name);
+                  }
+                }}
+                className="rounded-xl"
+              >
+                删除
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

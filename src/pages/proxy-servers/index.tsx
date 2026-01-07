@@ -29,6 +29,12 @@ import { LinkParseDialog } from './LinkParseDialog';
 // Removed ProxyServerDialog in favor of window
 import { listen } from '@tauri-apps/api/event';
 import { getProxyTypeColor, getProxyTypeBgColor } from './utils';
+import type { ProfileConfig } from '@/types/config';
+import {
+  validateDeleteProxy,
+  formatDependencies,
+  type DeleteValidationResult,
+} from '@/utils/deleteValidation';
 
 // AddServerMenu component
 const AddServerMenu = ({
@@ -111,6 +117,7 @@ export default function ProxyServers() {
   const status = useProxyStore((state) => state.status);
   const { toast } = useToast();
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [profileConfig, setProfileConfig] = useState<ProfileConfig | null>(null);
 
   const [proxyServers, setProxyServers] = useState<ProxyConfig[]>([]);
   const [loadingServers, setLoadingServers] = useState(false);
@@ -119,6 +126,7 @@ export default function ProxyServers() {
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   // Removed dialogOpen and editingProxy
   const [deleteConfirm, setDeleteConfirm] = useState<ProxyConfig | null>(null);
+  const [deleteValidation, setDeleteValidation] = useState<DeleteValidationResult | null>(null);
 
   const loadProxyServers = useCallback(async () => {
     setLoadingServers(true);
@@ -128,10 +136,12 @@ export default function ProxyServers() {
 
       if (!profileId) {
         setProxyServers([]);
+        setProfileConfig(null);
         return;
       }
 
       const [, config] = await ipc.getProfile(profileId);
+      setProfileConfig(config);
       const sorted = [...config.proxies].sort((a, b) => a.name.localeCompare(b.name));
       setProxyServers(sorted);
     } catch (error) {
@@ -301,8 +311,37 @@ export default function ProxyServers() {
     };
   }, [loadProxyServers]);
 
+  // 请求删除服务器（先校验依赖）
+  const handleRequestDelete = (server: ProxyConfig) => {
+    if (!profileConfig) {
+      setDeleteConfirm(server);
+      setDeleteValidation(null);
+      return;
+    }
+
+    // 校验删除依赖
+    const validation = validateDeleteProxy(server.name, profileConfig);
+    setDeleteValidation(validation);
+    setDeleteConfirm(server);
+  };
+
   const handleDeleteProxy = async (name: string) => {
     if (!activeProfileId) return;
+
+    // 再次校验（防止并发修改）
+    if (profileConfig) {
+      const validation = validateDeleteProxy(name, profileConfig);
+      if (!validation.canDelete) {
+        toast({
+          title: '无法删除',
+          description: validation.errorMessage,
+          variant: 'destructive',
+        });
+        setDeleteConfirm(null);
+        setDeleteValidation(null);
+        return;
+      }
+    }
 
     try {
       await ipc.deleteProxy(activeProfileId, name);
@@ -432,7 +471,7 @@ export default function ProxyServers() {
                       title="删除"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setDeleteConfirm(server);
+                        handleRequestDelete(server);
                       }}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -520,29 +559,63 @@ export default function ProxyServers() {
         statusRunning={status.running}
       />
 
-      <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+      <Dialog
+        open={!!deleteConfirm}
+        onOpenChange={() => {
+          setDeleteConfirm(null);
+          setDeleteValidation(null);
+        }}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>确认删除</DialogTitle>
+            <DialogTitle>
+              {deleteValidation?.canDelete === false ? '无法删除' : '确认删除'}
+            </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            确定要删除服务器 "{deleteConfirm?.name}" 吗？此操作不可撤销。
-          </p>
+          {deleteValidation?.canDelete === false ? (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                服务器 "{deleteConfirm?.name}" 正在被以下对象引用：
+              </p>
+              <ul className="text-sm text-amber-600 dark:text-amber-400 space-y-1 max-h-40 overflow-y-auto">
+                {formatDependencies(deleteValidation.dependencies).map((dep, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-amber-500 mt-0.5">•</span>
+                    <span>{dep}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-gray-500">请先移除这些引用后再删除服务器。</p>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              确定要删除服务器 "{deleteConfirm?.name}" 吗？此操作不可撤销。
+            </p>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
-              取消
-            </Button>
             <Button
-              variant="destructive"
+              variant="outline"
               onClick={() => {
-                if (deleteConfirm?.name) {
-                  handleDeleteProxy(deleteConfirm.name);
-                }
                 setDeleteConfirm(null);
+                setDeleteValidation(null);
               }}
             >
-              删除
+              {deleteValidation?.canDelete === false ? '知道了' : '取消'}
             </Button>
+            {deleteValidation?.canDelete !== false && (
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (deleteConfirm?.name) {
+                    handleDeleteProxy(deleteConfirm.name);
+                  }
+                  setDeleteConfirm(null);
+                  setDeleteValidation(null);
+                }}
+              >
+                删除
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

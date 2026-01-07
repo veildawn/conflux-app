@@ -434,6 +434,27 @@ export const ipc = {
     return invoke('get_app_version');
   },
 
+  /**
+   * 清除 FakeIP 缓存
+   */
+  async flushFakeipCache(): Promise<void> {
+    return invoke('flush_fakeip_cache');
+  },
+
+  /**
+   * 获取开机自启动状态
+   */
+  async getAutostartEnabled(): Promise<boolean> {
+    return invoke('get_autostart_enabled');
+  },
+
+  /**
+   * 设置开机自启动
+   */
+  async setAutostartEnabled(enabled: boolean): Promise<void> {
+    return invoke('set_autostart_enabled', { enabled });
+  },
+
   // ============= Sub-Store 命令 =============
 
   /**

@@ -18,6 +18,10 @@ import {
   Eye,
   EyeOff,
   CloudOff,
+  MousePointerClick,
+  Server,
+  Cloud,
+  Globe2,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -44,6 +48,8 @@ import {
   toggleListItem,
   STEP_METADATA,
   type StepKey,
+  type SourceMode,
+  SOURCE_MODE_OPTIONS,
 } from './shared/utils';
 
 // Simplified helper for common icons
@@ -96,6 +102,7 @@ export default function ProxyGroupEditWindow() {
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
   const [formData, setFormData] = useState<GroupFormData>(createDefaultFormData());
   const [submitting, setSubmitting] = useState(false);
+  const [sourceMode, setSourceMode] = useState<SourceMode>('manual');
 
   // Filter queries
   const [proxyQuery, setProxyQuery] = useState('');
@@ -121,6 +128,19 @@ export default function ProxyGroupEditWindow() {
             (g) => g.name === editName
           );
           if (group) {
+            // 根据现有配置推断 sourceMode
+            let inferredSourceMode: SourceMode = 'manual';
+            if (group['include-all']) {
+              inferredSourceMode = 'all';
+            } else if (group['include-all-proxies'] && group['include-all-providers']) {
+              inferredSourceMode = 'all';
+            } else if (group['include-all-proxies']) {
+              inferredSourceMode = 'all-proxies';
+            } else if (group['include-all-providers']) {
+              inferredSourceMode = 'all-providers';
+            }
+            setSourceMode(inferredSourceMode);
+
             setFormData({
               ...createDefaultFormData(),
               name: group.name || '',
@@ -145,7 +165,7 @@ export default function ProxyGroupEditWindow() {
               strategy: group.strategy || '',
               tolerance: group.tolerance !== undefined ? String(group.tolerance) : '',
             });
-            setStep('basic'); // Start from basic if editing
+            setStep('source'); // Start from source if editing
           } else {
             toast({ title: '错误', description: '未找到该策略组', variant: 'destructive' });
           }
@@ -180,6 +200,8 @@ export default function ProxyGroupEditWindow() {
   const nameValue = formData.name.trim();
   const typeValue = formData.type.trim();
   const needsBehavior = ['url-test', 'fallback', 'load-balance'].includes(typeValue);
+  // 是否需要显示手动选择节点的步骤
+  const needsManualSelection = sourceMode === 'manual';
 
   const proxies = useMemo(() => normalizeList(formData.proxies), [formData.proxies]);
   const providers = useMemo(() => normalizeList(formData.providers), [formData.providers]);
@@ -188,7 +210,11 @@ export default function ProxyGroupEditWindow() {
     if (!needsBehavior && step === 'behavior') {
       setStep('advanced');
     }
-  }, [needsBehavior, step]);
+    // 如果不需要手动选择但当前在 proxies 步骤，跳到下一步
+    if (!needsManualSelection && step === 'proxies') {
+      setStep(needsBehavior ? 'behavior' : 'advanced');
+    }
+  }, [needsBehavior, needsManualSelection, step]);
 
   const selectableTypeOptions = useMemo(
     () =>
@@ -240,20 +266,20 @@ export default function ProxyGroupEditWindow() {
   const strategyValid =
     !strategyValue || LOAD_BALANCE_STRATEGIES.some((strategy) => strategy.value === strategyValue);
 
-  const providersEnabled = !formData.includeAll && !formData.includeAllProviders;
+  const providersEnabled = sourceMode === 'manual';
   const hasProviders = providersEnabled && providers.length > 0;
-  const hasAutoProviders = formData.includeAll || formData.includeAllProviders;
-  const hasAutoProxies = formData.includeAll || formData.includeAllProxies;
-  const hasSources = proxies.length > 0 || hasProviders || hasAutoProviders || hasAutoProxies;
+  // 如果是自动模式，始终有来源；手动模式需要选择节点或代理源
+  const hasSources = sourceMode !== 'manual' || proxies.length > 0 || hasProviders;
   const nameTaken =
     !!nameValue && existingNames.includes(nameValue) && (!editName || editName !== nameValue);
 
   const visibleSteps = useMemo<StepKey[]>(() => {
-    const steps: StepKey[] = ['type', 'basic'];
+    const steps: StepKey[] = ['type', 'source'];
+    if (needsManualSelection) steps.push('proxies');
     if (needsBehavior) steps.push('behavior');
     steps.push('advanced');
     return steps;
-  }, [needsBehavior]);
+  }, [needsBehavior, needsManualSelection]);
 
   const stepIndex = Math.max(0, visibleSteps.indexOf(step));
   const isFirstStep = stepIndex === 0;
@@ -393,9 +419,16 @@ export default function ProxyGroupEditWindow() {
         }
       }
       if (formData.disableUdp) group['disable-udp'] = true;
-      if (formData.includeAll) group['include-all'] = true;
-      if (formData.includeAllProxies) group['include-all-proxies'] = true;
-      if (formData.includeAllProviders) group['include-all-providers'] = true;
+
+      // 根据 sourceMode 设置自动包含标志
+      if (sourceMode === 'all') {
+        group['include-all'] = true;
+      } else if (sourceMode === 'all-proxies') {
+        group['include-all-proxies'] = true;
+      } else if (sourceMode === 'all-providers') {
+        group['include-all-providers'] = true;
+      }
+      // manual 模式不设置任何自动包含标志
       if (formData.filter.trim()) group.filter = formData.filter.trim();
       if (formData.excludeFilter.trim()) group['exclude-filter'] = formData.excludeFilter.trim();
       if (formData.excludeType.trim()) group['exclude-type'] = formData.excludeType.trim();
@@ -565,7 +598,7 @@ export default function ProxyGroupEditWindow() {
             <div
               className={cn(
                 'absolute inset-0 px-8 pb-24',
-                step === 'basic'
+                step === 'proxies'
                   ? 'overflow-hidden flex flex-col'
                   : 'overflow-y-auto custom-scrollbar'
               )}
@@ -576,7 +609,7 @@ export default function ProxyGroupEditWindow() {
                   direction === 'forward'
                     ? 'animate-in fade-in slide-in-from-right-8'
                     : 'animate-in fade-in slide-in-from-left-8',
-                  step === 'basic' && 'flex flex-col'
+                  step === 'proxies' && 'flex flex-col'
                 )}
               >
                 {step === 'type' && (
@@ -667,66 +700,118 @@ export default function ProxyGroupEditWindow() {
                   </div>
                 )}
 
-                {step === 'basic' && (
+                {step === 'source' && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {SOURCE_MODE_OPTIONS.map((option) => {
+                        const selected = sourceMode === option.value;
+                        const IconComponent = {
+                          manual: MousePointerClick,
+                          proxies: Server,
+                          providers: Cloud,
+                          all: Globe2,
+                        }[option.icon];
+                        return (
+                          <div
+                            key={option.value}
+                            onClick={() => setSourceMode(option.value)}
+                            className={cn(
+                              'group relative rounded-3xl border p-5 transition-all cursor-pointer overflow-hidden',
+                              selected
+                                ? 'bg-white/80 border-blue-500 shadow-[0_0_20px_rgba(0,122,255,0.2)]'
+                                : 'bg-white/45 border-transparent hover:bg-white/70 hover:border-white/70'
+                            )}
+                          >
+                            <div className="flex items-center gap-4">
+                              <div
+                                className={cn(
+                                  'h-12 w-12 rounded-full flex items-center justify-center shadow-[0_4px_8px_rgba(0,0,0,0.06)]',
+                                  selected ? 'bg-blue-600 text-white' : 'bg-white text-blue-600'
+                                )}
+                              >
+                                <IconComponent className="h-5 w-5" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-semibold text-neutral-900">
+                                  {option.title}
+                                </h3>
+                                <p className="mt-1 text-xs text-neutral-500 leading-relaxed">
+                                  {option.description}
+                                </p>
+                              </div>
+                              {selected && (
+                                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white shadow-[0_0_12px_rgba(0,122,255,0.4)]">
+                                  <CheckIcon />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* 过滤器配置 - 对自动模式有用 */}
+                    {sourceMode !== 'manual' && (
+                      <div className="rounded-2xl border border-white/60 bg-white/50 shadow-[0_8px_20px_rgba(0,0,0,0.06)] p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-neutral-400">
+                          <Search className="h-3.5 w-3.5" />
+                          节点过滤正则
+                          {!filterValid && formData.filter && (
+                            <Badge variant="destructive" className="h-4 px-1 text-[8px]">
+                              正则错误
+                            </Badge>
+                          )}
+                        </div>
+                        <Input
+                          value={formData.filter}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, filter: e.target.value }))
+                          }
+                          placeholder="例如: US|HK|SG（留空包含全部）"
+                          className={cn(
+                            'h-10 rounded-xl bg-white/70 border border-white/70 text-sm font-mono',
+                            !filterValid && formData.filter && 'border-red-400/60 text-red-500'
+                          )}
+                        />
+                        <p className="text-xs text-neutral-400">
+                          使用正则表达式过滤节点名称，只有匹配的节点才会被包含
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {step === 'proxies' && (
                   <div className="flex flex-col h-full space-y-5">
-                    {/* 自动发现与过滤 - 置顶 */}
+                    {/* 过滤器 - 置顶 */}
                     <div className="space-y-3 shrink-0">
                       <div className="text-xs font-semibold uppercase tracking-widest text-neutral-400 flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-indigo-500" />
-                        自动发现与过滤
+                        <Search className="h-3.5 w-3.5 text-indigo-500" />
+                        节点过滤
                       </div>
 
-                      <div className="rounded-2xl border border-white/60 bg-white/50 shadow-[0_8px_20px_rgba(0,0,0,0.06)] overflow-hidden">
-                        <div
-                          className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-white/60 transition-colors"
-                          onClick={() =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              includeAllProxies: !prev.includeAllProxies,
-                            }))
-                          }
-                        >
-                          <div>
-                            <div className="text-sm font-semibold text-neutral-800">
-                              包含所有手动代理
-                            </div>
-                            <div className="text-xs text-neutral-400">
-                              自动导入所有已定义的代理。
-                            </div>
-                          </div>
-                          <Switch
-                            className="scale-90 data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-neutral-200"
-                            checked={formData.includeAllProxies}
-                            onCheckedChange={(c) =>
-                              setFormData((prev) => ({ ...prev, includeAllProxies: c }))
-                            }
-                            onClick={(e) => e.stopPropagation()}
-                          />
+                      <div className="rounded-2xl border border-white/60 bg-white/50 shadow-[0_8px_20px_rgba(0,0,0,0.06)] overflow-hidden px-4 py-3 space-y-2">
+                        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-neutral-400">
+                          包含过滤正则
+                          {!filterValid && formData.filter && (
+                            <Badge variant="destructive" className="h-4 px-1 text-[8px]">
+                              正则错误
+                            </Badge>
+                          )}
                         </div>
-
-                        <div className="border-t border-white/60 px-4 py-3 space-y-2">
-                          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-neutral-400">
-                            包含过滤正则
-                            {!filterValid && formData.filter && (
-                              <Badge variant="destructive" className="h-4 px-1 text-[8px]">
-                                正则错误
-                              </Badge>
+                        <div className="relative">
+                          <Input
+                            value={formData.filter}
+                            onChange={(e) =>
+                              setFormData((prev) => ({ ...prev, filter: e.target.value }))
+                            }
+                            placeholder="例如: US|HK|SG"
+                            className={cn(
+                              'h-9 rounded-xl bg-white/70 border border-white/70 text-xs font-mono',
+                              !filterValid && formData.filter && 'border-red-400/60 text-red-500'
                             )}
-                          </div>
-                          <div className="relative">
-                            <Input
-                              value={formData.filter}
-                              onChange={(e) =>
-                                setFormData((prev) => ({ ...prev, filter: e.target.value }))
-                              }
-                              placeholder="例如: US|HK|SG"
-                              className={cn(
-                                'h-9 rounded-xl bg-white/70 border border-white/70 text-xs font-mono',
-                                !filterValid && formData.filter && 'border-red-400/60 text-red-500'
-                              )}
-                            />
-                            <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
-                          </div>
+                          />
+                          <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
                         </div>
                       </div>
                     </div>
