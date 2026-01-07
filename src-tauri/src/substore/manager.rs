@@ -273,6 +273,9 @@ impl SubStoreManager {
         let pid = child.pid();
         log::info!("Sub-Store sidecar spawned with PID: {}", pid);
 
+        // 克隆 process Arc 用于后台任务
+        let process_clone = self.process.clone();
+
         // 启动后台任务处理 sidecar 输出
         tokio::spawn(async move {
             use tauri_plugin_shell::process::CommandEvent;
@@ -297,6 +300,10 @@ impl SubStoreManager {
                             payload.code,
                             payload.signal
                         );
+                        // 清理进程状态，确保 is_running() 返回正确结果
+                        let mut guard = process_clone.lock().await;
+                        *guard = None;
+                        log::info!("[substore] Process state cleared");
                         break;
                     }
                     _ => {}
