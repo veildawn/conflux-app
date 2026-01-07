@@ -48,8 +48,9 @@ pub async fn install_service() -> Result<(), String> {
 /// 卸载服务
 #[cfg(target_os = "windows")]
 #[tauri::command]
-pub async fn uninstall_service() -> Result<(), String> {
+pub async fn uninstall_service(app: tauri::AppHandle) -> Result<(), String> {
     use crate::system::WinServiceManager;
+    use crate::commands::reload::sync_proxy_status;
 
     // 检查是否已安装
     if !WinServiceManager::is_installed().map_err(|e| e.to_string())? {
@@ -69,10 +70,12 @@ pub async fn uninstall_service() -> Result<(), String> {
     // 重新启动 mihomo（普通模式）
     if let Err(e) = state.mihomo_manager.start().await {
         log::warn!("Failed to restart mihomo after service uninstall: {}", e);
-        // 不返回错误，因为服务已经成功卸载
     } else {
         log::info!("Mihomo restarted in normal mode after service uninstall");
     }
+
+    // 同步代理状态到前端
+    sync_proxy_status(&app).await;
 
     Ok(())
 }
@@ -99,8 +102,9 @@ pub async fn start_service() -> Result<(), String> {
 /// 停止服务
 #[cfg(target_os = "windows")]
 #[tauri::command]
-pub async fn stop_service() -> Result<(), String> {
+pub async fn stop_service(app: tauri::AppHandle) -> Result<(), String> {
     use crate::system::WinServiceManager;
+    use crate::commands::reload::sync_proxy_status;
     
     // 停止服务
     WinServiceManager::stop().map_err(|e| e.to_string())?;
@@ -115,10 +119,12 @@ pub async fn stop_service() -> Result<(), String> {
     // 重新启动 mihomo（普通模式）
     if let Err(e) = state.mihomo_manager.start().await {
         log::warn!("Failed to restart mihomo after service stop: {}", e);
-        // 不返回错误，因为服务已经成功停止
     } else {
         log::info!("Mihomo restarted in normal mode after service stop");
     }
+
+    // 同步代理状态到前端
+    sync_proxy_status(&app).await;
 
     Ok(())
 }
