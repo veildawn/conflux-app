@@ -36,7 +36,9 @@
           { "name": "binaries/node", "sidecar": true }
         ]
       },
-      "dialog:default"
+      "dialog:default",
+      "fs:default",
+      "fs:allow-write-text-file"
     ]
   }
 }

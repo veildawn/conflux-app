@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Server, LayoutGrid, RefreshCw, Trash2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,7 @@ import {
 import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
 import { BentoCard, SettingItem, SectionHeader, CONTROL_BASE_CLASS } from '../components';
-import { parseDnsList } from '../hooks/useSettingsData';
+import { parseDnsList, DEFAULT_DNS_CONFIG } from '../hooks/useSettingsData';
 import type { DnsConfig, MihomoConfig } from '@/types/config';
 import type { ProxyStatus } from '@/types/proxy';
 
@@ -24,23 +24,193 @@ interface DnsSectionProps {
   toast: (options: { title: string; description?: string; variant?: 'destructive' }) => void;
 }
 
+/**
+ * 比较两个字符串数组是否相等
+ */
+function arraysEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((val, i) => val === b[i]);
+}
+
 export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSectionProps) {
+  // 输入框本地状态（用于编辑时的临时值）
   const [dnsNameserverInput, setDnsNameserverInput] = useState('');
   const [dnsFallbackInput, setDnsFallbackInput] = useState('');
   const [dnsDefaultNameserverInput, setDnsDefaultNameserverInput] = useState('');
+  const [dnsProxyServerNameserverInput, setDnsProxyServerNameserverInput] = useState('');
   const [dnsFakeIpFilterInput, setDnsFakeIpFilterInput] = useState('');
+  const [fakeIpRangeInput, setFakeIpRangeInput] = useState('');
   const [flushingFakeip, setFlushingFakeip] = useState(false);
 
-  const dnsEnabled = Boolean(config?.dns?.enable);
-  const isFakeIpMode = config?.dns?.['enhanced-mode'] === 'fake-ip';
+  // config.dns 已经与默认值合并，所有字段都有值
+  const dns = config?.dns;
+  const dnsEnabled = Boolean(dns?.enable);
+  const isFakeIpMode = dns?.['enhanced-mode'] === 'fake-ip';
 
+  // 当 config 变化时，同步输入框的值
   useEffect(() => {
-    if (!config) return;
-    setDnsNameserverInput((config.dns?.nameserver || []).join(', '));
-    setDnsFallbackInput((config.dns?.fallback || []).join(', '));
-    setDnsDefaultNameserverInput((config.dns?.['default-nameserver'] || []).join(', '));
-    setDnsFakeIpFilterInput((config.dns?.['fake-ip-filter'] || []).join(', '));
-  }, [config]);
+    if (!dns) return;
+    setDnsNameserverInput((dns.nameserver || []).join(', '));
+    setDnsFallbackInput((dns.fallback || []).join(', '));
+    setDnsDefaultNameserverInput((dns['default-nameserver'] || []).join(', '));
+    setDnsProxyServerNameserverInput((dns['proxy-server-nameserver'] || []).join(', '));
+    setDnsFakeIpFilterInput((dns['fake-ip-filter'] || []).join(', '));
+    setFakeIpRangeInput(dns['fake-ip-range'] || '');
+  }, [dns]);
+
+  // 保存输入框值：只在值改变时保存
+  const handleNameserverBlur = useCallback(() => {
+    const newValue = parseDnsList(dnsNameserverInput);
+    if (!arraysEqual(newValue, dns?.nameserver || [])) {
+      onDnsConfigChange({ nameserver: newValue });
+    }
+  }, [dnsNameserverInput, dns?.nameserver, onDnsConfigChange]);
+
+  const handleFallbackBlur = useCallback(() => {
+    const newValue = parseDnsList(dnsFallbackInput);
+    if (!arraysEqual(newValue, dns?.fallback || [])) {
+      onDnsConfigChange({ fallback: newValue });
+    }
+  }, [dnsFallbackInput, dns?.fallback, onDnsConfigChange]);
+
+  const handleDefaultNameserverBlur = useCallback(() => {
+    const newValue = parseDnsList(dnsDefaultNameserverInput);
+    if (!arraysEqual(newValue, dns?.['default-nameserver'] || [])) {
+      onDnsConfigChange({ 'default-nameserver': newValue });
+    }
+  }, [dnsDefaultNameserverInput, dns, onDnsConfigChange]);
+
+  const handleProxyServerNameserverBlur = useCallback(() => {
+    const newValue = parseDnsList(dnsProxyServerNameserverInput);
+
+    // 如果 respect-rules 已开启，不允许清空 proxy-server-nameserver
+    if (dns?.['respect-rules'] && newValue.length === 0) {
+      // 恢复之前的值
+      setDnsProxyServerNameserverInput((dns['proxy-server-nameserver'] || []).join(', '));
+      toast({
+        title: '无法清空',
+        description: '开启"遵循路由规则"时，Proxy Server DNS 不能为空',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!arraysEqual(newValue, dns?.['proxy-server-nameserver'] || [])) {
+      onDnsConfigChange({ 'proxy-server-nameserver': newValue });
+    }
+  }, [dnsProxyServerNameserverInput, dns, onDnsConfigChange, toast]);
+
+  const handleFakeIpFilterBlur = useCallback(() => {
+    const newValue = parseDnsList(dnsFakeIpFilterInput);
+    if (!arraysEqual(newValue, dns?.['fake-ip-filter'] || [])) {
+      onDnsConfigChange({ 'fake-ip-filter': newValue });
+    }
+  }, [dnsFakeIpFilterInput, dns, onDnsConfigChange]);
+
+  const handleFakeIpRangeBlur = useCallback(() => {
+    if (fakeIpRangeInput !== dns?.['fake-ip-range']) {
+      onDnsConfigChange({ 'fake-ip-range': fakeIpRangeInput });
+    }
+  }, [fakeIpRangeInput, dns, onDnsConfigChange]);
+
+  // Switch 和 Select：值改变时直接保存
+  const handleEnableChange = useCallback(
+    (checked: boolean) => {
+      if (checked !== dns?.enable) {
+        onDnsConfigChange({ enable: checked });
+      }
+    },
+    [dns?.enable, onDnsConfigChange]
+  );
+
+  const handleEnhancedModeChange = useCallback(
+    (value: string) => {
+      if (value !== dns?.['enhanced-mode']) {
+        onDnsConfigChange({ 'enhanced-mode': value as DnsConfig['enhanced-mode'] });
+      }
+    },
+    [dns, onDnsConfigChange]
+  );
+
+  const handleFakeIpFilterModeChange = useCallback(
+    (value: string) => {
+      if (value !== dns?.['fake-ip-filter-mode']) {
+        onDnsConfigChange({ 'fake-ip-filter-mode': value as DnsConfig['fake-ip-filter-mode'] });
+      }
+    },
+    [dns, onDnsConfigChange]
+  );
+
+  const handleCacheAlgorithmChange = useCallback(
+    (value: string) => {
+      if (value !== dns?.['cache-algorithm']) {
+        onDnsConfigChange({ 'cache-algorithm': value as DnsConfig['cache-algorithm'] });
+      }
+    },
+    [dns, onDnsConfigChange]
+  );
+
+  const handlePreferH3Change = useCallback(
+    (checked: boolean) => {
+      if (checked !== dns?.['prefer-h3']) {
+        onDnsConfigChange({ 'prefer-h3': checked });
+      }
+    },
+    [dns, onDnsConfigChange]
+  );
+
+  const handleUseHostsChange = useCallback(
+    (checked: boolean) => {
+      if (checked !== dns?.['use-hosts']) {
+        onDnsConfigChange({ 'use-hosts': checked });
+      }
+    },
+    [dns, onDnsConfigChange]
+  );
+
+  const handleRespectRulesChange = useCallback(
+    (checked: boolean) => {
+      if (checked !== dns?.['respect-rules']) {
+        if (checked) {
+          // 使用输入框当前值判断（避免竞态条件，输入框可能还未保存到 dns 状态）
+          const currentProxyServerDns = parseDnsList(dnsProxyServerNameserverInput);
+
+          if (currentProxyServerDns.length === 0) {
+            const defaultProxyDns = DEFAULT_DNS_CONFIG['proxy-server-nameserver'] || [];
+
+            if (defaultProxyDns.length === 0) {
+              toast({
+                title: '无法开启',
+                description: '开启"遵循路由规则"前，请先填写 Proxy Server DNS',
+                variant: 'destructive',
+              });
+              return;
+            }
+
+            onDnsConfigChange({
+              'respect-rules': checked,
+              'proxy-server-nameserver': defaultProxyDns,
+            });
+            setDnsProxyServerNameserverInput(defaultProxyDns.join(', '));
+            toast({
+              title: '已自动设置 Proxy Server DNS',
+              description: '开启"遵循路由规则"需要配置 Proxy Server DNS',
+            });
+            return;
+          }
+
+          // 同时保存两个字段以确保一致性
+          onDnsConfigChange({
+            'respect-rules': checked,
+            'proxy-server-nameserver': currentProxyServerDns,
+          });
+          return;
+        }
+        onDnsConfigChange({ 'respect-rules': checked });
+      }
+    },
+    [dns, dnsProxyServerNameserverInput, onDnsConfigChange, toast]
+  );
 
   const handleFlushFakeip = async () => {
     setFlushingFakeip(true);
@@ -67,8 +237,8 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
             description="启用内置 DNS 服务以处理 DNS 请求"
             action={
               <Switch
-                checked={config?.dns?.enable || false}
-                onCheckedChange={(checked) => onDnsConfigChange({ enable: checked })}
+                checked={dnsEnabled}
+                onCheckedChange={handleEnableChange}
                 className="scale-90"
               />
             }
@@ -84,12 +254,8 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
                     运行模式
                   </label>
                   <Select
-                    value={config?.dns?.['enhanced-mode'] || 'normal'}
-                    onValueChange={(value) =>
-                      onDnsConfigChange({
-                        'enhanced-mode': value as DnsConfig['enhanced-mode'],
-                      })
-                    }
+                    value={dns?.['enhanced-mode'] || 'normal'}
+                    onValueChange={handleEnhancedModeChange}
                   >
                     <SelectTrigger className={cn('w-32', CONTROL_BASE_CLASS)}>
                       <SelectValue />
@@ -109,8 +275,9 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
                         Fake-IP 范围
                       </label>
                       <Input
-                        value={config?.dns?.['fake-ip-range'] || '198.18.0.1/16'}
-                        onChange={(e) => onDnsConfigChange({ 'fake-ip-range': e.target.value })}
+                        value={fakeIpRangeInput}
+                        onChange={(e) => setFakeIpRangeInput(e.target.value)}
+                        onBlur={handleFakeIpRangeBlur}
                         placeholder="198.18.0.1/16"
                         className={cn('w-32 font-mono text-right', CONTROL_BASE_CLASS)}
                       />
@@ -121,12 +288,8 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
                           Fake-IP 过滤
                         </label>
                         <Select
-                          value={config?.dns?.['fake-ip-filter-mode'] || 'blacklist'}
-                          onValueChange={(value) =>
-                            onDnsConfigChange({
-                              'fake-ip-filter-mode': value as DnsConfig['fake-ip-filter-mode'],
-                            })
-                          }
+                          value={dns?.['fake-ip-filter-mode'] || 'blacklist'}
+                          onValueChange={handleFakeIpFilterModeChange}
                         >
                           <SelectTrigger className={cn('w-24', CONTROL_BASE_CLASS)}>
                             <SelectValue />
@@ -140,11 +303,7 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
                       <Input
                         value={dnsFakeIpFilterInput}
                         onChange={(e) => setDnsFakeIpFilterInput(e.target.value)}
-                        onBlur={() =>
-                          onDnsConfigChange({
-                            'fake-ip-filter': parseDnsList(dnsFakeIpFilterInput),
-                          })
-                        }
+                        onBlur={handleFakeIpFilterBlur}
                         placeholder="域名列表，逗号分隔"
                         className={cn('w-full font-mono text-xs', CONTROL_BASE_CLASS)}
                       />
@@ -182,14 +341,21 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
                   <Input
                     value={dnsDefaultNameserverInput}
                     onChange={(e) => setDnsDefaultNameserverInput(e.target.value)}
-                    onBlur={() =>
-                      onDnsConfigChange({
-                        'default-nameserver': parseDnsList(dnsDefaultNameserverInput),
-                      })
-                    }
-                    placeholder="223.5.5.5"
+                    onBlur={handleDefaultNameserverBlur}
                     className={cn('font-mono', CONTROL_BASE_CLASS)}
                   />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-500 uppercase">
+                    Proxy Server DNS
+                  </label>
+                  <Input
+                    value={dnsProxyServerNameserverInput}
+                    onChange={(e) => setDnsProxyServerNameserverInput(e.target.value)}
+                    onBlur={handleProxyServerNameserverBlur}
+                    className={cn('font-mono', CONTROL_BASE_CLASS)}
+                  />
+                  <p className="text-xs text-gray-400">用于解析代理节点域名，避免 TUN 循环依赖</p>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-gray-500 uppercase">
@@ -198,10 +364,7 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
                   <Input
                     value={dnsNameserverInput}
                     onChange={(e) => setDnsNameserverInput(e.target.value)}
-                    onBlur={() =>
-                      onDnsConfigChange({ nameserver: parseDnsList(dnsNameserverInput) })
-                    }
-                    placeholder="https://doh.pub/dns-query"
+                    onBlur={handleNameserverBlur}
                     className={cn('font-mono', CONTROL_BASE_CLASS)}
                   />
                 </div>
@@ -210,8 +373,7 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
                   <Input
                     value={dnsFallbackInput}
                     onChange={(e) => setDnsFallbackInput(e.target.value)}
-                    onBlur={() => onDnsConfigChange({ fallback: parseDnsList(dnsFallbackInput) })}
-                    placeholder="https://1.1.1.1/dns-query"
+                    onBlur={handleFallbackBlur}
                     className={cn('font-mono', CONTROL_BASE_CLASS)}
                   />
                 </div>
@@ -225,12 +387,8 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
                     缓存算法
                   </span>
                   <Select
-                    value={config?.dns?.['cache-algorithm'] || 'lru'}
-                    onValueChange={(value) =>
-                      onDnsConfigChange({
-                        'cache-algorithm': value as DnsConfig['cache-algorithm'],
-                      })
-                    }
+                    value={dns?.['cache-algorithm'] || 'lru'}
+                    onValueChange={handleCacheAlgorithmChange}
                   >
                     <SelectTrigger className={cn('w-full', CONTROL_BASE_CLASS)}>
                       <SelectValue />
@@ -246,8 +404,8 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
                     优先 HTTP/3
                   </span>
                   <Switch
-                    checked={config?.dns?.['prefer-h3'] || false}
-                    onCheckedChange={(checked) => onDnsConfigChange({ 'prefer-h3': checked })}
+                    checked={dns?.['prefer-h3'] || false}
+                    onCheckedChange={handlePreferH3Change}
                     className="scale-90"
                   />
                 </div>
@@ -256,8 +414,8 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
                     使用 Hosts
                   </span>
                   <Switch
-                    checked={config?.dns?.['use-hosts'] !== false}
-                    onCheckedChange={(checked) => onDnsConfigChange({ 'use-hosts': checked })}
+                    checked={dns?.['use-hosts'] !== false}
+                    onCheckedChange={handleUseHostsChange}
                     className="scale-90"
                   />
                 </div>
@@ -266,8 +424,8 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
                     遵循路由规则
                   </span>
                   <Switch
-                    checked={config?.dns?.['respect-rules'] || false}
-                    onCheckedChange={(checked) => onDnsConfigChange({ 'respect-rules': checked })}
+                    checked={dns?.['respect-rules'] || false}
+                    onCheckedChange={handleRespectRulesChange}
                     className="scale-90"
                   />
                 </div>

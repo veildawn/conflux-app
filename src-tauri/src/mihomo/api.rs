@@ -19,7 +19,7 @@ impl MihomoApi {
     /// 创建新的 API 客户端
     pub fn new(base_url: String, secret: String) -> Self {
         let client = Client::builder()
-            .timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(2))
             .build()
             .expect("Failed to create HTTP client");
 

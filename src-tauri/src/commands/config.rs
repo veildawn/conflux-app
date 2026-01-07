@@ -63,6 +63,8 @@ pub async fn get_config_proxies() -> Result<Vec<ProxyServerInfo>, String> {
 /// 保存 MiHomo 配置
 #[tauri::command]
 pub async fn save_config(config: MihomoConfig) -> Result<(), String> {
+    use crate::commands::reload::{reload_config, ConfigBackup, ReloadOptions};
+
     let state = get_app_state();
 
     // 验证配置
@@ -71,22 +73,58 @@ pub async fn save_config(config: MihomoConfig) -> Result<(), String> {
         .validate_mihomo_config(&config)
         .map_err(|e| e.to_string())?;
 
+    // 自动处理 dns-hijack 逻辑
+    // 如果 DNS 已关闭，则清空 dns-hijack 以避免日志刷屏和潜在冲突
+    let mut config_to_save = config.clone();
+    if let Some(dns) = &config_to_save.dns {
+        if !dns.enable {
+            if let Some(tun) = &mut config_to_save.tun {
+                // 如果 DNS 关闭，强制清空 dns-hijack
+                if !tun.dns_hijack.is_empty() {
+                    log::info!("DNS is disabled, clearing tun.dns-hijack automatically");
+                    tun.dns_hijack.clear();
+                }
+            }
+        } else {
+            // 如果 DNS 开启且 TUN 开启，确保 dns-hijack 存在
+            if let Some(tun) = &mut config_to_save.tun {
+                if tun.enable && tun.dns_hijack.is_empty() {
+                    log::info!("DNS is enabled and TUN is enabled, restoring default dns-hijack");
+                    tun.dns_hijack = vec![
+                        "any:53".to_string(),
+                        "tcp://any:53".to_string(),
+                    ];
+                }
+            }
+        }
+    }
+
+    // 创建配置备份
+    let backup = ConfigBackup::create(state).map_err(|e| e.to_string())?;
+
     // 保存配置
     state
         .config_manager
-        .save_mihomo_config(&config)
+        .save_mihomo_config(&config_to_save)
         .map_err(|e| e.to_string())?;
 
     // 如果 MiHomo 正在运行，重新加载配置
     if state.mihomo_manager.is_running().await {
-        let config_path = state.config_manager.mihomo_config_path();
-        state
-            .mihomo_api
-            .reload_configs(config_path.to_str().unwrap_or(""), true)
-            .await
-            .map_err(|e| format!("Failed to reload config: {}", e))?;
+        let options = ReloadOptions::safe();
+        if let Err(e) = reload_config(None, &options).await {
+            // 重载失败，回滚配置
+            log::error!("Config reload failed, rolling back: {}", e);
+            if let Err(rollback_err) = backup.rollback() {
+                log::error!("Failed to rollback config: {}", rollback_err);
+            } else {
+                // 尝试用回滚后的配置重新加载
+                let _ = reload_config(None, &ReloadOptions::quick()).await;
+            }
+            return Err(format!("配置保存成功但重载失败: {}", e));
+        }
     }
 
+    backup.cleanup();
     log::info!("Config saved and reloaded");
     Ok(())
 }
@@ -667,32 +705,16 @@ pub async fn get_rules() -> Result<Vec<String>, String> {
 /// 保存规则列表
 #[tauri::command]
 pub async fn save_rules(rules: Vec<String>) -> Result<(), String> {
-    let state = get_app_state();
+    use crate::commands::reload::{apply_config_change, ReloadOptions};
 
-    // 加载当前配置
-    let mut config = state
-        .config_manager
-        .load_mihomo_config()
-        .map_err(|e| e.to_string())?;
-
-    // 更新规则
-    config.rules = rules;
-
-    // 保存配置
-    state
-        .config_manager
-        .save_mihomo_config(&config)
-        .map_err(|e| e.to_string())?;
-
-    // 如果 MiHomo 正在运行，重新加载配置
-    if state.mihomo_manager.is_running().await {
-        let config_path = state.config_manager.mihomo_config_path();
-        state
-            .mihomo_api
-            .reload_configs(config_path.to_str().unwrap_or(""), true)
-            .await
-            .map_err(|e| format!("Failed to reload config: {}", e))?;
-    }
+    apply_config_change(
+        None,
+        &ReloadOptions::safe(),
+        |config| {
+            config.rules = rules.clone();
+            Ok(())
+        },
+    ).await?;
 
     log::info!("Rules saved and reloaded");
     Ok(())

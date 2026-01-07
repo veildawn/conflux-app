@@ -219,39 +219,6 @@ impl ConfigManager {
         Ok(())
     }
 
-    /// 更新 LAN 访问开关
-    pub fn update_allow_lan(&self, enabled: bool) -> Result<()> {
-        let mut config = self.load_mihomo_config()?;
-        config.allow_lan = enabled;
-        self.save_mihomo_config(&config)?;
-        Ok(())
-    }
-
-    /// 更新 HTTP/SOCKS 端口
-    pub fn update_ports(&self, port: u16, socks_port: u16) -> Result<()> {
-        let mut config = self.load_mihomo_config()?;
-        config.port = port;
-        config.socks_port = socks_port;
-        self.save_mihomo_config(&config)?;
-        Ok(())
-    }
-
-    /// 更新 IPv6 开关
-    pub fn update_ipv6(&self, enabled: bool) -> Result<()> {
-        let mut config = self.load_mihomo_config()?;
-        config.ipv6 = enabled;
-        self.save_mihomo_config(&config)?;
-        Ok(())
-    }
-
-    /// 更新 TCP 并发开关
-    pub fn update_tcp_concurrent(&self, enabled: bool) -> Result<()> {
-        let mut config = self.load_mihomo_config()?;
-        config.tcp_concurrent = enabled;
-        self.save_mihomo_config(&config)?;
-        Ok(())
-    }
-
     /// 更新 TUN 开关
     pub fn update_tun_mode(&self, enabled: bool) -> Result<()> {
         let mut config = self.load_mihomo_config()?;
@@ -279,29 +246,16 @@ impl ConfigManager {
                     "tcp://any:53".to_string(),
                 ];
             }
+        } else {
+            // 当禁用 TUN 模式时，清空 dns-hijack 列表
+            // 防止某些版本的核心在禁用 TUN 时仍然尝试劫持 DNS
+            tun.dns_hijack.clear();
         }
 
         config.tun = Some(tun);
         self.save_mihomo_config(&config)?;
         Ok(())
     }
-
-    /// 更新混合端口
-    pub fn update_mixed_port(&self, port: Option<u16>) -> Result<()> {
-        let mut config = self.load_mihomo_config()?;
-        config.mixed_port = port;
-        self.save_mihomo_config(&config)?;
-        Ok(())
-    }
-
-    /// 更新进程查找模式
-    pub fn update_find_process_mode(&self, mode: String) -> Result<()> {
-        let mut config = self.load_mihomo_config()?;
-        config.find_process_mode = mode;
-        self.save_mihomo_config(&config)?;
-        Ok(())
-    }
-
 }
 
 impl Default for ConfigManager {

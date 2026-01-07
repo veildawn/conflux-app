@@ -6,6 +6,38 @@ use crate::tray_menu::TrayMenuState;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
+/// 检查 TUN 配置是否一致
+#[tauri::command]
+pub async fn check_tun_consistency() -> Result<serde_json::Value, String> {
+    let state = get_app_state();
+
+    if !state.mihomo_manager.is_running().await {
+        return Err("Proxy is not running".to_string());
+    }
+
+    // 获取配置文件中的配置
+    let file_config = state
+        .config_manager
+        .load_mihomo_config()
+        .map_err(|e| e.to_string())?;
+
+    // 获取运行时配置
+    let runtime_config = state
+        .mihomo_api
+        .get_configs()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // 比较 TUN 配置
+    let file_tun = file_config.tun.clone();
+    let runtime_tun = runtime_config.get("tun").cloned();
+
+    Ok(serde_json::json!({
+        "file_tun": file_tun,
+        "runtime_tun": runtime_tun
+    }))
+}
+
 /// 启动代理
 #[tauri::command]
 pub async fn start_proxy(app: AppHandle) -> Result<(), String> {
@@ -121,113 +153,63 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
 /// 设置 LAN 访问开关
 #[tauri::command]
 pub async fn set_allow_lan(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let state = get_app_state();
+    use crate::commands::reload::{apply_config_change, ReloadOptions};
 
-    state
-        .config_manager
-        .update_allow_lan(enabled)
-        .map_err(|e| e.to_string())?;
-
-    if state.mihomo_manager.is_running().await {
-        let config_path = state.config_manager.mihomo_config_path();
-        state
-            .mihomo_api
-            .reload_configs(config_path.to_str().unwrap_or(""), true)
-            .await
-            .map_err(|e| format!("Failed to reload config: {}", e))?;
-    }
-
-    // 同步状态到托盘菜单和前端
-    if let Ok(status) = get_proxy_status().await {
-        app.state::<TrayMenuState>().sync_from_status(&status);
-        let _ = app.emit("proxy-status-changed", status);
-    }
-
-    Ok(())
+    apply_config_change(
+        Some(&app),
+        &ReloadOptions::default(),
+        |config| {
+            config.allow_lan = enabled;
+            Ok(())
+        },
+    ).await
 }
 
 /// 设置 HTTP/SOCKS 端口
 #[tauri::command]
 pub async fn set_ports(app: AppHandle, port: u16, socks_port: u16) -> Result<(), String> {
-    let state = get_app_state();
+    use crate::commands::reload::{apply_config_change, ReloadOptions};
 
-    state
-        .config_manager
-        .update_ports(port, socks_port)
-        .map_err(|e| e.to_string())?;
-
-    if state.mihomo_manager.is_running().await {
-        let config_path = state.config_manager.mihomo_config_path();
-        state
-            .mihomo_api
-            .reload_configs(config_path.to_str().unwrap_or(""), true)
-            .await
-            .map_err(|e| format!("Failed to reload config: {}", e))?;
-    }
-
-    // 同步状态到托盘菜单和前端
-    if let Ok(status) = get_proxy_status().await {
-        app.state::<TrayMenuState>().sync_from_status(&status);
-        let _ = app.emit("proxy-status-changed", status);
-    }
-
-    Ok(())
+    // 端口变更使用安全模式，因为可能影响系统代理设置
+    apply_config_change(
+        Some(&app),
+        &ReloadOptions::safe(),
+        |config| {
+            config.port = port;
+            config.socks_port = socks_port;
+            Ok(())
+        },
+    ).await
 }
 
 /// 设置 IPv6 开关
 #[tauri::command]
 pub async fn set_ipv6(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let state = get_app_state();
+    use crate::commands::reload::{apply_config_change, ReloadOptions};
 
-    state
-        .config_manager
-        .update_ipv6(enabled)
-        .map_err(|e| e.to_string())?;
-
-    if state.mihomo_manager.is_running().await {
-        let config_path = state.config_manager.mihomo_config_path();
-        state
-            .mihomo_api
-            .reload_configs(config_path.to_str().unwrap_or(""), true)
-            .await
-            .map_err(|e| format!("Failed to reload config: {}", e))?;
-    }
-
-    // 同步状态到托盘菜单和前端
-    if let Ok(status) = get_proxy_status().await {
-        app.state::<TrayMenuState>().sync_from_status(&status);
-        let _ = app.emit("proxy-status-changed", status);
-    }
-
-    Ok(())
+    apply_config_change(
+        Some(&app),
+        &ReloadOptions::default(),
+        |config| {
+            config.ipv6 = enabled;
+            Ok(())
+        },
+    ).await
 }
 
 /// 设置 TCP 并发开关
 #[tauri::command]
 pub async fn set_tcp_concurrent(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let state = get_app_state();
+    use crate::commands::reload::{apply_config_change, ReloadOptions};
 
-    state
-        .config_manager
-        .update_tcp_concurrent(enabled)
-        .map_err(|e| e.to_string())?;
-
-    if state.mihomo_manager.is_running().await {
-        let config_path = state.config_manager.mihomo_config_path();
-        state
-            .mihomo_api
-            .reload_configs(config_path.to_str().unwrap_or(""), true)
-            .await
-            .map_err(|e| format!("Failed to reload config: {}", e))?;
-    }
-
-    // 同步状态到托盘菜单和前端
-    if let Ok(status) = get_proxy_status().await {
-        app.state::<TrayMenuState>().sync_from_status(&status);
-        let _ = app.emit("proxy-status-changed", status);
-    }
-
-    Ok(())
+    apply_config_change(
+        Some(&app),
+        &ReloadOptions::default(),
+        |config| {
+            config.tcp_concurrent = enabled;
+            Ok(())
+        },
+    ).await
 }
 
 /// 切换代理模式
@@ -453,21 +435,41 @@ pub async fn close_all_connections() -> Result<(), String> {
 }
 
 /// 设置 TUN 模式（增强模式）
+///
+/// 优化后的流程：
+/// 1. 检查代理是否运行
+/// 2. 如果启用 TUN，检查是否有激活的订阅
+/// 3. 如果启用 TUN，检查并设置权限
+/// 4. 备份当前配置
+/// 5. 更新配置文件
+/// 6. 重新加载或重启代理
+/// 7. 验证健康状态
+/// 8. 如果失败，回滚配置和状态
 #[tauri::command]
 pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
+    use crate::commands::reload::{reload_config, safe_restart_proxy, sync_proxy_status, ConfigBackup, ReloadOptions};
+
     let state = get_app_state();
 
     if !state.mihomo_manager.is_running().await {
-        return Err("Proxy is not running".to_string());
+        return Err("代理核心未运行".to_string());
     }
 
-    let mut needs_restart = false;
+    // 记录当前状态，用于失败回滚
+    let previous_enabled = *state.enhanced_mode.lock().await;
+
+    // 无论配置文件状态如何，只要用户发起请求，就强制执行更新流程
+    // 这样可以修复配置文件与运行状态不一致的问题
+    // let config = state.config_manager.load_mihomo_config().map_err(|e| e.to_string())?;
+    // let current_tun_enabled = config.tun.as_ref().map(|t| t.enable).unwrap_or(false);
+    // if current_tun_enabled == enabled { ... }
+
+    // 如果要启用 TUN 模式，执行前置检查
     if enabled {
+        // 检查是否有激活的订阅
         crate::commands::require_active_subscription_with_proxies()?;
-    }
 
-    // 如果要启用 TUN 模式，先检查权限
-    if enabled {
+        // 检查并设置权限
         let has_permission = crate::system::TunPermission::check_permission()
             .map_err(|e| e.to_string())?;
 
@@ -475,53 +477,120 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
             log::info!("TUN permission not set, requesting setup...");
             crate::system::TunPermission::setup_permission()
                 .map_err(|e| format!("设置 TUN 权限失败: {}", e))?;
-
-            needs_restart = true;
         }
     }
 
-    state
-        .config_manager
-        .update_tun_mode(enabled)
-        .map_err(|e| e.to_string())?;
+    // 创建配置备份
+    let backup = ConfigBackup::create(state).map_err(|e| e.to_string())?;
 
-    if needs_restart {
-        // 权限设置成功后，需要重启 mihomo 进程以应用 TUN 配置
-        log::info!("Permission setup complete, restarting MiHomo...");
-        state
-            .mihomo_manager
-            .restart()
-            .await
-            .map_err(|e| format!("重启代理失败: {}", e))?;
-    } else {
-        let config_path = state.config_manager.mihomo_config_path();
-        state
-            .mihomo_api
-            .reload_configs(config_path.to_str().unwrap_or(""), true)
-            .await
-            .map_err(|e| format!("Failed to reload config: {}", e))?;
+    // 更新配置文件
+    if let Err(e) = state.config_manager.update_tun_mode(enabled) {
+        log::error!("Failed to update TUN config: {}", e);
+        return Err(format!("更新配置失败: {}", e));
     }
 
-    // 更新状态（注意：必须在调用 get_proxy_status 之前释放锁，否则会死锁）
-    {
-        let mut enhanced_mode = state.enhanced_mode.lock().await;
-        *enhanced_mode = enabled;
-    }
+    // TUN 模式切换涉及网络栈重大变更，使用安全重启以确稳定性
+    log::info!("TUN mode change requires restart for stability...");
+    let result = safe_restart_proxy(&app).await;
 
-    // 同步状态到托盘菜单和前端
-    if let Ok(status) = get_proxy_status().await {
-        app.state::<TrayMenuState>().sync_from_status(&status);
-        let _ = app.emit("proxy-status-changed", status);
-    }
+    match result {
+        Ok(_) => {
+            // 成功：更新状态
+            {
+                let mut enhanced_mode = state.enhanced_mode.lock().await;
+                *enhanced_mode = enabled;
+            }
 
-    log::info!("TUN mode set to: {}", enabled);
-    Ok(())
+            // 验证 mihomo 是否健康
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            if !state.mihomo_manager.is_running().await {
+                log::error!("MiHomo crashed after TUN mode change, attempting recovery...");
+
+                // 回滚配置
+                if let Err(rollback_err) = backup.rollback() {
+                    log::error!("Failed to rollback config: {}", rollback_err);
+                }
+
+                // 恢复状态
+                {
+                    let mut enhanced_mode = state.enhanced_mode.lock().await;
+                    *enhanced_mode = previous_enabled;
+                }
+
+                // 尝试重新启动
+                if let Err(e) = state.mihomo_manager.start().await {
+                    log::error!("Failed to restart MiHomo after crash: {}", e);
+                }
+
+                sync_proxy_status(&app).await;
+                return Err("增强模式切换后代理核心崩溃，已尝试恢复".to_string());
+            }
+
+            // 清理备份
+            backup.cleanup();
+
+            log::info!("TUN mode set to: {}", enabled);
+            sync_proxy_status(&app).await;
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("Failed to apply TUN mode change: {}", e);
+
+            // 回滚配置
+            if let Err(rollback_err) = backup.rollback() {
+                log::error!("Failed to rollback config: {}", rollback_err);
+            } else {
+                log::info!("Config rolled back after TUN mode change failure");
+                // 尝试用回滚后的配置重新加载
+                let _ = reload_config(Some(&app), &ReloadOptions::quick()).await;
+            }
+
+            // 恢复状态
+            {
+                let mut enhanced_mode = state.enhanced_mode.lock().await;
+                *enhanced_mode = previous_enabled;
+            }
+
+            sync_proxy_status(&app).await;
+            Err(format!("切换增强模式失败: {}", e))
+        }
+    }
 }
 
 /// 检查 TUN 权限状态
 #[tauri::command]
 pub async fn check_tun_permission() -> Result<bool, String> {
     crate::system::TunPermission::check_permission().map_err(|e| e.to_string())
+}
+
+/// 设置 TUN Stack
+#[tauri::command]
+pub async fn set_tun_stack(app: AppHandle, stack: String) -> Result<(), String> {
+    use crate::commands::reload::{apply_config_change, ReloadOptions};
+
+    let valid_stacks = ["gvisor", "system", "mixed"];
+    if !valid_stacks.contains(&stack.as_str()) {
+        return Err(format!("无效的 stack 类型: {}", stack));
+    }
+
+    apply_config_change(
+        Some(&app),
+        &ReloadOptions::safe(), // Stack change might require restart of network stack, so use safe reload
+        |config| {
+            if let Some(tun) = &mut config.tun {
+                tun.stack = Some(stack.clone());
+            } else {
+                // If tun is None, create it (disabled by default)
+                let mut tun = crate::models::TunConfig::default();
+                tun.stack = Some(stack.clone());
+                config.tun = Some(tun);
+            }
+            Ok(())
+        },
+    ).await?;
+
+    log::info!("TUN stack set to: {}", stack);
+    Ok(())
 }
 
 /// 手动设置 TUN 权限
@@ -762,55 +831,37 @@ pub async fn update_rule_provider(name: String) -> Result<(), String> {
 /// 设置混合端口
 #[tauri::command]
 pub async fn set_mixed_port(app: AppHandle, port: Option<u16>) -> Result<(), String> {
-    let state = get_app_state();
+    use crate::commands::reload::{apply_config_change, ReloadOptions};
 
-    state
-        .config_manager
-        .update_mixed_port(port)
-        .map_err(|e| e.to_string())?;
-
-    if state.mihomo_manager.is_running().await {
-        let config_path = state.config_manager.mihomo_config_path();
-        state
-            .mihomo_api
-            .reload_configs(config_path.to_str().unwrap_or(""), true)
-            .await
-            .map_err(|e| format!("Failed to reload config: {}", e))?;
-    }
-
-    // 同步状态到托盘菜单和前端
-    if let Ok(status) = get_proxy_status().await {
-        app.state::<TrayMenuState>().sync_from_status(&status);
-        let _ = app.emit("proxy-status-changed", status);
-    }
-
-    Ok(())
+    apply_config_change(
+        Some(&app),
+        &ReloadOptions::default(),
+        |config| {
+            config.mixed_port = port;
+            Ok(())
+        },
+    ).await
 }
 
 /// 设置进程查找模式
 #[tauri::command]
-pub async fn set_find_process_mode(_app: AppHandle, mode: String) -> Result<(), String> {
-    let state = get_app_state();
+pub async fn set_find_process_mode(app: AppHandle, mode: String) -> Result<(), String> {
+    use crate::commands::reload::{apply_config_change, ReloadOptions};
 
     // 验证模式
     let valid_modes = ["always", "strict", "off"];
     if !valid_modes.contains(&mode.as_str()) {
-        return Err(format!("Invalid find-process-mode: {}", mode));
+        return Err(format!("无效的进程查找模式: {}", mode));
     }
 
-    state
-        .config_manager
-        .update_find_process_mode(mode.clone())
-        .map_err(|e| e.to_string())?;
-
-    if state.mihomo_manager.is_running().await {
-        let config_path = state.config_manager.mihomo_config_path();
-        state
-            .mihomo_api
-            .reload_configs(config_path.to_str().unwrap_or(""), true)
-            .await
-            .map_err(|e| format!("Failed to reload config: {}", e))?;
-    }
+    apply_config_change(
+        Some(&app),
+        &ReloadOptions::default(),
+        |config| {
+            config.find_process_mode = mode.clone();
+            Ok(())
+        },
+    ).await?;
 
     log::info!("Find process mode set to: {}", mode);
     Ok(())

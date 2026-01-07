@@ -333,11 +333,38 @@ impl MihomoManager {
     }
 
     /// 重启 MiHomo 进程
+    ///
+    /// 优化后的重启流程：
+    /// 1. 停止当前进程
+    /// 2. 等待进程完全停止
+    /// 3. 清理残留进程
+    /// 4. 启动新进程
+    /// 5. 等待健康检查通过
     pub async fn restart(&self) -> Result<()> {
-        log::info!("Restarting MiHomo");
+        log::info!("Restarting MiHomo...");
+
+        // 停止当前进程
         self.stop().await?;
-        sleep(Duration::from_millis(500)).await;
+
+        // 等待进程完全停止，最多等待 3 秒
+        for i in 0..6 {
+            sleep(Duration::from_millis(500)).await;
+            if !self.is_running().await {
+                log::debug!("MiHomo stopped after {} ms", (i + 1) * 500);
+                break;
+            }
+        }
+
+        // 额外清理可能的残留进程
+        Self::cleanup_stale_processes();
+
+        // 短暂等待后启动
+        sleep(Duration::from_millis(200)).await;
+
+        // 启动新进程
         self.start().await?;
+
+        log::info!("MiHomo restarted successfully");
         Ok(())
     }
 
@@ -390,6 +417,74 @@ impl MihomoManager {
                 response.status()
             ))
         }
+    }
+
+    /// 安全启动（如果已运行则跳过，否则启动）
+    ///
+    /// 适用于需要确保 mihomo 运行但不确定当前状态的场景
+    #[allow(dead_code)]
+    pub async fn ensure_running(&self) -> Result<()> {
+        if self.is_running().await {
+            // 额外验证健康状态
+            match self.check_health().await {
+                Ok(_) => {
+                    log::debug!("MiHomo is already running and healthy");
+                    return Ok(());
+                }
+                Err(e) => {
+                    log::warn!("MiHomo is running but unhealthy: {}, attempting restart", e);
+                    return self.restart().await;
+                }
+            }
+        }
+
+        self.start().await
+    }
+
+    /// 等待健康检查通过
+    ///
+    /// 在启动或重启后调用，确保 mihomo 完全就绪
+    #[allow(dead_code)]
+    pub async fn wait_for_healthy(&self, timeout_secs: u64) -> Result<()> {
+        let max_attempts = timeout_secs * 2; // 每 500ms 检查一次
+
+        for attempt in 1..=max_attempts {
+            match self.check_health().await {
+                Ok(_) => {
+                    log::debug!("MiHomo healthy after {} attempts", attempt);
+                    return Ok(());
+                }
+                Err(e) => {
+                    if attempt == max_attempts {
+                        return Err(anyhow::anyhow!(
+                            "Health check timeout after {} seconds: {}",
+                            timeout_secs,
+                            e
+                        ));
+                    }
+                    sleep(Duration::from_millis(500)).await;
+                }
+            }
+        }
+
+        Err(anyhow::anyhow!("Health check timeout"))
+    }
+
+    /// 获取进程状态信息（用于调试）
+    #[allow(dead_code)]
+    pub async fn get_status_info(&self) -> String {
+        let process_guard = self.process.lock().await;
+        let has_handle = process_guard.is_some();
+        let pid = process_guard.as_ref().map(|c| c.id());
+        drop(process_guard);
+
+        let pid_from_file = Self::load_pid();
+        let is_running = self.is_running().await;
+
+        format!(
+            "has_handle={}, handle_pid={:?}, file_pid={:?}, is_running={}",
+            has_handle, pid, pid_from_file, is_running
+        )
     }
 }
 
