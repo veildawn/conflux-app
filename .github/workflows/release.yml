@@ -18,7 +18,7 @@ env:
   RELEASE_BODY: |
     ## Changes
     See the assets below to download and install.
-    
+
     ### Installation
     - **macOS ARM64 (Apple Silicon)**: Download `.dmg` file for M1/M2/M3 Macs
     - **macOS x86_64 (Intel)**: Download `.dmg` file for Intel Macs
@@ -202,7 +202,7 @@ jobs:
               echo "✅ .app size verified: ${APP_SIZE}MB"
             fi
           fi
-          
+
           echo ""
           echo "=== DMG files ==="
           find src-tauri/target -name "*.dmg" -exec ls -lh {} \; 2>/dev/null || echo "No DMG found"
@@ -380,7 +380,7 @@ jobs:
               echo "✅ .app size verified: ${APP_SIZE}MB"
             fi
           fi
-          
+
           echo ""
           echo "=== DMG files ==="
           find src-tauri/target -name "*.dmg" -exec ls -lh {} \; 2>/dev/null || echo "No DMG found"
@@ -593,7 +593,7 @@ jobs:
           echo ""
           echo "📦 Built artifacts:"
           echo "  - macOS ARM64 (Apple Silicon): .dmg"
-          echo "  - macOS x86_64 (Intel): .dmg"  
+          echo "  - macOS x86_64 (Intel): .dmg"
           echo "  - Windows x86_64: NSIS installer (.exe)"
           echo ""
           echo "🔗 Release: https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.tag_name || github.ref_name }}"
