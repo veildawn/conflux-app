@@ -249,9 +249,13 @@ impl Workspace {
         Ok(())
     }
 
-    /// 激活 Profile（生成运行时配置）
-    pub fn activate_profile(&self, id: &str, base_config: &MihomoConfig) -> Result<MihomoConfig> {
-        let (metadata, mut config) = self.get_profile(id)?;
+    /// 生成运行时配置（不改变 active 状态）
+    pub fn generate_runtime_config(
+        &self,
+        id: &str,
+        base_config: &MihomoConfig,
+    ) -> Result<MihomoConfig> {
+        let (_metadata, mut config) = self.get_profile(id)?;
 
         // 修正 rule-provider 路径
         Composer::fix_provider_paths(&mut config, &self.ruleset_dir)?;
@@ -273,6 +277,14 @@ impl Workspace {
         runtime_config.proxy_providers = config.proxy_providers;
         runtime_config.rule_providers = config.rule_providers;
         runtime_config.rules = config.rules;
+
+        Ok(runtime_config)
+    }
+
+    /// 激活 Profile（生成运行时配置）
+    pub fn activate_profile(&self, id: &str, base_config: &MihomoConfig) -> Result<MihomoConfig> {
+        let metadata = self.get_metadata(id)?;
+        let runtime_config = self.generate_runtime_config(id, base_config)?;
 
         // 更新所有 Profile 的 active 状态
         self.set_active_profile(id)?;

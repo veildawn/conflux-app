@@ -176,12 +176,35 @@ pub async fn preview_remote_config(url: String) -> Result<ProfileConfig, String>
         .map_err(|e| e.to_string())
 }
 
-/// 导出 Profile 配置到指定路径
+/// 导出 Profile 配置到指定路径（导出运行时完整配置）
 #[tauri::command]
-pub async fn export_profile_config(id: String, target_path: String) -> Result<(), String> {
+pub async fn export_profile_config(
+    id: String,
+    target_path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
-    let (_metadata, config) = workspace.get_profile(&id).map_err(|e| e.to_string())?;
-    let yaml = serde_yaml::to_string(&config).map_err(|e| e.to_string())?;
+    let (metadata, _) = workspace.get_profile(&id).map_err(|e| e.to_string())?;
+
+    // 获取运行时完整配置
+    let runtime_config = if metadata.active {
+        // 如果是当前激活的 Profile，直接读取运行时配置
+        state
+            .config_manager
+            .load_mihomo_config()
+            .map_err(|e| e.to_string())?
+    } else {
+        // 如果不是激活的 Profile，临时生成运行时配置
+        let base_config = state
+            .config_manager
+            .load_mihomo_config()
+            .map_err(|e| e.to_string())?;
+        workspace
+            .generate_runtime_config(&id, &base_config)
+            .map_err(|e| e.to_string())?
+    };
+
+    let yaml = serde_yaml::to_string(&runtime_config).map_err(|e| e.to_string())?;
     let target = Path::new(&target_path);
 
     if let Some(parent) = target.parent() {
