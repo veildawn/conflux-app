@@ -4,10 +4,13 @@ Conflux 是一个基于 Tauri 2 + MiHomo 构建的现代化跨平台代理管理
 
 ## 项目概述
 
-**类型**: 桌面应用 (Tauri 2 + React)
-**用途**: 基于 MiHomo 核心的代理管理应用
-**架构**: Rust 后端 (Tauri) + React 前端
-**语言**: 中文文档/界面
+| 属性     | 说明                                   |
+| -------- | -------------------------------------- |
+| **类型** | 桌面应用 (Tauri 2 + React)             |
+| **用途** | 基于 MiHomo 核心的代理管理应用         |
+| **架构** | Rust 后端 (Tauri) + React 前端         |
+| **语言** | 中文文档/界面                          |
+| **仓库** | https://github.com/Ashbaer/conflux-app |
 
 ## 技术栈
 
@@ -18,33 +21,122 @@ Conflux 是一个基于 Tauri 2 + MiHomo 构建的现代化跨平台代理管理
 - **Zustand** 状态管理
 - **Vite 7** 构建工具
 - **React Router DOM** 路由
+- **Recharts** 图表库
+- **dnd-kit** 拖拽排序
 
 ### 后端
 
 - **Tauri 2** 桌面框架
 - **Rust 1.77+** + Tokio 异步运行时
 - **MiHomo** 代理核心集成
-- 系统集成（托盘、通知）
+- **Sub-Store** 订阅管理服务
+- 系统集成（托盘、TUN、通知）
 
 ## 项目结构
 
 ```
-conflux/
-├── src/                    # React 前端
-│   ├── components/         # UI 组件
-│   ├── pages/              # 页面组件
-│   ├── services/           # IPC 通信
-│   ├── stores/             # Zustand 状态
-│   ├── types/              # TypeScript 类型定义
-│   └── utils/              # 前端工具函数
-├── src-tauri/              # Rust 后端
+conflux-app/
+├── src/                          # React 前端
+│   ├── components/               # UI 组件
+│   │   ├── layout/               # 布局组件
+│   │   │   ├── AppLayout.tsx     # 主布局
+│   │   │   ├── Header.tsx        # 标题栏
+│   │   │   ├── Sidebar.tsx       # 侧边栏
+│   │   │   └── WindowControls.tsx# 窗口控制按钮
+│   │   ├── ui/                   # Shadcn/ui 组件
+│   │   └── icons/                # 图标组件
+│   ├── pages/                    # 页面组件
+│   │   ├── Home.tsx              # 活动监控页
+│   │   ├── Proxy.tsx             # 策略管理页
+│   │   ├── ProxyGroups.tsx       # 策略组列表页
+│   │   ├── proxy-groups/         # 策略组相关
+│   │   │   ├── ProxyGroupEditWindow.tsx  # 编辑窗口
+│   │   │   ├── shared/           # 共享组件
+│   │   │   ├── steps/            # 向导步骤
+│   │   │   └── hooks/            # 自定义 Hooks
+│   │   ├── proxy-servers/        # 服务器管理
+│   │   │   ├── index.tsx         # 服务器列表页
+│   │   │   ├── ProxyServerEditWindow.tsx
+│   │   │   └── LinkParseDialog.tsx
+│   │   ├── Subscription.tsx      # 配置管理页
+│   │   ├── SubscriptionEditWindow.tsx
+│   │   ├── Rules.tsx             # 规则管理页
+│   │   ├── RuleEditWindow.tsx    # 规则编辑窗口
+│   │   ├── RuleDatabase.tsx      # 规则数据库
+│   │   ├── Providers.tsx         # 资源管理页
+│   │   ├── SubStore.tsx          # Sub-Store 页
+│   │   ├── Logs.tsx              # 日志查看页
+│   │   ├── Settings.tsx          # 设置主页
+│   │   └── settings/             # 设置子模块
+│   │       ├── sections/         # 设置分区组件
+│   │       ├── hooks/            # 设置相关 Hooks
+│   │       └── components.tsx    # 通用组件
+│   ├── services/
+│   │   └── ipc.ts                # 前后端 IPC 通信封装
+│   ├── stores/
+│   │   ├── appStore.ts           # 应用状态
+│   │   └── proxyStore.ts         # 代理状态
+│   ├── hooks/
+│   │   └── useToast.ts           # Toast 通知
+│   ├── types/
+│   │   ├── config.ts             # 配置类型定义
+│   │   ├── proxy.ts              # 代理类型定义
+│   │   └── proxy-configs.ts      # 代理配置类型
+│   ├── utils/
+│   │   ├── cn.ts                 # className 工具
+│   │   ├── format.ts             # 格式化工具
+│   │   ├── deleteValidation.ts   # 删除校验
+│   │   ├── dragUtils.ts          # 拖拽工具
+│   │   └── logger.ts             # 日志工具
+│   └── styles/
+│       └── globals.css           # 全局样式
+├── src-tauri/                    # Rust 后端
 │   ├── src/
-│   │   ├── commands/       # Tauri IPC 命令
-│   │   ├── config/         # 配置管理
-│   │   ├── mihomo/         # MiHomo 集成
-│   │   ├── models/         # 数据模型
-│   │   └── main.rs         # 入口文件
-│   └── binaries/           # MiHomo 二进制文件
+│   │   ├── main.rs               # 应用入口
+│   │   ├── lib.rs                # 库入口
+│   │   ├── tray_menu.rs          # 系统托盘
+│   │   ├── commands/             # Tauri IPC 命令
+│   │   │   ├── mod.rs
+│   │   │   ├── proxy.rs          # 代理相关命令
+│   │   │   ├── config.rs         # 配置相关命令
+│   │   │   ├── profile.rs        # Profile 管理
+│   │   │   └── ...
+│   │   ├── config/               # 配置管理
+│   │   │   ├── mod.rs
+│   │   │   ├── manager.rs        # 配置管理器
+│   │   │   └── profile.rs        # Profile 处理
+│   │   ├── mihomo/               # MiHomo 集成
+│   │   │   ├── mod.rs
+│   │   │   ├── process.rs        # 进程管理
+│   │   │   ├── api.rs            # REST API 客户端
+│   │   │   └── config.rs         # MiHomo 配置
+│   │   ├── models/               # 数据模型
+│   │   ├── system/               # 系统功能
+│   │   │   ├── mod.rs
+│   │   │   ├── tun.rs            # TUN 模式
+│   │   │   └── autostart.rs      # 开机自启
+│   │   ├── substore/             # Sub-Store 集成
+│   │   │   ├── mod.rs
+│   │   │   └── service.rs
+│   │   └── utils/                # 工具函数
+│   ├── binaries/                 # 外部二进制 (sidecar)
+│   │   ├── mihomo-*              # MiHomo 核心
+│   │   └── node-*                # Node.js 运行时
+│   ├── resources/                # 资源文件
+│   │   └── sub-store/            # Sub-Store 前端
+│   ├── icons/                    # 应用图标
+│   ├── tauri.conf.json           # Tauri 主配置
+│   ├── tauri.macos.conf.json     # macOS 特定配置
+│   ├── tauri.windows.conf.json   # Windows 特定配置
+│   └── Cargo.toml                # Rust 依赖
+├── docs/                         # 文档
+│   └── USER_GUIDE.md             # 用户手册
+├── scripts/                      # 构建脚本
+│   ├── fetch-mihomo.sh           # 下载 MiHomo
+│   ├── fetch-node.sh             # 下载 Node.js
+│   ├── fetch-substore.sh         # 下载 Sub-Store
+│   └── gen-icons.mjs             # 生成图标
+└── package.json
 ```
 
 ## 开发命令
@@ -64,149 +156,225 @@ pnpm dev
 
 # 代码质量
 pnpm lint          # ESLint
-pnpm type-check    # TypeScript
-pnpm format        # Prettier
-pnpm test          # Vitest
+pnpm lint:fix      # 自动修复
+pnpm type-check    # TypeScript 类型检查
+pnpm format        # Prettier 格式化
+pnpm test          # Vitest 测试
 
 # 下载外部依赖
 pnpm run fetch:mihomo      # 下载 MiHomo 二进制
 pnpm run fetch:substore    # 下载 Sub-Store
+pnpm run fetch:node        # 下载 Node.js
 pnpm run fetch:all         # 下载全部
 ```
+
+## 页面组件一览
+
+| 路由             | 组件                      | 功能                                     |
+| ---------------- | ------------------------- | ---------------------------------------- |
+| `/`              | `Home.tsx`                | 活动监控：核心状态、流量统计、速度图表   |
+| `/proxy`         | `Proxy.tsx`               | 策略管理：模式切换、策略组选择、节点切换 |
+| `/proxy-groups`  | `ProxyGroups.tsx`         | 策略组列表：创建/编辑/删除策略组         |
+| `/proxy-servers` | `proxy-servers/index.tsx` | 服务器列表：管理代理节点                 |
+| `/subscription`  | `Subscription.tsx`        | 配置管理：订阅/本地/空白配置             |
+| `/rules`         | `Rules.tsx`               | 规则管理：可视化编辑分流规则             |
+| `/providers`     | `Providers.tsx`           | 资源管理：代理源/规则源                  |
+| `/sub-store`     | `SubStore.tsx`            | Sub-Store：内嵌订阅管理工具              |
+| `/logs`          | `Logs.tsx`                | 日志查看：实时日志、过滤、导出           |
+| `/settings`      | `Settings.tsx`            | 设置：通用/网络/DNS 配置                 |
+
+### 独立窗口
+
+| 路由                 | 组件                         | 用途           |
+| -------------------- | ---------------------------- | -------------- |
+| `/proxy-group-edit`  | `ProxyGroupEditWindow.tsx`   | 策略组编辑向导 |
+| `/proxy-server-edit` | `ProxyServerEditWindow.tsx`  | 服务器编辑表单 |
+| `/subscription-edit` | `SubscriptionEditWindow.tsx` | 配置编辑表单   |
+| `/rule-edit`         | `RuleEditWindow.tsx`         | 规则编辑表单   |
 
 ## 重要文件
 
 ### 配置文件
 
-- `package.json` - Node.js 依赖和脚本
-- `src-tauri/Cargo.toml` - Rust 依赖
-- `src-tauri/tauri.conf.json` - Tauri 配置
-- `vite.config.ts` - 前端构建配置
+| 文件                        | 说明               |
+| --------------------------- | ------------------ |
+| `package.json`              | Node.js 依赖和脚本 |
+| `src-tauri/Cargo.toml`      | Rust 依赖          |
+| `src-tauri/tauri.conf.json` | Tauri 主配置       |
+| `vite.config.ts`            | 前端构建配置       |
+| `tailwind.config.js`        | Tailwind CSS 配置  |
+| `tsconfig.json`             | TypeScript 配置    |
 
 ### 核心源码
 
-- `src/App.tsx` - React 主应用
-- `src/services/ipc.ts` - 前后端通信
-- `src-tauri/src/main.rs` - Rust 应用入口
-- `src-tauri/src/commands/` - 后端 API 端点
+| 文件                       | 说明                             |
+| -------------------------- | -------------------------------- |
+| `src/App.tsx`              | React 路由配置                   |
+| `src/services/ipc.ts`      | **IPC 通信封装**（所有后端调用） |
+| `src/stores/proxyStore.ts` | **代理状态管理**                 |
+| `src/types/config.ts`      | **配置类型定义**                 |
+| `src-tauri/src/main.rs`    | Rust 应用入口                    |
+| `src-tauri/src/commands/`  | **后端 API 端点**                |
+| `src-tauri/src/mihomo/`    | MiHomo 核心集成                  |
 
-## 开发流程
+## IPC 通信模式
 
-### 1. 前端开发
+### 前端调用后端
 
-- 使用 `pnpm dev` 进行纯前端开发
-- 使用 `pnpm tauri dev` 进行全栈开发
-- 前端通过 Tauri IPC 与后端通信
+```typescript
+// src/services/ipc.ts
+import { invoke } from '@tauri-apps/api/core';
 
-### 2. 后端开发
+export const ipc = {
+  // 获取代理状态
+  getProxyStatus: () => invoke<ProxyStatus>('get_proxy_status'),
 
-- Rust 代码位于 `src-tauri/src/`
-- 通过 `#[tauri::command]` 暴露命令给前端
-- 代理设置的配置管理
+  // 切换代理模式
+  switchMode: (mode: string) => invoke('switch_mode', { mode }),
 
-### 3. IPC 通信
+  // 获取配置
+  getProfile: (id: string) => invoke<[ProfileMetadata, ProfileConfig]>('get_profile', { id }),
+};
+```
 
-- 前端通过 `invoke()` 函数调用后端
-- 类型定义在 `src/types/` 和 `src-tauri/src/models/`
-- 异步通信模式
+### 后端定义命令
 
-## 功能开发进度
+```rust
+// src-tauri/src/commands/proxy.rs
+#[tauri::command]
+pub async fn get_proxy_status(state: State<'_, AppState>) -> Result<ProxyStatus, String> {
+    // 实现...
+}
+```
 
-### 当前阶段 (Phase 1) ✅
+### 事件监听
 
-- MiHomo 核心集成
-- 基础代理管理
-- 系统托盘集成
-- 配置管理
-- 节点切换功能
+```typescript
+// 前端监听后端事件
+import { listen } from '@tauri-apps/api/event';
 
-### 计划中 (Phase 2)
+listen('log-entry', (event) => {
+  console.log('Log:', event.payload);
+});
+```
 
-- 订阅管理
-- 高级节点管理
-- 规则管理
-- 连接管理
-- 配置编辑器
+## 功能开发状态
 
-### 未来 (Phase 3)
+### 已完成 ✅
 
-- 流量统计
-- TUN 模式
-- 系统集成优化
-- 自动更新
+| 模块       | 功能                                         |
+| ---------- | -------------------------------------------- |
+| **核心**   | MiHomo 集成、进程管理、系统托盘、开机自启    |
+| **配置**   | 远程订阅、本地导入、空白创建、导出、自动更新 |
+| **策略**   | 策略组 CRUD、节点选择、延迟测速、模式切换    |
+| **服务器** | 服务器 CRUD、链接解析、批量测速              |
+| **规则**   | 规则 CRUD、拖拽排序、多类型支持              |
+| **资源**   | 代理源/规则源管理                            |
+| **监控**   | 实时流量、速度图表、连接统计                 |
+| **日志**   | 实时日志、级别过滤、搜索、导出               |
+| **设置**   | 端口配置、TUN 模式、DNS、IPv6、TCP 并发      |
+| **集成**   | Sub-Store 内嵌                               |
+
+### 计划中 🚧
+
+- 自动更新功能
+- 连接详情查看
+- 更多规则类型支持
 
 ## MiHomo 集成
 
-- 二进制文件下载到 `src-tauri/binaries/`
-- 平台特定二进制（Windows/macOS/Linux）
-- 通过 Rust 后端控制
-- REST API 通信用于状态/控制
+### Sidecar 二进制命名规范
 
-### Sidecar 二进制命名
+| 平台      | 开发时 (binaries/)                  | 打包后       |
+| --------- | ----------------------------------- | ------------ |
+| Windows   | `mihomo-x86_64-pc-windows-msvc.exe` | `mihomo.exe` |
+| macOS ARM | `mihomo-aarch64-apple-darwin`       | `mihomo`     |
+| macOS x64 | `mihomo-x86_64-apple-darwin`        | `mihomo`     |
+| Linux     | `mihomo-x86_64-unknown-linux-gnu`   | `mihomo`     |
 
-Tauri `externalBin` 打包后会简化文件名（去掉 target triple）：
+### MiHomo REST API
 
-| 环境      | 开发时 (binaries/)                  | 打包后 (安装目录) |
-| --------- | ----------------------------------- | ----------------- |
-| Windows   | `mihomo-x86_64-pc-windows-msvc.exe` | `mihomo.exe`      |
-| macOS ARM | `mihomo-aarch64-apple-darwin`       | `mihomo`          |
-| macOS x64 | `mihomo-x86_64-apple-darwin`        | `mihomo`          |
-| Linux     | `mihomo-x86_64-unknown-linux-gnu`   | `mihomo`          |
+MiHomo 启动后在本地端口提供 REST API：
 
-`find_sidecar_binary()` 函数直接使用简化名称查找打包后的 sidecar。
+```
+GET  /proxies          # 获取所有代理
+GET  /proxies/:name    # 获取特定代理
+PUT  /proxies/:name    # 切换代理
+GET  /configs          # 获取配置
+PATCH /configs         # 更新配置
+GET  /connections      # 获取连接
+DELETE /connections    # 关闭连接
+WS   /traffic          # 流量 WebSocket
+WS   /logs             # 日志 WebSocket
+```
 
-## 代码风格规范
+## 代码规范
 
 ### TypeScript/React
 
 - 函数式组件 + Hooks
 - TypeScript 严格模式
-- Tailwind 样式
+- Tailwind CSS 样式（使用 `cn()` 工具合并类名）
 - Radix UI 无障碍组件
+- 异步操作使用 `async/await`
 
 ### Rust
 
-- 标准 Rust 规范
-- Tokio 异步/等待
+- 标准 Rust 2021 规范
+- Tokio 异步运行时
 - `Result<T, E>` 错误处理
 - Serde JSON 序列化
+- 使用 `thiserror` 定义错误类型
 
-## 测试
+## Claude 开发任务指南
 
-- **前端**: Vitest 单元测试
-- **后端**: Rust 内置测试框架
-- **E2E**: 计划使用 Tauri 测试工具
+### 1. 添加新页面
 
-## 构建与分发
+1. 在 `src/pages/` 创建页面组件
+2. 在 `src/App.tsx` 添加路由
+3. 在 `src/components/layout/Sidebar.tsx` 添加导航项
 
-- **开发**: `pnpm tauri dev`
-- **生产**: `pnpm tauri build`
-- **CI/CD**: GitHub Actions 多平台构建
-- **平台**: Windows (x64), macOS (ARM64/x64), Linux (x64)
+### 2. 添加 IPC 命令
 
-## Claude 常见任务
+1. 在 `src-tauri/src/commands/` 添加 Rust 命令
+2. 在 `src-tauri/src/lib.rs` 注册命令
+3. 在 `src/services/ipc.ts` 添加 TypeScript 封装
+4. 在 `src/types/` 添加类型定义
 
-1. **添加新功能**: 通常涉及前端 UI 和后端命令
-2. **IPC 通信**: 在 Rust 中定义命令，从 TypeScript 调用
-3. **配置管理**: 更新配置模型和持久化
-4. **UI 开发**: React 组件 + Tailwind CSS
-5. **Bug 修复**: 检查前端和后端日志
-6. **依赖管理**: 前端用 `pnpm`，Rust 用 `cargo`
+### 3. 修改配置结构
+
+1. 更新 `src/types/config.ts` 类型定义
+2. 更新 `src-tauri/src/models/` Rust 结构
+3. 更新相关的 IPC 命令和前端组件
+
+### 4. UI 开发
+
+- 使用 `src/components/ui/` 中的基础组件
+- 参考现有页面的 BentoCard 等布局模式
+- 使用 Tailwind CSS，遵循现有配色方案
+
+### 5. 调试技巧
+
+- 前端：浏览器开发者工具
+- 后端：`println!` 或 `log` crate
+- IPC：检查 `invoke` 返回的错误信息
 
 ## 环境要求
 
 - **Node.js** >= 18.0.0
 - **pnpm** >= 8.0.0（推荐包管理器）
 - **Rust** >= 1.77.0
-- **Python 3**（用于下载 MiHomo）
-- **系统依赖**: 参考 Tauri 要求
+- **Python 3**（用于下载脚本）
+- **系统依赖**: 参考 [Tauri 前置要求](https://v2.tauri.app/start/prerequisites/)
 
 ## 参考资源
 
 - [Tauri 2 文档](https://v2.tauri.app/)
 - [MiHomo 文档](https://wiki.metacubex.one/)
-- [项目 README](README.md) - 详细项目信息
+- [MiHomo API 文档](MIHOMO_API.md)
+- [用户使用手册](docs/USER_GUIDE.md)
+- [项目 README](README.md)
 
 ---
 
-_本指南应随项目发展和新功能添加而更新。_
+_本指南应随项目发展和新功能添加而更新。最后更新：2024年1月_
