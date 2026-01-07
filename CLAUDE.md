@@ -12,6 +12,7 @@ Conflux is a modern cross-platform proxy management desktop application built wi
 ## Technology Stack
 
 ### Frontend
+
 - **React 19** with TypeScript 5
 - **Tailwind CSS 4** + **Radix UI** components
 - **Zustand** for state management
@@ -19,6 +20,7 @@ Conflux is a modern cross-platform proxy management desktop application built wi
 - **React Router DOM** for routing
 
 ### Backend
+
 - **Tauri 2** desktop framework
 - **Rust 1.77+** with Tokio async runtime
 - **MiHomo** proxy core integration
@@ -75,12 +77,14 @@ pnpm run fetch:all         # Download all
 ## Important Files to Know
 
 ### Configuration
+
 - `package.json` - Node.js dependencies and scripts
 - `src-tauri/Cargo.toml` - Rust dependencies
 - `src-tauri/tauri.conf.json` - Tauri configuration
 - `vite.config.ts` - Frontend build configuration
 
 ### Key Source Files
+
 - `src/App.tsx` - Main React application
 - `src/services/ipc.ts` - Frontend-backend communication
 - `src-tauri/src/main.rs` - Rust application entry
@@ -89,16 +93,19 @@ pnpm run fetch:all         # Download all
 ## Development Workflow
 
 ### 1. Frontend Development
+
 - Use `pnpm dev` for frontend-only development
 - Use `pnpm tauri dev` for full-stack development
 - Frontend communicates with backend via Tauri IPC
 
 ### 2. Backend Development
+
 - Rust code in `src-tauri/src/`
 - Commands exposed to frontend via `#[tauri::command]`
 - Configuration management for proxy settings
 
 ### 3. IPC Communication
+
 - Frontend calls backend via `invoke()` functions
 - Types defined in `src/types/` and `src-tauri/src/models/`
 - Async communication pattern
@@ -106,6 +113,7 @@ pnpm run fetch:all         # Download all
 ## Key Features Being Developed
 
 ### Current (Phase 1) ✅
+
 - MiHomo core integration
 - Basic proxy management
 - System tray integration
@@ -113,6 +121,7 @@ pnpm run fetch:all         # Download all
 - Node switching functionality
 
 ### Planned (Phase 2)
+
 - Subscription management
 - Advanced node management
 - Rule management
@@ -120,6 +129,7 @@ pnpm run fetch:all         # Download all
 - Configuration editor
 
 ### Future (Phase 3)
+
 - Traffic statistics
 - TUN mode
 - System integration optimization
@@ -127,20 +137,35 @@ pnpm run fetch:all         # Download all
 
 ## MiHomo Integration
 
-- Binary downloaded to `src-tauri/resources/`
+- Binary downloaded to `src-tauri/binaries/`
 - Platform-specific binaries (Windows/macOS/Linux)
 - Controlled via Rust backend
 - REST API communication for status/control
 
+### Sidecar Binary Naming
+
+Tauri `externalBin` 打包后会简化文件名（去掉 target triple）：
+
+| 环境      | 开发时 (binaries/)                  | 打包后 (安装目录) |
+| --------- | ----------------------------------- | ----------------- |
+| Windows   | `mihomo-x86_64-pc-windows-msvc.exe` | `mihomo.exe`      |
+| macOS ARM | `mihomo-aarch64-apple-darwin`       | `mihomo`          |
+| macOS x64 | `mihomo-x86_64-apple-darwin`        | `mihomo`          |
+| Linux     | `mihomo-x86_64-unknown-linux-gnu`   | `mihomo`          |
+
+`find_sidecar_binary()` 函数直接使用简化名称查找打包后的 sidecar。
+
 ## Code Style & Conventions
 
 ### TypeScript/React
+
 - Functional components with hooks
 - TypeScript strict mode
 - Tailwind for styling
 - Radix UI for accessible components
 
 ### Rust
+
 - Standard Rust conventions
 - Async/await with Tokio
 - Error handling with `Result<T, E>`
@@ -184,4 +209,4 @@ pnpm run fetch:all         # Download all
 
 ---
 
-*This guide should be updated as the project evolves and new features are added.*
+_This guide should be updated as the project evolves and new features are added._
