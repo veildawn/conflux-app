@@ -4,7 +4,7 @@
  * 用于检查删除操作是否会导致配置运行报错
  */
 
-import type { ProfileConfig, ProxyGroupConfig } from '@/types/config';
+import type { ProfileConfig } from '@/types/config';
 import { parseRule } from '@/types/config';
 
 /**
