@@ -1,9 +1,9 @@
-# Conflux
+# Conflux 汇流
 
 基于 Tauri 2 + MiHomo 的现代化跨平台代理管理桌面应用。
 
 <p align="center">
-  <img src="src-tauri/icons/icon.png" width="128" height="128" alt="Conflux Logo">
+  <img src="src-tauri/icons/icon.png" width="128" height="128" alt="Conflux 汇流">
 </p>
 
 ## 特性

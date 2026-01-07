@@ -1,6 +1,6 @@
-# Conflux Claude 开发指南
+# Conflux 汇流 - Claude 开发指南
 
-Conflux 是一个基于 Tauri 2 + MiHomo 构建的现代化跨平台代理管理桌面应用。本指南帮助 Claude 理解并高效地参与项目开发。
+Conflux（汇流）是一个基于 Tauri 2 + MiHomo 构建的现代化跨平台代理管理桌面应用。本指南帮助 Claude 理解并高效地参与项目开发。
 
 ## 项目概述
 
