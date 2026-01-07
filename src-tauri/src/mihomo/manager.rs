@@ -529,6 +529,9 @@ impl MihomoManager {
                 if service_installed && service_running {
                     // 服务已安装并运行，等待 IPC 就绪
                     log::info!("Service is running, waiting for IPC to be ready...");
+                    log::info!("  mihomo_path: {:?}", mihomo_path);
+                    log::info!("  config_dir: {}", config_dir_str);
+                    log::info!("  config_path: {}", config_path_str);
                     
                     // 最多等待 5 秒
                     for i in 0..10 {
@@ -646,6 +649,13 @@ impl MihomoManager {
                     let mut service_mode = self.service_mode.lock().await;
                     *service_mode = false;
                 }
+                // 清理 process_guard，避免下次 start() 时误判
+                {
+                    let mut process_guard = self.process.lock().await;
+                    let _ = process_guard.take();
+                }
+                // 删除 PID 文件
+                Self::remove_pid_file();
                 log::info!("MiHomo stopped via service");
                 return Ok(());
             }
@@ -779,13 +789,18 @@ impl MihomoManager {
                 return Self::is_mihomo_process_running();
             }
 
-            // 检查服务是否正在运行，如果是，可能需要恢复 service_mode 状态
+            // 检查服务是否正在运行，且服务报告 mihomo 是通过服务启动的
             // 这处理应用重启后的情况
-            if is_service_available() && Self::is_mihomo_process_running() {
-                log::info!("Detected mihomo running via service, restoring service_mode");
-                let mut service_mode = self.service_mode.lock().await;
-                *service_mode = true;
-                return true;
+            if is_service_available() {
+                // 查询服务状态确认 mihomo 确实是通过服务启动的
+                if let Ok(status) = crate::system::WinServiceManager::get_status().await {
+                    if status.mihomo_running {
+                        log::info!("Detected mihomo running via service (PID: {:?}), restoring service_mode", status.mihomo_pid);
+                        let mut service_mode = self.service_mode.lock().await;
+                        *service_mode = true;
+                        return true;
+                    }
+                }
             }
 
             // 非服务模式但 TUN 启用时（可能是 UAC 提权方式）

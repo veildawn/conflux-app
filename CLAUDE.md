@@ -281,6 +281,99 @@ listen('log-entry', (event) => {
 - 连接详情查看
 - 更多规则类型支持
 
+## TUN 模式实现
+
+TUN 模式（增强模式）通过创建虚拟网卡实现系统级全局代理。由于需要修改系统网络配置，需要管理员/root 权限。
+
+### Windows 实现
+
+```
+src-tauri/
+├── src/mihomo/manager.rs      # MihomoManager::start_elevated() - TUN 启动逻辑
+├── src/system/win_service.rs  # WinServiceManager - TUN 服务管理
+└── service/                   # 独立 Windows 服务项目
+    ├── src/main.rs            # 服务入口
+    ├── src/service.rs         # 服务生命周期
+    ├── src/ipc.rs             # IPC 服务器 (端口 33211)
+    └── src/mihomo.rs          # mihomo 进程管理
+```
+
+**启动优先级：**
+
+```rust
+// src-tauri/src/mihomo/manager.rs - start() 方法
+if is_tun_enabled() {
+    // 1. 优先：TUN 服务模式（服务已安装并运行）
+    if service_installed && service_running && is_service_ipc_ready() {
+        return start_via_service();  // 通过 IPC 启动，无需 UAC
+    }
+
+    // 2. 次选：应用已有管理员权限
+    if is_running_as_admin() {
+        return spawn_mihomo_directly();  // 直接启动，无需 UAC
+    }
+
+    // 3. 兜底：请求 UAC 提权
+    return start_elevated();  // PowerShell Start-Process -Verb RunAs
+}
+```
+
+**TUN 服务架构：**
+
+- 服务名称：`ConfluxService`
+- IPC 端口：`33211`
+- 端点：`/health`, `/status`, `/start`, `/stop`, `/restart`
+- 服务以 LocalSystem 账户运行，具有管理员权限
+
+**关键函数：**
+| 函数 | 文件 | 说明 |
+|------|------|------|
+| `is_running_as_admin()` | `manager.rs` | 检查当前进程是否有管理员权限 |
+| `is_service_available()` | `manager.rs` | 检查服务是否可用（已安装+运行+IPC就绪） |
+| `start_via_service()` | `manager.rs` | 通过 IPC 请求服务启动 mihomo |
+| `start_elevated()` | `manager.rs` | 通过 PowerShell UAC 提权启动 |
+| `WinServiceManager::install()` | `win_service.rs` | 安装 Windows 服务 |
+| `WinServiceManager::start_mihomo()` | `win_service.rs` | 发送 IPC 请求启动 mihomo |
+
+### macOS 实现
+
+```
+src-tauri/
+├── src/system/tun.rs          # TunPermission - 权限检查和设置
+└── src/mihomo/manager.rs      # 普通启动（已有 root helper）
+```
+
+macOS 使用系统的网络扩展框架，首次启用需要：
+
+1. 用户在系统设置中批准网络扩展
+2. 安装 privileged helper tool（需要管理员密码）
+
+授权后 helper tool 持久化，后续无需再次授权。
+
+**关键函数：**
+| 函数 | 文件 | 说明 |
+|------|------|------|
+| `TunPermission::check_permission()` | `tun.rs` | 检查 TUN 权限状态 |
+| `TunPermission::setup_permission()` | `tun.rs` | 请求设置 TUN 权限 |
+
+### 前端交互
+
+```typescript
+// src/stores/proxyStore.ts
+setEnhancedMode: async (enabled: boolean) => {
+  await ipc.setTunMode(enabled);
+  // 失败时自动获取实际状态，确保开关正确显示
+};
+
+// src/services/ipc.ts
+setTunMode: (enabled: boolean) => invoke('set_tun_mode', { enabled });
+```
+
+**错误处理：**
+
+- Windows UAC 被拒绝 → 返回错误，前端回滚开关状态
+- macOS 权限未授权 → 返回错误，提示用户授权
+
 ## MiHomo 集成
 
 ### Sidecar 二进制命名规范
