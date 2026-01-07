@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { ipc } from '@/services/ipc';
+import logger from '@/utils/logger';
 import type { AppSettings, RuleDatabaseItem } from '@/types/config';
 import { DEFAULT_APP_SETTINGS, DEFAULT_RULE_DATABASES } from '@/types/config';
 
@@ -56,7 +57,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // 应用主题 - 始终使用 system
       get().setTheme('system');
     } catch (error) {
-      console.error('Failed to fetch app settings:', error);
+      logger.error('Failed to fetch app settings:', error);
       set({ initialized: true });
     }
   },
@@ -69,7 +70,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await ipc.saveAppSettings(mergedSettings);
       set({ settings: mergedSettings });
     } catch (error) {
-      console.error('Failed to save app settings:', error);
+      logger.error('Failed to save app settings:', error);
       throw error;
     }
   },
@@ -139,10 +140,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       const updateCount = results.filter((r) => r.hasUpdate && !r.error).length;
       if (updateCount > 0) {
-        console.log(`[RuleDatabase] ${updateCount} 个数据库有新版本可用`);
+        logger.log(`[RuleDatabase] ${updateCount} 个数据库有新版本可用`);
       }
     } catch (error) {
-      console.error('Failed to check rule database updates:', error);
+      logger.error('Failed to check rule database updates:', error);
       const errorStatus: Record<string, RuleDatabaseUpdateStatus> = {};
       databases.forEach((db) => {
         errorStatus[db.id] = { hasUpdate: false, checking: false, error: '检查失败' };
