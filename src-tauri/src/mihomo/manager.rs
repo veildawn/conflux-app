@@ -201,6 +201,9 @@ impl MihomoManager {
         let config_path_str = self.config_path.to_string_lossy().to_string();
 
         // 启动 mihomo 进程
+        // 注意：使用 Stdio::null() 丢弃 stdout/stderr 输出
+        // 不能使用 Stdio::piped() 因为如果不读取管道，缓冲区会满导致进程阻塞
+        // mihomo 的日志已经通过 WebSocket API (/logs) 获取，无需从 stdout/stderr 读取
         #[cfg(windows)]
         let child = {
             use std::os::windows::process::CommandExt;
@@ -209,8 +212,8 @@ impl MihomoManager {
                 .current_dir(config_dir)
                 .args(["-d", &config_dir_str, "-f", &config_path_str])
                 .creation_flags(CREATE_NO_WINDOW)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
                 .spawn()
                 .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?
         };
@@ -219,8 +222,8 @@ impl MihomoManager {
         let child = Command::new(&mihomo_path)
             .current_dir(config_dir)
             .args(["-d", &config_dir_str, "-f", &config_path_str])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .spawn()
             .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?;
 
