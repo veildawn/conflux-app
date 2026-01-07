@@ -760,6 +760,64 @@ export const ipc = {
     const newConfig = { ...config, 'proxy-groups': nextGroups };
     await invoke('update_profile_config', { profileId: activeId, config: newConfig });
   },
+
+  // ============= Windows 服务命令 (仅 Windows) =============
+
+  /**
+   * 获取 Windows 服务状态
+   */
+  async getServiceStatus(): Promise<{
+    installed: boolean;
+    running: boolean;
+    mihomo_running: boolean;
+    mihomo_pid: number | null;
+  }> {
+    return invoke('get_service_status');
+  },
+
+  /**
+   * 安装 Windows 服务
+   * 需要管理员权限
+   */
+  async installService(): Promise<void> {
+    return invoke('install_service');
+  },
+
+  /**
+   * 卸载 Windows 服务
+   * 需要管理员权限
+   */
+  async uninstallService(): Promise<void> {
+    return invoke('uninstall_service');
+  },
+
+  /**
+   * 启动 Windows 服务
+   */
+  async startService(): Promise<void> {
+    return invoke('start_service');
+  },
+
+  /**
+   * 停止 Windows 服务
+   */
+  async stopService(): Promise<void> {
+    return invoke('stop_service');
+  },
+
+  /**
+   * 重启 Windows 服务
+   */
+  async restartService(): Promise<void> {
+    return invoke('restart_service');
+  },
+
+  /**
+   * 检查是否有管理员权限
+   */
+  async hasAdminPrivileges(): Promise<boolean> {
+    return invoke('has_admin_privileges');
+  },
 };
 
 export default ipc;
