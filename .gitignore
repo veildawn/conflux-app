@@ -50,6 +50,3 @@ coverage/
 src-tauri/service/target
 src-tauri/gen
 src-tauri/gen/schemas
-src-tauri/binaries/conflux-service-x86_64-pc-windows-msvc.exe
-src-tauri/binaries/mihomo-x86_64-pc-windows-msvc.exe
-src-tauri/binaries/mihomo-aarch64-apple-darwin
