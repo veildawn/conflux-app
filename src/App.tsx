@@ -17,6 +17,7 @@ const Providers = lazy(() => import('./pages/Providers'));
 const ProxyGroupEditWindow = lazy(() => import('./pages/proxy-groups/ProxyGroupEditWindow'));
 const ProxyServerEditWindow = lazy(() => import('./pages/proxy-servers/ProxyServerEditWindow'));
 const SubscriptionEditWindow = lazy(() => import('./pages/SubscriptionEditWindow'));
+const RuleEditWindow = lazy(() => import('./pages/RuleEditWindow'));
 
 // 加载中占位组件
 const LoadingFallback = () => (
@@ -49,6 +50,7 @@ function App() {
         <Route path="/proxy-group-edit" element={<ProxyGroupEditWindow />} />
         <Route path="/proxy-server-edit" element={<ProxyServerEditWindow />} />
         <Route path="/subscription-edit" element={<SubscriptionEditWindow />} />
+        <Route path="/rule-edit" element={<RuleEditWindow />} />
       </Routes>
     </Suspense>
   );

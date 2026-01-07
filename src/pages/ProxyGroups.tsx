@@ -117,7 +117,7 @@ export default function ProxyGroups() {
         url: `/#/proxy-group-edit${name ? `?name=${encodeURIComponent(name)}` : ''}`,
         title: name ? `编辑策略组 - ${name}` : '添加策略组',
         width: 860,
-        height: 700,
+        height: 860,
         center: true,
         resizable: false,
         decorations: false,

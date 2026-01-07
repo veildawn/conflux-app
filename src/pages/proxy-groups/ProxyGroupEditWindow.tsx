@@ -556,293 +556,443 @@ export default function ProxyGroupEditWindow() {
         </div>
 
         <div className="relative flex flex-col overflow-hidden bg-white/25 backdrop-blur-[50px] rounded-r-xl">
-          <div className="relative flex-1 overflow-y-auto px-8 py-10 pb-28">
-            <div className="mb-7">
-              <h1 className="text-2xl font-semibold text-neutral-900">{currentMeta.title}</h1>
-              <p className="mt-1 text-sm text-neutral-500">{currentMeta.description}</p>
-            </div>
+          <div className="flex-none px-8 pt-10 pb-6">
+            <h1 className="text-2xl font-semibold text-neutral-900">{currentMeta.title}</h1>
+            <p className="mt-1 text-sm text-neutral-500">{currentMeta.description}</p>
+          </div>
 
+          <div className="flex-1 min-h-0 relative">
             <div
               className={cn(
-                'transition-all duration-500 ease-out',
-                direction === 'forward'
-                  ? 'animate-in fade-in slide-in-from-right-8'
-                  : 'animate-in fade-in slide-in-from-left-8'
+                'absolute inset-0 px-8 pb-24',
+                step === 'basic'
+                  ? 'overflow-hidden flex flex-col'
+                  : 'overflow-y-auto custom-scrollbar'
               )}
             >
-              {step === 'type' && (
-                <div className="space-y-8">
-                  <div className="space-y-3">
-                    <label className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
-                      策略组名称
-                    </label>
-                    <Input
-                      value={formData.name}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                      className={cn(
-                        'h-12 rounded-2xl bg-white/40 border border-white/60 px-4 text-base font-semibold text-neutral-900 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] transition-all focus-visible:ring-4 focus-visible:ring-blue-500/20',
-                        errors.name
-                          ? 'border-red-400/60 focus-visible:ring-red-500/20'
-                          : 'focus-visible:border-blue-500'
+              <div
+                className={cn(
+                  'h-full transition-all duration-500 ease-out',
+                  direction === 'forward'
+                    ? 'animate-in fade-in slide-in-from-right-8'
+                    : 'animate-in fade-in slide-in-from-left-8',
+                  step === 'basic' && 'flex flex-col'
+                )}
+              >
+                {step === 'type' && (
+                  <div className="space-y-8">
+                    <div className="space-y-3">
+                      <label className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
+                        策略组名称
+                      </label>
+                      <Input
+                        value={formData.name}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                        className={cn(
+                          'h-12 rounded-2xl bg-white/40 border border-white/60 px-4 text-base font-semibold text-neutral-900 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] transition-all focus-visible:ring-4 focus-visible:ring-blue-500/20',
+                          errors.name
+                            ? 'border-red-400/60 focus-visible:ring-red-500/20'
+                            : 'focus-visible:border-blue-500'
+                        )}
+                        placeholder="输入名称..."
+                        autoFocus
+                      />
+                      {errors.name && (
+                        <div className="flex items-center gap-2 text-xs font-semibold text-red-500">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          {errors.name}
+                        </div>
                       )}
-                      placeholder="输入名称..."
-                      autoFocus
-                    />
-                    {errors.name && (
-                      <div className="flex items-center gap-2 text-xs font-semibold text-red-500">
-                        <AlertCircle className="h-3.5 w-3.5" />
-                        {errors.name}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
-                      分发模式
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {selectableTypeOptions.map((option) => {
-                        const selected = typeValue === option.value;
-                        const Icon = GROUP_TYPE_ICON_MAP[option.value] || Layers;
-                        return (
-                          <div
-                            key={option.value}
-                            onClick={() => setFormData((prev) => ({ ...prev, type: option.value }))}
-                            className={cn(
-                              'group relative rounded-3xl border p-5 transition-all cursor-pointer overflow-hidden',
-                              selected
-                                ? 'bg-white/80 border-blue-500 shadow-[0_0_20px_rgba(0,122,255,0.2)]'
-                                : 'bg-white/45 border-transparent hover:bg-white/70 hover:border-white/70'
-                            )}
-                          >
-                            <div className="flex items-center gap-4">
-                              <div
-                                className={cn(
-                                  'h-12 w-12 rounded-full flex items-center justify-center shadow-[0_4px_8px_rgba(0,0,0,0.06)]',
-                                  selected ? 'bg-blue-600 text-white' : 'bg-white text-blue-600'
-                                )}
-                              >
-                                <Icon className="h-5 w-5" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <h3 className="text-sm font-semibold text-neutral-900">
-                                    {option.label}
-                                  </h3>
-                                  {option.deprecated && (
-                                    <Badge
-                                      variant="destructive"
-                                      className="h-4 text-[9px] px-1 uppercase font-bold"
-                                    >
-                                      已弃用
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="mt-1 text-xs text-neutral-500 leading-relaxed">
-                                  {option.description}
-                                </p>
-                              </div>
-                              {selected && (
-                                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white shadow-[0_0_12px_rgba(0,122,255,0.4)]">
-                                  <CheckIcon />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {step === 'basic' && (
-                <div className="space-y-6">
-                  {/* 自动发现与过滤 - 置顶 */}
-                  <div className="space-y-3">
-                    <div className="text-xs font-semibold uppercase tracking-widest text-neutral-400 flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-indigo-500" />
-                      自动发现与过滤
                     </div>
 
-                    <div className="rounded-2xl border border-white/60 bg-white/50 shadow-[0_8px_20px_rgba(0,0,0,0.06)] overflow-hidden">
-                      <div
-                        className="flex items-center justify-between px-4 py-4 cursor-pointer hover:bg-white/60 transition-colors"
-                        onClick={() =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            includeAllProxies: !prev.includeAllProxies,
-                          }))
-                        }
-                      >
-                        <div>
-                          <div className="text-sm font-semibold text-neutral-800">
-                            包含所有手动代理
-                          </div>
-                          <div className="text-xs text-neutral-400">自动导入所有已定义的代理。</div>
-                        </div>
-                        <Switch
-                          className="scale-90 data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-neutral-200"
-                          checked={formData.includeAllProxies}
-                          onCheckedChange={(c) =>
-                            setFormData((prev) => ({ ...prev, includeAllProxies: c }))
-                          }
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-
-                      <div className="border-t border-white/60 p-4 space-y-2">
-                        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-neutral-400">
-                          包含过滤正则
-                          {!filterValid && formData.filter && (
-                            <Badge variant="destructive" className="h-4 px-1 text-[8px]">
-                              正则错误
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="relative">
-                          <Input
-                            value={formData.filter}
-                            onChange={(e) =>
-                              setFormData((prev) => ({ ...prev, filter: e.target.value }))
-                            }
-                            placeholder="例如: US|HK|SG"
-                            className={cn(
-                              'h-9 rounded-xl bg-white/70 border border-white/70 text-xs font-mono',
-                              !filterValid && formData.filter && 'border-red-400/60 text-red-500'
-                            )}
-                          />
-                          <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6 items-start">
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs font-semibold uppercase tracking-widest text-neutral-400 flex items-center gap-2">
-                          <Layers className="h-3.5 w-3.5 text-blue-500" />
-                          可用子策略 / 节点
-                        </div>
-                        <div className="text-[11px] font-semibold text-blue-600 bg-blue-500/10 px-2 py-0.5 rounded-full">
-                          已选: {proxies.length}
-                        </div>
+                      <div className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
+                        分发模式
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {selectableTypeOptions.map((option) => {
+                          const selected = typeValue === option.value;
+                          const Icon = GROUP_TYPE_ICON_MAP[option.value] || Layers;
+                          return (
+                            <div
+                              key={option.value}
+                              onClick={() =>
+                                setFormData((prev) => ({ ...prev, type: option.value }))
+                              }
+                              className={cn(
+                                'group relative rounded-3xl border p-5 transition-all cursor-pointer overflow-hidden',
+                                selected
+                                  ? 'bg-white/80 border-blue-500 shadow-[0_0_20px_rgba(0,122,255,0.2)]'
+                                  : 'bg-white/45 border-transparent hover:bg-white/70 hover:border-white/70'
+                              )}
+                            >
+                              <div className="flex items-center gap-4">
+                                <div
+                                  className={cn(
+                                    'h-12 w-12 rounded-full flex items-center justify-center shadow-[0_4px_8px_rgba(0,0,0,0.06)]',
+                                    selected ? 'bg-blue-600 text-white' : 'bg-white text-blue-600'
+                                  )}
+                                >
+                                  <Icon className="h-5 w-5" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="text-sm font-semibold text-neutral-900">
+                                      {option.label}
+                                    </h3>
+                                    {option.deprecated && (
+                                      <Badge
+                                        variant="destructive"
+                                        className="h-4 text-[9px] px-1 uppercase font-bold"
+                                      >
+                                        已弃用
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="mt-1 text-xs text-neutral-500 leading-relaxed">
+                                    {option.description}
+                                  </p>
+                                </div>
+                                {selected && (
+                                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white shadow-[0_0_12px_rgba(0,122,255,0.4)]">
+                                    <CheckIcon />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {step === 'basic' && (
+                  <div className="flex flex-col h-full space-y-5">
+                    {/* 自动发现与过滤 - 置顶 */}
+                    <div className="space-y-3 shrink-0">
+                      <div className="text-xs font-semibold uppercase tracking-widest text-neutral-400 flex items-center gap-2">
+                        <div className="h-2 w-2 rounded-full bg-indigo-500" />
+                        自动发现与过滤
                       </div>
 
                       <div className="rounded-2xl border border-white/60 bg-white/50 shadow-[0_8px_20px_rgba(0,0,0,0.06)] overflow-hidden">
-                        <div className="p-3 border-b border-white/60 bg-white/60">
-                          <div className="relative">
-                            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-                            <Input
-                              value={proxyQuery}
-                              onChange={(e) => setProxyQuery(e.target.value)}
-                              placeholder="搜索节点、区域..."
-                              className="h-9 pl-10 pr-10 rounded-xl bg-white/70 border border-white/70 text-sm font-medium"
-                            />
-                            {proxyQuery && (
-                              <button
-                                onClick={() => setProxyQuery('')}
-                                className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-neutral-100/80 text-neutral-500 text-xs"
-                              >
-                                ✕
-                              </button>
+                        <div
+                          className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-white/60 transition-colors"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              includeAllProxies: !prev.includeAllProxies,
+                            }))
+                          }
+                        >
+                          <div>
+                            <div className="text-sm font-semibold text-neutral-800">
+                              包含所有手动代理
+                            </div>
+                            <div className="text-xs text-neutral-400">
+                              自动导入所有已定义的代理。
+                            </div>
+                          </div>
+                          <Switch
+                            className="scale-90 data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-neutral-200"
+                            checked={formData.includeAllProxies}
+                            onCheckedChange={(c) =>
+                              setFormData((prev) => ({ ...prev, includeAllProxies: c }))
+                            }
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+
+                        <div className="border-t border-white/60 px-4 py-3 space-y-2">
+                          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-neutral-400">
+                            包含过滤正则
+                            {!filterValid && formData.filter && (
+                              <Badge variant="destructive" className="h-4 px-1 text-[8px]">
+                                正则错误
+                              </Badge>
                             )}
+                          </div>
+                          <div className="relative">
+                            <Input
+                              value={formData.filter}
+                              onChange={(e) =>
+                                setFormData((prev) => ({ ...prev, filter: e.target.value }))
+                              }
+                              placeholder="例如: US|HK|SG"
+                              className={cn(
+                                'h-9 rounded-xl bg-white/70 border border-white/70 text-xs font-mono',
+                                !filterValid && formData.filter && 'border-red-400/60 text-red-500'
+                              )}
+                            />
+                            <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-300" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-5">
+                      {/* 可用子策略 / 节点 */}
+                      <div className="flex flex-col min-h-0 flex-1 gap-3">
+                        <div className="flex items-center justify-between shrink-0">
+                          <div className="text-xs font-semibold uppercase tracking-widest text-neutral-400 flex items-center gap-2">
+                            <Layers className="h-3.5 w-3.5 text-blue-500" />
+                            可用子策略 / 节点
+                          </div>
+                          <div className="text-[11px] font-semibold text-blue-600 bg-blue-500/10 px-2 py-0.5 rounded-full">
+                            已选: {proxies.length}
                           </div>
                         </div>
 
-                        <div className="max-h-[280px] overflow-y-auto p-2 space-y-2">
-                          {filteredProxyOptions.length === 0 ? (
-                            <div className="py-10 text-center text-xs text-neutral-400">
-                              无匹配结果
+                        <div className="flex-1 min-h-0 flex flex-col rounded-2xl border border-white/60 bg-white/50 shadow-[0_8px_20px_rgba(0,0,0,0.06)] overflow-hidden">
+                          <div className="p-3 border-b border-white/60 bg-white/60 shrink-0">
+                            <div className="relative">
+                              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                              <Input
+                                value={proxyQuery}
+                                onChange={(e) => setProxyQuery(e.target.value)}
+                                placeholder="搜索节点、区域..."
+                                className="h-9 pl-10 pr-10 rounded-xl bg-white/70 border border-white/70 text-sm font-medium"
+                              />
+                              {proxyQuery && (
+                                <button
+                                  onClick={() => setProxyQuery('')}
+                                  className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-neutral-100/80 text-neutral-500 text-xs"
+                                >
+                                  ✕
+                                </button>
+                              )}
                             </div>
-                          ) : (
-                            filteredProxyOptions.map((p) => {
-                              const isSelected = proxies.includes(p);
+                          </div>
+
+                          <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5 custom-scrollbar">
+                            {filteredProxyOptions.length === 0 ? (
+                              <div className="py-10 text-center text-xs text-neutral-400">
+                                无匹配结果
+                              </div>
+                            ) : (
+                              filteredProxyOptions.map((p) => {
+                                const isSelected = proxies.includes(p);
+                                return (
+                                  <div
+                                    key={p}
+                                    onClick={() =>
+                                      setFormData((prev) => ({
+                                        ...prev,
+                                        proxies: toggleListItem(prev.proxies, p),
+                                      }))
+                                    }
+                                    className={cn(
+                                      'flex items-center gap-3 rounded-xl px-3 py-2.5 border transition-all cursor-pointer',
+                                      isSelected
+                                        ? 'bg-white/90 border-blue-500 shadow-[0_4px_12px_rgba(0,0,0,0.06)]'
+                                        : 'bg-white/40 border-transparent hover:bg-white/70'
+                                    )}
+                                  >
+                                    <div
+                                      className={cn(
+                                        'h-5 w-5 rounded-md border-2 flex items-center justify-center transition-all shrink-0',
+                                        isSelected
+                                          ? 'bg-blue-600 border-blue-600'
+                                          : 'border-neutral-300'
+                                      )}
+                                    >
+                                      {isSelected && (
+                                        <span className="text-white text-xs font-bold">✓</span>
+                                      )}
+                                    </div>
+                                    <span className="text-sm font-medium text-neutral-800 truncate">
+                                      {p}
+                                    </span>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 外部策略集 */}
+                      {hasProviderOptions && (
+                        <div className="flex flex-col min-h-0 lg:w-[280px] shrink-0 gap-3">
+                          <div className="text-xs font-semibold uppercase tracking-widest text-neutral-400 flex items-center gap-2 shrink-0">
+                            <div className="h-2 w-2 rounded-full bg-orange-400" />
+                            外部策略集
+                          </div>
+
+                          <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl border border-white/60 bg-white/50 shadow-[0_8px_20px_rgba(0,0,0,0.06)] p-2 space-y-1.5 custom-scrollbar">
+                            {providerOptions.map((p) => {
+                              const isSelected = providers.includes(p);
                               return (
                                 <div
                                   key={p}
                                   onClick={() =>
                                     setFormData((prev) => ({
                                       ...prev,
-                                      proxies: toggleListItem(prev.proxies, p),
+                                      providers: toggleListItem(prev.providers, p),
                                     }))
                                   }
                                   className={cn(
-                                    'flex items-center gap-3 rounded-2xl px-4 py-3 border transition-all cursor-pointer',
+                                    'flex items-center gap-3 rounded-xl px-3 py-2 border transition-all cursor-pointer',
                                     isSelected
-                                      ? 'bg-white/90 border-blue-500 shadow-[0_4px_12px_rgba(0,0,0,0.06)]'
+                                      ? 'bg-orange-500/10 border-orange-400 shadow-[0_4px_10px_rgba(251,146,60,0.15)]'
                                       : 'bg-white/40 border-transparent hover:bg-white/70'
                                   )}
                                 >
                                   <div
                                     className={cn(
-                                      'h-5 w-5 rounded-md border-2 flex items-center justify-center transition-all',
+                                      'h-7 w-7 rounded-xl flex items-center justify-center shrink-0',
                                       isSelected
-                                        ? 'bg-blue-600 border-blue-600'
-                                        : 'border-neutral-300'
+                                        ? 'bg-orange-500 text-white'
+                                        : 'bg-orange-500/10 text-orange-500'
                                     )}
                                   >
-                                    {isSelected && (
-                                      <span className="text-white text-xs font-bold">✓</span>
-                                    )}
+                                    <Save className="h-3.5 w-3.5" />
                                   </div>
-                                  <span className="text-sm font-semibold text-neutral-800 truncate">
-                                    {p}
-                                  </span>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-semibold text-neutral-800 truncate">
+                                      {p}
+                                    </div>
+                                    <div className="text-[10px] text-neutral-400">
+                                      {isSelected ? '已包含' : '未包含'}
+                                    </div>
+                                  </div>
+                                  {isSelected && <CheckIcon />}
                                 </div>
                               );
-                            })
-                          )}
+                            })}
+                          </div>
                         </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {step === 'behavior' && needsBehavior && (
+                  <div className="space-y-6">
+                    <div className="rounded-3xl border border-white/60 bg-white/55 p-5 shadow-[0_12px_24px_rgba(0,0,0,0.06)] space-y-5">
+                      <div className="space-y-3">
+                        <label className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
+                          Health Check URL
+                        </label>
+                        <Input
+                          value={formData.url}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, url: e.target.value }))
+                          }
+                          className="h-10 rounded-xl bg-white/80 border border-white/70 text-sm font-mono"
+                          placeholder="http://www.gstatic.com/generate_204"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
+                            测试间隔 (s)
+                          </label>
+                          <Input
+                            value={formData.interval}
+                            onChange={(e) =>
+                              setFormData((prev) => ({ ...prev, interval: e.target.value }))
+                            }
+                            className="h-10 rounded-xl bg-white/80 border border-white/70 text-sm font-semibold"
+                            placeholder="300"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
+                            最大失败次数
+                          </label>
+                          <Input
+                            value={formData.maxFailedTimes}
+                            onChange={(e) =>
+                              setFormData((prev) => ({ ...prev, maxFailedTimes: e.target.value }))
+                            }
+                            className="h-10 rounded-xl bg-white/80 border border-white/70 text-sm font-semibold"
+                            placeholder="5"
+                          />
+                        </div>
+                      </div>
+
+                      {typeValue === 'url-test' && (
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
+                            容差 (ms)
+                          </label>
+                          <Input
+                            value={formData.tolerance}
+                            onChange={(e) =>
+                              setFormData((prev) => ({ ...prev, tolerance: e.target.value }))
+                            }
+                            className="h-10 rounded-xl bg-white/80 border border-white/70 text-sm font-semibold"
+                            placeholder="50"
+                          />
+                        </div>
+                      )}
+
+                      <div
+                        className="flex items-center justify-between rounded-2xl bg-white/70 px-4 py-3 border border-white/70 cursor-pointer hover:bg-white/80 transition-colors"
+                        onClick={() => setFormData((prev) => ({ ...prev, lazy: !prev.lazy }))}
+                      >
+                        <div>
+                          <div className="text-sm font-semibold text-neutral-800">懒加载模式</div>
+                          <div className="text-xs text-neutral-400">
+                            仅在被使用时进行测速，节省流量。
+                          </div>
+                        </div>
+                        <Switch
+                          className="scale-90 data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-neutral-200"
+                          checked={formData.lazy}
+                          onCheckedChange={(c) => setFormData((prev) => ({ ...prev, lazy: c }))}
+                          onClick={(e) => e.stopPropagation()}
+                        />
                       </div>
                     </div>
 
-                    {hasProviderOptions && (
+                    {typeValue === 'load-balance' && (
                       <div className="space-y-3">
-                        <div className="text-xs font-semibold uppercase tracking-widest text-neutral-400 flex items-center gap-2">
-                          <div className="h-2 w-2 rounded-full bg-orange-400" />
-                          外部策略集
+                        <div className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
+                          分流算法
                         </div>
-
-                        <div className="rounded-2xl border border-white/60 bg-white/50 shadow-[0_8px_20px_rgba(0,0,0,0.06)] p-3 max-h-[220px] overflow-y-auto space-y-2">
-                          {providerOptions.map((p) => {
-                            const isSelected = providers.includes(p);
+                        <div className="grid gap-3">
+                          {LOAD_BALANCE_STRATEGIES.map((strategy) => {
+                            const selected = formData.strategy === strategy.value;
                             return (
                               <div
-                                key={p}
+                                key={strategy.value}
                                 onClick={() =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    providers: toggleListItem(prev.providers, p),
-                                  }))
+                                  setFormData((prev) => ({ ...prev, strategy: strategy.value }))
                                 }
                                 className={cn(
-                                  'flex items-center gap-3 rounded-2xl px-3 py-2 border transition-all cursor-pointer',
-                                  isSelected
-                                    ? 'bg-orange-500/10 border-orange-400 shadow-[0_4px_10px_rgba(251,146,60,0.15)]'
-                                    : 'bg-white/40 border-transparent hover:bg-white/70'
+                                  'flex items-center gap-3 rounded-2xl px-4 py-3 border transition-all cursor-pointer',
+                                  selected
+                                    ? 'bg-white/90 border-blue-500 shadow-[0_4px_12px_rgba(0,122,255,0.12)]'
+                                    : 'bg-white/45 border-transparent hover:bg-white/70'
                                 )}
                               >
                                 <div
                                   className={cn(
-                                    'h-7 w-7 rounded-xl flex items-center justify-center',
-                                    isSelected
-                                      ? 'bg-orange-500 text-white'
-                                      : 'bg-orange-500/10 text-orange-500'
+                                    'h-9 w-9 rounded-xl flex items-center justify-center',
+                                    selected
+                                      ? 'bg-blue-600 text-white'
+                                      : 'bg-blue-500/10 text-blue-600'
                                   )}
                                 >
-                                  <Save className="h-3.5 w-3.5" />
+                                  <Settings2 className="h-4 w-4" />
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-xs font-semibold text-neutral-800 truncate">
-                                    {p}
+                                <div className="flex-1">
+                                  <div className="text-sm font-semibold text-neutral-800">
+                                    {strategy.label}
                                   </div>
-                                  <div className="text-[10px] text-neutral-400">
-                                    {isSelected ? '已包含' : '未包含'}
+                                  <div className="text-xs text-neutral-400">
+                                    {strategy.description}
                                   </div>
                                 </div>
-                                {isSelected && <CheckIcon />}
+                                {selected && (
+                                  <div className="h-6 w-6 rounded-full bg-blue-600 text-white flex items-center justify-center">
+                                    <CheckIcon />
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
@@ -850,264 +1000,135 @@ export default function ProxyGroupEditWindow() {
                       </div>
                     )}
                   </div>
-                </div>
-              )}
+                )}
 
-              {step === 'behavior' && needsBehavior && (
-                <div className="space-y-6">
-                  <div className="rounded-3xl border border-white/60 bg-white/55 p-5 shadow-[0_12px_24px_rgba(0,0,0,0.06)] space-y-5">
-                    <div className="space-y-3">
-                      <label className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
-                        Health Check URL
-                      </label>
-                      <Input
-                        value={formData.url}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, url: e.target.value }))}
-                        className="h-10 rounded-xl bg-white/80 border border-white/70 text-sm font-mono"
-                        placeholder="http://www.gstatic.com/generate_204"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
-                          测试间隔 (s)
-                        </label>
-                        <Input
-                          value={formData.interval}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, interval: e.target.value }))
-                          }
-                          className="h-10 rounded-xl bg-white/80 border border-white/70 text-sm font-semibold"
-                          placeholder="300"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
-                          最大失败次数
-                        </label>
-                        <Input
-                          value={formData.maxFailedTimes}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, maxFailedTimes: e.target.value }))
-                          }
-                          className="h-10 rounded-xl bg-white/80 border border-white/70 text-sm font-semibold"
-                          placeholder="5"
-                        />
-                      </div>
-                    </div>
-
-                    {typeValue === 'url-test' && (
-                      <div className="space-y-2">
-                        <label className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
-                          容差 (ms)
-                        </label>
-                        <Input
-                          value={formData.tolerance}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, tolerance: e.target.value }))
-                          }
-                          className="h-10 rounded-xl bg-white/80 border border-white/70 text-sm font-semibold"
-                          placeholder="50"
-                        />
-                      </div>
-                    )}
-
-                    <div
-                      className="flex items-center justify-between rounded-2xl bg-white/70 px-4 py-3 border border-white/70 cursor-pointer hover:bg-white/80 transition-colors"
-                      onClick={() => setFormData((prev) => ({ ...prev, lazy: !prev.lazy }))}
-                    >
-                      <div>
-                        <div className="text-sm font-semibold text-neutral-800">懒加载模式</div>
-                        <div className="text-xs text-neutral-400">
-                          仅在被使用时进行测速，节省流量。
+                {step === 'advanced' && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                        <div className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
+                          排除过滤
+                        </div>
+                        <div className="rounded-3xl border border-white/60 bg-white/55 p-5 shadow-[0_12px_24px_rgba(0,0,0,0.06)] space-y-4">
+                          <div className="space-y-2">
+                            <label className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
+                              正则排除
+                            </label>
+                            <Input
+                              value={formData.excludeFilter}
+                              onChange={(e) =>
+                                setFormData((prev) => ({ ...prev, excludeFilter: e.target.value }))
+                              }
+                              className="h-10 rounded-xl bg-white/80 border border-white/70 text-sm font-mono"
+                              placeholder="例如: 流量|过期|Back"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
+                              类型过滤
+                            </label>
+                            <Input
+                              value={formData.excludeType}
+                              onChange={(e) =>
+                                setFormData((prev) => ({ ...prev, excludeType: e.target.value }))
+                              }
+                              className="h-10 rounded-xl bg-white/80 border border-white/70 text-sm font-mono"
+                              placeholder="例如: Shadowsocks"
+                            />
+                          </div>
                         </div>
                       </div>
-                      <Switch
-                        className="scale-90 data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-neutral-200"
-                        checked={formData.lazy}
-                        onCheckedChange={(c) => setFormData((prev) => ({ ...prev, lazy: c }))}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </div>
-                  </div>
 
-                  {typeValue === 'load-balance' && (
-                    <div className="space-y-3">
-                      <div className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
-                        分流算法
-                      </div>
-                      <div className="grid gap-3">
-                        {LOAD_BALANCE_STRATEGIES.map((strategy) => {
-                          const selected = formData.strategy === strategy.value;
-                          return (
-                            <div
-                              key={strategy.value}
-                              onClick={() =>
-                                setFormData((prev) => ({ ...prev, strategy: strategy.value }))
-                              }
-                              className={cn(
-                                'flex items-center gap-3 rounded-2xl px-4 py-3 border transition-all cursor-pointer',
-                                selected
-                                  ? 'bg-white/90 border-blue-500 shadow-[0_4px_12px_rgba(0,122,255,0.12)]'
-                                  : 'bg-white/45 border-transparent hover:bg-white/70'
-                              )}
-                            >
+                      <div className="space-y-4">
+                        <div className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
+                          显示控制
+                        </div>
+                        <div className="rounded-3xl border border-white/60 bg-white/55 shadow-[0_12px_24px_rgba(0,0,0,0.06)] overflow-hidden">
+                          <div
+                            className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-white/60 transition-colors"
+                            onClick={() =>
+                              setFormData((prev) => ({ ...prev, hidden: !prev.hidden }))
+                            }
+                          >
+                            <div className="flex items-center gap-3">
                               <div
                                 className={cn(
-                                  'h-9 w-9 rounded-xl flex items-center justify-center',
-                                  selected
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-blue-500/10 text-blue-600'
+                                  'h-9 w-9 rounded-2xl flex items-center justify-center',
+                                  !formData.hidden
+                                    ? 'bg-blue-600 text-white shadow-[0_4px_12px_rgba(0,122,255,0.2)]'
+                                    : 'bg-white/70 text-neutral-400'
                                 )}
                               >
-                                <Settings2 className="h-4 w-4" />
+                                {!formData.hidden ? (
+                                  <Eye className="h-4 w-4" />
+                                ) : (
+                                  <EyeOff className="h-4 w-4" />
+                                )}
                               </div>
-                              <div className="flex-1">
+                              <div>
                                 <div className="text-sm font-semibold text-neutral-800">
-                                  {strategy.label}
+                                  在首页显示
                                 </div>
                                 <div className="text-xs text-neutral-400">
-                                  {strategy.description}
+                                  将此策略组展示在主面板中。
                                 </div>
                               </div>
-                              {selected && (
-                                <div className="h-6 w-6 rounded-full bg-blue-600 text-white flex items-center justify-center">
-                                  <CheckIcon />
+                            </div>
+                            <Switch
+                              className="scale-90 data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-neutral-200"
+                              checked={!formData.hidden}
+                              onCheckedChange={(c) =>
+                                setFormData((prev) => ({ ...prev, hidden: !c }))
+                              }
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+
+                          <div className="border-t border-white/60" />
+
+                          <div
+                            className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-white/60 transition-colors"
+                            onClick={() =>
+                              setFormData((prev) => ({ ...prev, disableUdp: !prev.disableUdp }))
+                            }
+                          >
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={cn(
+                                  'h-9 w-9 rounded-2xl flex items-center justify-center',
+                                  formData.disableUdp
+                                    ? 'bg-orange-500 text-white shadow-[0_4px_12px_rgba(251,146,60,0.2)]'
+                                    : 'bg-white/70 text-neutral-400'
+                                )}
+                              >
+                                <CloudOff className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <div className="text-sm font-semibold text-neutral-800">
+                                  禁用 UDP
                                 </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {step === 'advanced' && (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
-                        排除过滤
-                      </div>
-                      <div className="rounded-3xl border border-white/60 bg-white/55 p-5 shadow-[0_12px_24px_rgba(0,0,0,0.06)] space-y-4">
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
-                            正则排除
-                          </label>
-                          <Input
-                            value={formData.excludeFilter}
-                            onChange={(e) =>
-                              setFormData((prev) => ({ ...prev, excludeFilter: e.target.value }))
-                            }
-                            className="h-10 rounded-xl bg-white/80 border border-white/70 text-sm font-mono"
-                            placeholder="例如: 流量|过期|Back"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
-                            类型过滤
-                          </label>
-                          <Input
-                            value={formData.excludeType}
-                            onChange={(e) =>
-                              setFormData((prev) => ({ ...prev, excludeType: e.target.value }))
-                            }
-                            className="h-10 rounded-xl bg-white/80 border border-white/70 text-sm font-mono"
-                            placeholder="例如: Shadowsocks"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="text-xs font-semibold uppercase tracking-widest text-neutral-400">
-                        显示控制
-                      </div>
-                      <div className="rounded-3xl border border-white/60 bg-white/55 shadow-[0_12px_24px_rgba(0,0,0,0.06)] overflow-hidden">
-                        <div
-                          className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-white/60 transition-colors"
-                          onClick={() => setFormData((prev) => ({ ...prev, hidden: !prev.hidden }))}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={cn(
-                                'h-9 w-9 rounded-2xl flex items-center justify-center',
-                                !formData.hidden
-                                  ? 'bg-blue-600 text-white shadow-[0_4px_12px_rgba(0,122,255,0.2)]'
-                                  : 'bg-white/70 text-neutral-400'
-                              )}
-                            >
-                              {!formData.hidden ? (
-                                <Eye className="h-4 w-4" />
-                              ) : (
-                                <EyeOff className="h-4 w-4" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="text-sm font-semibold text-neutral-800">
-                                在首页显示
-                              </div>
-                              <div className="text-xs text-neutral-400">
-                                将此策略组展示在主面板中。
+                                <div className="text-xs text-neutral-400">
+                                  强制通过 TCP 转发流量。
+                                </div>
                               </div>
                             </div>
+                            <Switch
+                              className="scale-90 data-[state=checked]:bg-orange-500 data-[state=unchecked]:bg-neutral-200"
+                              checked={formData.disableUdp}
+                              onCheckedChange={(c) =>
+                                setFormData((prev) => ({ ...prev, disableUdp: c }))
+                              }
+                              onClick={(e) => e.stopPropagation()}
+                            />
                           </div>
-                          <Switch
-                            className="scale-90 data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-neutral-200"
-                            checked={!formData.hidden}
-                            onCheckedChange={(c) =>
-                              setFormData((prev) => ({ ...prev, hidden: !c }))
-                            }
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </div>
-
-                        <div className="border-t border-white/60" />
-
-                        <div
-                          className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-white/60 transition-colors"
-                          onClick={() =>
-                            setFormData((prev) => ({ ...prev, disableUdp: !prev.disableUdp }))
-                          }
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={cn(
-                                'h-9 w-9 rounded-2xl flex items-center justify-center',
-                                formData.disableUdp
-                                  ? 'bg-orange-500 text-white shadow-[0_4px_12px_rgba(251,146,60,0.2)]'
-                                  : 'bg-white/70 text-neutral-400'
-                              )}
-                            >
-                              <CloudOff className="h-4 w-4" />
-                            </div>
-                            <div>
-                              <div className="text-sm font-semibold text-neutral-800">禁用 UDP</div>
-                              <div className="text-xs text-neutral-400">
-                                强制通过 TCP 转发流量。
-                              </div>
-                            </div>
-                          </div>
-                          <Switch
-                            className="scale-90 data-[state=checked]:bg-orange-500 data-[state=unchecked]:bg-neutral-200"
-                            checked={formData.disableUdp}
-                            onCheckedChange={(c) =>
-                              setFormData((prev) => ({ ...prev, disableUdp: c }))
-                            }
-                            onClick={(e) => e.stopPropagation()}
-                          />
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
-
           <div className="absolute bottom-6 left-8 right-8 flex items-center justify-between">
             <Button
               variant="ghost"

@@ -1,4 +1,22 @@
 import { useState, useEffect, useMemo, useCallback, createElement } from 'react';
+import { listen } from '@tauri-apps/api/event';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   Shield,
   Plus,
@@ -10,11 +28,11 @@ import {
   X,
   Loader2,
   AlertCircle,
+  GripVertical,
 } from 'lucide-react';
 import { getRuleIconComponent } from '@/components/icons/RuleIcons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -26,32 +44,30 @@ import {
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
-  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
 import { useToast } from '@/hooks/useToast';
-import {
-  RULE_TYPES,
-  parseRule,
-  buildRule,
-  type RuleType,
-  type ProfileConfig,
-} from '@/types/config';
+import { RULE_TYPES, parseRule, type ProfileConfig } from '@/types/config';
 
 // -----------------------------------------------------------------------------
-// Types
+// Utils
 // -----------------------------------------------------------------------------
 
-interface RuleSetOption {
-  name: string;
-  ruleCount?: number;
-}
+const formatErrorMessage = (event: unknown): string => {
+  if (typeof event === 'string') return event;
+  if (event && typeof event === 'object' && 'message' in event) {
+    return String((event as { message: unknown }).message);
+  }
+  return '未知错误';
+};
+
+const buildRuleWindowLabel = (index?: number) => {
+  return index !== undefined ? `rule-edit-${index}` : `rule-add-${Date.now()}`;
+};
 
 // -----------------------------------------------------------------------------
 // UI Components
@@ -164,13 +180,6 @@ export default function Rules() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
 
-  // Dialog State
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [ruleType, setRuleType] = useState<RuleType>('DOMAIN');
-  const [rulePayload, setRulePayload] = useState('');
-  const [rulePolicy, setRulePolicy] = useState('DIRECT');
-
   // Delete Dialog State
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
@@ -199,33 +208,20 @@ export default function Rules() {
     loadProfileData();
   }, [loadProfileData]);
 
+  // Listen for rules-changed event
+  useEffect(() => {
+    const unlisten = listen('rules-changed', () => {
+      loadProfileData();
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [loadProfileData]);
+
   // Get rules from profile config
   const rules = useMemo(() => {
     return profileConfig?.rules || [];
   }, [profileConfig]);
-
-  // Get rule-providers from profile config
-  const ruleProviders = useMemo(() => {
-    return profileConfig?.['rule-providers'] || {};
-  }, [profileConfig]);
-
-  // Get proxy groups for policy selection
-  const proxyGroups = useMemo(() => {
-    return profileConfig?.['proxy-groups']?.map((g) => g.name) || [];
-  }, [profileConfig]);
-
-  const proxyGroupOptions = useMemo(() => {
-    return Array.from(new Set(proxyGroups.filter((g) => !DEFAULT_POLICIES.includes(g)))).sort(
-      (a, b) => a.localeCompare(b)
-    );
-  }, [proxyGroups]);
-
-  const proxyNodeOptions = useMemo(() => {
-    const nodes = profileConfig?.proxies?.map((proxy) => proxy.name).filter(Boolean) || [];
-    return Array.from(new Set(nodes))
-      .filter((name) => !DEFAULT_POLICIES.includes(name) && !proxyGroups.includes(name))
-      .sort((a, b) => a.localeCompare(b));
-  }, [profileConfig, proxyGroups]);
 
   const filteredRules = useMemo(() => {
     const normalizedFilterType = filterType === 'all' ? 'all' : normalizeRuleType(filterType);
@@ -246,79 +242,79 @@ export default function Rules() {
     });
   }, [rules, searchQuery, filterType]);
 
-  const ruleSetOptions = useMemo<RuleSetOption[]>(() => {
-    const options = new Map<string, RuleSetOption>();
-
-    // Add from rule-providers
-    Object.keys(ruleProviders).forEach((name) => {
-      options.set(name, { name });
-    });
-
-    // Add from existing rules
-    rules.forEach((rule) => {
-      const parsed = parseRule(rule);
-      if (parsed?.type === 'RULE-SET' && parsed.payload) {
-        if (!options.has(parsed.payload)) {
-          options.set(parsed.payload, { name: parsed.payload });
-        }
+  // Open rule window
+  const openRuleWindow = async (index?: number) => {
+    try {
+      const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+      const label = buildRuleWindowLabel(index);
+      const existing = await WebviewWindow.getByLabel(label);
+      if (existing) {
+        await existing.show();
+        await existing.setFocus();
+        return;
       }
-    });
 
-    // Add current input if editing
-    if (ruleType === 'RULE-SET' && rulePayload && !options.has(rulePayload)) {
-      options.set(rulePayload, { name: rulePayload });
-    }
+      const newWindow = new WebviewWindow(label, {
+        url: `/#/rule-edit${index !== undefined ? `?index=${index}` : ''}`,
+        title: index !== undefined ? '编辑规则' : '添加规则',
+        width: 680,
+        height: 720,
+        center: true,
+        resizable: false,
+        decorations: false,
+        transparent: true,
+        shadow: false,
+      });
 
-    return Array.from(options.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [ruleProviders, rules, rulePayload, ruleType]);
-
-  const openAddDialog = () => {
-    setEditingIndex(null);
-    setRuleType('DOMAIN');
-    setRulePayload('');
-    setRulePolicy('DIRECT');
-    setIsDialogOpen(true);
-  };
-
-  const openEditDialog = (index: number) => {
-    const rule = rules[index];
-    const parsed = parseRule(rule);
-    if (parsed) {
-      setEditingIndex(index);
-      setRuleType(parsed.type);
-      setRulePayload(parsed.payload);
-      setRulePolicy(parsed.policy);
-      setIsDialogOpen(true);
+      await new Promise<void>((resolve, reject) => {
+        newWindow.once('tauri://created', () => {
+          resolve();
+        });
+        newWindow.once('tauri://error', (event) => {
+          console.error('Failed to create window', event);
+          reject(new Error(formatErrorMessage(event) || '窗口创建失败'));
+        });
+      });
+    } catch (e) {
+      console.error('Failed to open window', e);
+      toast({ title: '打开窗口失败', description: String(e), variant: 'destructive' });
     }
   };
 
-  const handleSaveRule = async () => {
-    if (!activeProfileId || !profileConfig) {
-      toast({ title: '错误', description: '没有活跃的配置文件', variant: 'destructive' });
+  const handleDeleteClick = (index: number) => {
+    setDeletingIndex(index);
+    setDeleteDialogOpen(true);
+  };
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle drag end
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id || !activeProfileId || !profileConfig) {
       return;
     }
 
+    const oldIndex = rules.findIndex((rule) => rule === active.id);
+    const newIndex = rules.findIndex((rule) => rule === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
     setSaving(true);
     try {
-      const newRule = buildRule(ruleType, rulePayload, rulePolicy);
-      let newRules: string[];
+      const newRules = arrayMove(rules, oldIndex, newIndex);
 
-      if (editingIndex !== null) {
-        // Edit existing rule
-        newRules = [...rules];
-        newRules[editingIndex] = newRule;
-      } else {
-        // Add new rule before MATCH
-        const matchIndex = rules.findIndex((r) => r.startsWith('MATCH,'));
-        if (matchIndex !== -1) {
-          newRules = [...rules];
-          newRules.splice(matchIndex, 0, newRule);
-        } else {
-          newRules = [...rules, newRule];
-        }
-      }
-
-      // Update profile config
       const newConfig: ProfileConfig = {
         ...profileConfig,
         rules: newRules,
@@ -326,22 +322,12 @@ export default function Rules() {
 
       await ipc.updateProfileConfig(activeProfileId, newConfig);
       setProfileConfig(newConfig);
-      setIsDialogOpen(false);
-      toast({
-        title: '保存成功',
-        description: editingIndex !== null ? '规则已更新' : '规则已添加',
-      });
     } catch (error) {
-      console.error('Failed to save rule:', error);
-      toast({ title: '保存失败', description: String(error), variant: 'destructive' });
+      console.error('Failed to reorder rules:', error);
+      toast({ title: '排序失败', description: String(error), variant: 'destructive' });
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleDeleteClick = (index: number) => {
-    setDeletingIndex(index);
-    setDeleteDialogOpen(true);
   };
 
   const handleConfirmDelete = async () => {
@@ -367,8 +353,6 @@ export default function Rules() {
       setSaving(false);
     }
   };
-
-  const currentRuleTypeConfig = RULE_TYPES.find((t) => t.value === ruleType);
 
   // No active profile
   if (!loading && !activeProfileId) {
@@ -462,7 +446,7 @@ export default function Rules() {
             <Button
               variant="outline"
               size="sm"
-              onClick={openAddDialog}
+              onClick={() => openRuleWindow()}
               disabled={!activeProfileId}
               className="rounded-full gap-2 h-9 px-4 bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
             >
@@ -479,7 +463,8 @@ export default function Rules() {
         title=""
       >
         {/* Table Header */}
-        <div className="grid grid-cols-[48px_110px_1fr_100px_50px] gap-3 px-4 py-3 border-b border-gray-100 dark:border-zinc-800/50 bg-gray-50/50 dark:bg-zinc-900/50 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider shrink-0">
+        <div className="grid grid-cols-[32px_48px_110px_1fr_100px_70px] gap-3 px-4 py-3 border-b border-gray-100 dark:border-zinc-800/50 bg-gray-50/50 dark:bg-zinc-900/50 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider shrink-0">
+          <div className="text-center"></div>
           <div className="text-center">#</div>
           <div>类型</div>
           <div>匹配内容/规则集</div>
@@ -496,156 +481,40 @@ export default function Rules() {
           ) : filteredRules.length === 0 ? (
             <EmptyState searchQuery={searchQuery} />
           ) : (
-            <div className="divide-y divide-gray-100 dark:divide-zinc-800/50">
-              {filteredRules.map((rule, index) => {
-                const parsed = typeof rule === 'string' ? parseRule(rule) : null;
-                if (!parsed) return null;
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={filteredRules} strategy={verticalListSortingStrategy}>
+                <div className="divide-y divide-gray-100 dark:divide-zinc-800/50">
+                  {filteredRules.map((rule, index) => {
+                    const parsed = typeof rule === 'string' ? parseRule(rule) : null;
+                    if (!parsed) return null;
 
-                // Find the actual index in the full rules array
-                const fullIndex = rules.indexOf(rule);
+                    // Find the actual index in the full rules array
+                    const fullIndex = rules.indexOf(rule);
 
-                return (
-                  <RuleTableRow
-                    key={`${rule}-${index}`}
-                    index={index + 1}
-                    type={parsed.type}
-                    payload={parsed.payload}
-                    policy={parsed.policy}
-                    onEdit={() => openEditDialog(fullIndex)}
-                    onDelete={() => handleDeleteClick(fullIndex)}
-                  />
-                );
-              })}
-            </div>
+                    return (
+                      <SortableRuleRow
+                        key={rule}
+                        id={rule}
+                        index={index + 1}
+                        type={parsed.type}
+                        payload={parsed.payload}
+                        policy={parsed.policy}
+                        onEdit={() => openRuleWindow(fullIndex)}
+                        onDelete={() => handleDeleteClick(fullIndex)}
+                        disabled={saving}
+                      />
+                    );
+                  })}
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
         </div>
       </BentoCard>
-
-      {/* Add/Edit Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] rounded-[24px]">
-          <DialogHeader>
-            <DialogTitle>{editingIndex !== null ? '编辑规则' : '添加规则'}</DialogTitle>
-            <DialogDescription>配置规则类型、匹配内容和目标策略</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>规则类型</Label>
-              <Select value={ruleType} onValueChange={(v) => setRuleType(v as RuleType)}>
-                <SelectTrigger className="rounded-xl h-11">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {RULE_TYPES.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      <span className="font-medium">{type.label}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {currentRuleTypeConfig?.hasPayload && (
-              <div className="space-y-2">
-                <Label>{ruleType === 'RULE-SET' ? '规则集' : '匹配内容'}</Label>
-                {ruleType === 'RULE-SET' ? (
-                  ruleSetOptions.length > 0 ? (
-                    <Select value={rulePayload} onValueChange={setRulePayload}>
-                      <SelectTrigger className="rounded-xl h-11">
-                        <SelectValue placeholder="选择规则集" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ruleSetOptions.map((option) => (
-                          <SelectItem key={option.name} value={option.name}>
-                            <div className="flex items-center justify-between gap-2 w-full">
-                              <span className="font-medium">{option.name}</span>
-                              {option.ruleCount !== undefined && (
-                                <span className="text-xs text-gray-500">{option.ruleCount} 条</span>
-                              )}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      placeholder={getPayloadPlaceholder(ruleType)}
-                      value={rulePayload}
-                      onChange={(e) => setRulePayload(e.target.value)}
-                      className="rounded-xl font-mono h-11"
-                    />
-                  )
-                ) : (
-                  <Input
-                    placeholder={getPayloadPlaceholder(ruleType)}
-                    value={rulePayload}
-                    onChange={(e) => setRulePayload(e.target.value)}
-                    className="rounded-xl font-mono h-11"
-                  />
-                )}
-                <p className="text-xs text-gray-500">{getPayloadHint(ruleType)}</p>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label>目标策略</Label>
-              <Select value={rulePolicy} onValueChange={setRulePolicy}>
-                <SelectTrigger className="rounded-xl h-11">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel>基础</SelectLabel>
-                    <SelectItem value="DIRECT">DIRECT (直连)</SelectItem>
-                    <SelectItem value="REJECT">REJECT (拒绝)</SelectItem>
-                  </SelectGroup>
-                  {proxyGroupOptions.length > 0 && (
-                    <>
-                      <SelectSeparator />
-                      <SelectGroup>
-                        <SelectLabel>策略组</SelectLabel>
-                        {proxyGroupOptions.map((group) => (
-                          <SelectItem key={group} value={group}>
-                            {group}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </>
-                  )}
-                  {proxyNodeOptions.length > 0 && (
-                    <>
-                      <SelectSeparator />
-                      <SelectGroup>
-                        <SelectLabel>节点</SelectLabel>
-                        {proxyNodeOptions.map((node) => (
-                          <SelectItem key={node} value={node}>
-                            {node}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="rounded-xl">
-              取消
-            </Button>
-            <Button
-              onClick={handleSaveRule}
-              disabled={(currentRuleTypeConfig?.hasPayload && !rulePayload) || saving}
-              className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {editingIndex !== null ? '保存更改' : '添加规则'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -688,31 +557,58 @@ export default function Rules() {
 // Sub-components
 // -----------------------------------------------------------------------------
 
-function RuleTableRow({
+function SortableRuleRow({
+  id,
   index,
   type,
   payload,
   policy,
   onEdit,
   onDelete,
+  disabled,
 }: {
+  id: string;
   index: number;
   type: string;
   payload?: string;
   policy: string;
   onEdit?: () => void;
   onDelete?: () => void;
+  disabled?: boolean;
 }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
   const Icon = getRuleIcon(type);
   const payloadBadge = getPayloadBadge(type);
 
   return (
     <div
+      ref={setNodeRef}
+      style={style}
       onClick={onEdit}
       className={cn(
-        'group grid grid-cols-[48px_110px_1fr_100px_50px] gap-3 px-4 h-[52px] items-center transition-colors border-l-2 border-transparent text-sm cursor-pointer hover:bg-blue-50/30 dark:hover:bg-blue-900/10 hover:border-blue-500'
+        'group grid grid-cols-[32px_48px_110px_1fr_100px_70px] gap-3 px-4 h-[52px] items-center transition-colors border-l-2 border-transparent text-sm cursor-pointer hover:bg-blue-50/30 dark:hover:bg-blue-900/10 hover:border-blue-500 bg-white dark:bg-zinc-900',
+        isDragging && 'opacity-50 shadow-lg z-50 bg-blue-50 dark:bg-blue-900/20'
       )}
     >
+      {/* Drag Handle */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="flex items-center justify-center cursor-grab active:cursor-grabbing touch-none"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="w-4 h-4 text-gray-300 hover:text-gray-500 dark:hover:text-gray-400" />
+      </div>
+
       {/* Index */}
       <div className="text-center text-xs font-mono text-gray-400 truncate">{index}</div>
 
@@ -814,46 +710,4 @@ function EmptyState({ searchQuery }: { searchQuery: string }) {
       </p>
     </div>
   );
-}
-
-function getPayloadPlaceholder(type: RuleType): string {
-  switch (type) {
-    case 'DOMAIN':
-      return 'example.com';
-    case 'DOMAIN-SUFFIX':
-      return 'example.com';
-    case 'DOMAIN-KEYWORD':
-      return 'google';
-    case 'GEOIP':
-      return 'CN';
-    case 'GEOSITE':
-      return 'cn';
-    case 'IP-CIDR':
-      return '192.168.1.0/24';
-    case 'RULE-SET':
-      return 'rule-provider 名称';
-    case 'PROCESS-NAME':
-      return 'chrome.exe';
-    default:
-      return '';
-  }
-}
-
-function getPayloadHint(type: RuleType): string {
-  switch (type) {
-    case 'DOMAIN-SUFFIX':
-      return '匹配域名后缀，如 example.com 匹配 *.example.com';
-    case 'DOMAIN-KEYWORD':
-      return '匹配域名中包含的关键词';
-    case 'GEOIP':
-      return '国家/地区代码，如 CN';
-    case 'GEOSITE':
-      return '分类名称，如 cn 或 geolocation-!cn';
-    case 'IP-CIDR':
-      return 'CIDR 格式的 IP 段';
-    case 'RULE-SET':
-      return '填写 rule-providers 中的名称，引用规则集内容';
-    default:
-      return '';
-  }
 }

@@ -10,7 +10,9 @@
       "edit-server-*",
       "add-server-*",
       "edit-profile-*",
-      "add-profile-*"
+      "add-profile-*",
+      "rule-edit-*",
+      "rule-add-*"
     ],
     "permissions": [
       "core:default",
