@@ -398,7 +398,7 @@ if (!fs.existsSync(substorePath)) {
 // ============= 环境变量配置 =============
 
 // 基础配置
-process.env.SUB_STORE_BACKEND_API_PORT = process.env.SUB_STORE_BACKEND_API_PORT || '3001';
+process.env.SUB_STORE_BACKEND_API_PORT = process.env.SUB_STORE_BACKEND_API_PORT || '39001';
 process.env.SUB_STORE_FRONTEND_BACKEND_PATH = '/api';
 process.env.SUB_STORE_BACKEND_MERGE = 'true';
 

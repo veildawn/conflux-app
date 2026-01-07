@@ -18,7 +18,7 @@ pub struct SubStoreManager {
 impl SubStoreManager {
     /// 创建新的 Sub-Store 管理器
     pub fn new(port: Option<u16>) -> Result<Self> {
-        let api_port = port.unwrap_or(3001);
+        let api_port = port.unwrap_or(39001);
 
         Ok(Self {
             app_handle: None,

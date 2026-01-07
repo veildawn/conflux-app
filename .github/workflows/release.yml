@@ -75,7 +75,7 @@ jobs:
         id: cache-mihomo
         uses: actions/cache@v4
         with:
-          path: src-tauri/resources/mihomo-darwin-arm64
+          path: src-tauri/binaries/mihomo-aarch64-apple-darwin
           key: mihomo-darwin-arm64-v1
 
       - name: Fetch MiHomo binaries
@@ -91,22 +91,22 @@ jobs:
       - name: Verify MiHomo binaries
         run: |
           echo "Checking MiHomo binaries..."
-          ls -lh src-tauri/resources/
+          ls -lh src-tauri/binaries/
 
           # Check if file exists
-          if [ ! -f "src-tauri/resources/mihomo-darwin-arm64" ]; then
-            echo "ERROR: mihomo-darwin-arm64 not found!"
+          if [ ! -f "src-tauri/binaries/mihomo-aarch64-apple-darwin" ]; then
+            echo "ERROR: mihomo-aarch64-apple-darwin not found!"
             exit 1
           fi
 
           # Check file size (should be > 10MB)
-          FILE_SIZE=$(stat -f%z "src-tauri/resources/mihomo-darwin-arm64" 2>/dev/null || stat -c%s "src-tauri/resources/mihomo-darwin-arm64")
+          FILE_SIZE=$(stat -f%z "src-tauri/binaries/mihomo-aarch64-apple-darwin" 2>/dev/null || stat -c%s "src-tauri/binaries/mihomo-aarch64-apple-darwin")
           MIN_SIZE=10000000  # 10MB
           if [ "$FILE_SIZE" -lt "$MIN_SIZE" ]; then
-            echo "ERROR: mihomo-darwin-arm64 is too small ($FILE_SIZE bytes). Expected > 10MB"
+            echo "ERROR: mihomo-aarch64-apple-darwin is too small ($FILE_SIZE bytes). Expected > 10MB"
             exit 1
           fi
-          echo "✅ mihomo-darwin-arm64 verified: $FILE_SIZE bytes"
+          echo "✅ mihomo-aarch64-apple-darwin verified: $FILE_SIZE bytes"
 
       - name: Cache Node.js binaries
         id: cache-node
@@ -259,7 +259,7 @@ jobs:
         id: cache-mihomo
         uses: actions/cache@v4
         with:
-          path: src-tauri/resources/mihomo-darwin-amd64
+          path: src-tauri/binaries/mihomo-x86_64-apple-darwin
           key: mihomo-darwin-amd64-v1
 
       - name: Fetch MiHomo binaries
@@ -275,22 +275,22 @@ jobs:
       - name: Verify MiHomo binaries
         run: |
           echo "Checking MiHomo binaries..."
-          ls -lh src-tauri/resources/
+          ls -lh src-tauri/binaries/
 
           # Check if file exists
-          if [ ! -f "src-tauri/resources/mihomo-darwin-amd64" ]; then
-            echo "ERROR: mihomo-darwin-amd64 not found!"
+          if [ ! -f "src-tauri/binaries/mihomo-x86_64-apple-darwin" ]; then
+            echo "ERROR: mihomo-x86_64-apple-darwin not found!"
             exit 1
           fi
 
           # Check file size (should be > 10MB)
-          FILE_SIZE=$(stat -f%z "src-tauri/resources/mihomo-darwin-amd64" 2>/dev/null || stat -c%s "src-tauri/resources/mihomo-darwin-amd64")
+          FILE_SIZE=$(stat -f%z "src-tauri/binaries/mihomo-x86_64-apple-darwin" 2>/dev/null || stat -c%s "src-tauri/binaries/mihomo-x86_64-apple-darwin")
           MIN_SIZE=10000000  # 10MB
           if [ "$FILE_SIZE" -lt "$MIN_SIZE" ]; then
-            echo "ERROR: mihomo-darwin-amd64 is too small ($FILE_SIZE bytes). Expected > 10MB"
+            echo "ERROR: mihomo-x86_64-apple-darwin is too small ($FILE_SIZE bytes). Expected > 10MB"
             exit 1
           fi
-          echo "✅ mihomo-darwin-amd64 verified: $FILE_SIZE bytes"
+          echo "✅ mihomo-x86_64-apple-darwin verified: $FILE_SIZE bytes"
 
       - name: Cache Node.js binaries
         id: cache-node
@@ -445,7 +445,7 @@ jobs:
         id: cache-mihomo
         uses: actions/cache@v4
         with:
-          path: src-tauri/resources/mihomo-windows-amd64.exe
+          path: src-tauri/binaries/mihomo-x86_64-pc-windows-msvc.exe
           key: mihomo-windows-amd64-v1
 
       - name: Fetch MiHomo binaries
@@ -462,22 +462,22 @@ jobs:
         shell: bash
         run: |
           echo "Checking MiHomo binaries..."
-          ls -lh src-tauri/resources/
+          ls -lh src-tauri/binaries/
 
           # Check if file exists
-          if [ ! -f "src-tauri/resources/mihomo-windows-amd64.exe" ]; then
-            echo "ERROR: mihomo-windows-amd64.exe not found!"
+          if [ ! -f "src-tauri/binaries/mihomo-x86_64-pc-windows-msvc.exe" ]; then
+            echo "ERROR: mihomo-x86_64-pc-windows-msvc.exe not found!"
             exit 1
           fi
 
           # Check file size (should be > 10MB)
-          FILE_SIZE=$(stat -c%s "src-tauri/resources/mihomo-windows-amd64.exe" 2>/dev/null || wc -c < "src-tauri/resources/mihomo-windows-amd64.exe")
+          FILE_SIZE=$(stat -c%s "src-tauri/binaries/mihomo-x86_64-pc-windows-msvc.exe" 2>/dev/null || wc -c < "src-tauri/binaries/mihomo-x86_64-pc-windows-msvc.exe")
           MIN_SIZE=10000000  # 10MB
           if [ "$FILE_SIZE" -lt "$MIN_SIZE" ]; then
-            echo "ERROR: mihomo-windows-amd64.exe is too small ($FILE_SIZE bytes). Expected > 10MB"
+            echo "ERROR: mihomo-x86_64-pc-windows-msvc.exe is too small ($FILE_SIZE bytes). Expected > 10MB"
             exit 1
           fi
-          echo "✅ mihomo-windows-amd64.exe verified: $FILE_SIZE bytes"
+          echo "✅ mihomo-x86_64-pc-windows-msvc.exe verified: $FILE_SIZE bytes"
 
       - name: Cache Node.js binaries
         id: cache-node

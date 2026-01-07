@@ -95,7 +95,7 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
 
     // 初始化 Sub-Store 管理器
     let substore_manager = Arc::new(Mutex::new(
-        SubStoreManager::new(Some(3001)).map_err(|e| anyhow::anyhow!("Failed to create SubStore manager: {}", e))?
+        SubStoreManager::new(Some(39001)).map_err(|e| anyhow::anyhow!("Failed to create SubStore manager: {}", e))?
     ));
 
     // 自动启动 Sub-Store 服务
