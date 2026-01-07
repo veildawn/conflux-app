@@ -166,7 +166,8 @@ pub fn ensure_mihomo_in_data_dir() -> Result<PathBuf> {
 }
 
 /// 查找 Sidecar 二进制文件路径
-/// Tauri externalBin 会将二进制放在可执行文件同级目录
+/// Tauri externalBin 打包后文件名会简化（去掉 target triple）
+#[allow(unused_variables)]
 fn find_sidecar_binary(binary_name: &str) -> Result<Option<PathBuf>> {
     let current_exe = std::env::current_exe()?;
     let exe_dir = current_exe
@@ -176,8 +177,13 @@ fn find_sidecar_binary(binary_name: &str) -> Result<Option<PathBuf>> {
     log::debug!("Current exe: {:?}", current_exe);
     log::debug!("Exe directory: {:?}", exe_dir);
 
-    // Sidecar 位置：可执行文件同级目录
-    let sidecar_path = exe_dir.join(binary_name);
+    // Tauri 打包后文件名简化为 mihomo / mihomo.exe
+    #[cfg(target_os = "windows")]
+    let sidecar_path = exe_dir.join("mihomo.exe");
+
+    #[cfg(not(target_os = "windows"))]
+    let sidecar_path = exe_dir.join("mihomo");
+
     log::debug!("Checking sidecar path: {:?}", sidecar_path);
     if sidecar_path.exists() {
         return Ok(Some(sidecar_path));
@@ -186,7 +192,7 @@ fn find_sidecar_binary(binary_name: &str) -> Result<Option<PathBuf>> {
     // Linux 特殊处理：系统安装路径
     #[cfg(target_os = "linux")]
     {
-        let system_path = PathBuf::from("/usr/bin").join(binary_name);
+        let system_path = PathBuf::from("/usr/bin").join("mihomo");
         log::debug!("Checking Linux system path: {:?}", system_path);
         if system_path.exists() {
             return Ok(Some(system_path));
