@@ -2,6 +2,8 @@
 //!
 //! 仅在 Windows 平台上可用
 
+use crate::commands::get_app_state;
+
 /// 获取服务状态
 #[cfg(target_os = "windows")]
 #[tauri::command]
@@ -55,7 +57,24 @@ pub async fn uninstall_service() -> Result<(), String> {
     }
 
     // 使用提权方式卸载（会触发 UAC）
-    WinServiceManager::uninstall().map_err(|e| e.to_string())
+    WinServiceManager::uninstall().map_err(|e| e.to_string())?;
+
+    // 卸载服务后，以普通模式重新启动 mihomo
+    log::info!("Service uninstalled, restarting mihomo in normal mode...");
+    let state = get_app_state();
+    
+    // 等待一下让服务完全停止
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    
+    // 重新启动 mihomo（普通模式）
+    if let Err(e) = state.mihomo_manager.start().await {
+        log::warn!("Failed to restart mihomo after service uninstall: {}", e);
+        // 不返回错误，因为服务已经成功卸载
+    } else {
+        log::info!("Mihomo restarted in normal mode after service uninstall");
+    }
+
+    Ok(())
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -81,7 +100,27 @@ pub async fn start_service() -> Result<(), String> {
 #[cfg(target_os = "windows")]
 #[tauri::command]
 pub async fn stop_service() -> Result<(), String> {
-    crate::system::WinServiceManager::stop().map_err(|e| e.to_string())
+    use crate::system::WinServiceManager;
+    
+    // 停止服务
+    WinServiceManager::stop().map_err(|e| e.to_string())?;
+
+    // 停止服务后，以普通模式重新启动 mihomo
+    log::info!("Service stopped, restarting mihomo in normal mode...");
+    let state = get_app_state();
+    
+    // 等待一下让服务完全停止
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    
+    // 重新启动 mihomo（普通模式）
+    if let Err(e) = state.mihomo_manager.start().await {
+        log::warn!("Failed to restart mihomo after service stop: {}", e);
+        // 不返回错误，因为服务已经成功停止
+    } else {
+        log::info!("Mihomo restarted in normal mode after service stop");
+    }
+
+    Ok(())
 }
 
 #[cfg(not(target_os = "windows"))]
