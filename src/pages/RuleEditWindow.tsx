@@ -25,9 +25,6 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  SelectGroup,
-  SelectLabel,
-  SelectSeparator,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/useToast';
 import { cn } from '@/utils/cn';
