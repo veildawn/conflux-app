@@ -1,5 +1,10 @@
 import { useSettingsData, usePortSettings, useUpdateChecker } from './settings/hooks';
-import { GeneralSection, NetworkSection, DnsSection } from './settings/sections';
+import {
+  GeneralSection,
+  NetworkSection,
+  DnsSection,
+  WindowsServiceSection,
+} from './settings/sections';
 
 export default function Settings() {
   const {
@@ -74,6 +79,8 @@ export default function Settings() {
           onDnsConfigChange={handleDnsConfigChange}
           toast={toast}
         />
+
+        <WindowsServiceSection toast={toast} />
       </div>
     </div>
   );
