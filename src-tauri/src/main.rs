@@ -634,6 +634,14 @@ fn main() {
             commands::substore::get_substore_status,
             commands::substore::get_substore_subs,
             commands::substore::get_substore_collections,
+            // Windows 服务命令
+            commands::service::get_service_status,
+            commands::service::install_service,
+            commands::service::uninstall_service,
+            commands::service::start_service,
+            commands::service::stop_service,
+            commands::service::restart_service,
+            commands::service::has_admin_privileges,
             // Profile 命令
             commands::profile::list_profiles,
             commands::profile::get_profile,

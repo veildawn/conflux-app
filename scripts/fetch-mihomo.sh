@@ -198,3 +198,25 @@ echo "✅ Successfully downloaded MiHomo $release_tag"
 echo ""
 echo "Downloaded files:"
 ls -la "$TARGET_DIR" 2>/dev/null || dir "$TARGET_DIR"
+
+# Windows only: Build the Conflux Service
+if [[ "$OS_TYPE" == "windows" ]]; then
+  echo ""
+  echo "================================================"
+  echo "Building Conflux Service for Windows..."
+  echo "================================================"
+  
+  SERVICE_SCRIPT="$SCRIPT_DIR/build-service.ps1"
+  if [[ -f "$SERVICE_SCRIPT" ]]; then
+    # 使用 PowerShell 执行构建脚本
+    powershell.exe -ExecutionPolicy Bypass -File "$(cygpath -w "$SERVICE_SCRIPT")"
+    if [[ $? -eq 0 ]]; then
+      echo "✅ Conflux Service built successfully"
+    else
+      echo "⚠️  Warning: Failed to build Conflux Service" >&2
+      echo "   You can build it manually later with: powershell scripts/build-service.ps1" >&2
+    fi
+  else
+    echo "⚠️  Warning: build-service.ps1 not found, skipping service build" >&2
+  fi
+fi

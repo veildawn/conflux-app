@@ -318,6 +318,17 @@ jobs:
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
 
+      - name: Build Windows Service
+        shell: pwsh
+        run: |
+          Write-Host "Building Windows TUN service..."
+          .\scripts\build-service.ps1 -Release
+          if (!(Test-Path "src-tauri/binaries/conflux-service-x86_64-pc-windows-msvc.exe")) {
+            Write-Error "Service build failed!"
+            exit 1
+          }
+          Write-Host "✅ Windows service built successfully"
+
       - name: Fetch Node.js binaries
         if: steps.cache-node.outputs.cache-hit != 'true'
         shell: bash

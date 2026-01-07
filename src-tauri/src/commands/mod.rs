@@ -3,6 +3,7 @@ pub mod logs;
 pub mod profile;
 pub mod proxy;
 pub mod reload;
+pub mod service;
 pub mod substore;
 pub mod system;
 
