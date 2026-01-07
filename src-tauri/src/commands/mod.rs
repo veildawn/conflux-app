@@ -78,6 +78,32 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     let current_system_proxy = crate::system::SystemProxy::get_proxy_status().unwrap_or(false);
     log::info!("Detected system proxy status: {}", current_system_proxy);
 
+    // Windows: 检查服务状态，如果服务正在运行但 mihomo 没有启动，则通过服务启动
+    #[cfg(target_os = "windows")]
+    {
+        use crate::system::WinServiceManager;
+        
+        if let Ok(service_status) = WinServiceManager::get_status().await {
+            log::info!(
+                "Windows service status: installed={}, running={}, mihomo_running={}", 
+                service_status.installed, 
+                service_status.running, 
+                service_status.mihomo_running
+            );
+            
+            if service_status.running && !service_status.mihomo_running {
+                log::info!("Service is running but mihomo is not, starting mihomo via service...");
+                
+                // 通过服务启动 mihomo
+                if let Err(e) = mihomo_manager.start().await {
+                    log::error!("Failed to start mihomo via service: {}", e);
+                } else {
+                    log::info!("Mihomo started via service successfully");
+                }
+            }
+        }
+    }
+
     let enhanced_mode = if mihomo_manager.is_running().await {
         match mihomo_api.get_configs().await {
             Ok(configs) => configs
