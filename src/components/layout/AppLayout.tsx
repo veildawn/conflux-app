@@ -8,27 +8,9 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import { useProxyStore } from '@/stores/proxyStore';
 import { useAppStore } from '@/stores/appStore';
+import { DRAG_IGNORE_SELECTOR } from '@/utils/dragUtils';
+import logger from '@/utils/logger';
 import type { ProxyStatus } from '@/types/proxy';
-
-const dragIgnoreSelector = [
-  '[data-no-drag]',
-  '.no-drag',
-  'button',
-  'a',
-  'input',
-  'textarea',
-  'select',
-  'option',
-  'label',
-  '[role="button"]',
-  '[role="link"]',
-  '[role="menuitem"]',
-  '[role="tab"]',
-  '[role="option"]',
-  '[role="listbox"]',
-  '[contenteditable="true"]',
-  '.cursor-pointer',
-].join(', ');
 
 export default function AppLayout() {
   const { applyStatus, fetchStatus, fetchTraffic, fetchConnections, start, status } = useProxyStore(
@@ -47,35 +29,35 @@ export default function AppLayout() {
   useEffect(() => {
     // 防止重复初始化
     if (initStarted.current) {
-      console.log('AppLayout: Init already started, skipping...');
+      logger.log('AppLayout: Init already started, skipping...');
       return;
     }
     initStarted.current = true;
 
     const init = async () => {
-      console.log('AppLayout: Starting initialization...');
+      logger.log('AppLayout: Starting initialization...');
       try {
         await fetchSettings();
-        console.log('AppLayout: Settings fetched');
+        logger.log('AppLayout: Settings fetched');
         await fetchStatus();
-        console.log('AppLayout: Status fetched');
+        logger.log('AppLayout: Status fetched');
 
         // 如果 mihomo 未运行，自动启动
         const currentStatus = useProxyStore.getState().status;
-        console.log('AppLayout: Current status:', currentStatus);
+        logger.log('AppLayout: Current status:', currentStatus);
         if (!currentStatus.running) {
-          console.log('AppLayout: Starting MiHomo...');
+          logger.log('AppLayout: Starting MiHomo...');
           await start();
-          console.log('MiHomo started automatically');
+          logger.log('MiHomo started automatically');
         } else {
-          console.log('AppLayout: MiHomo already running');
+          logger.log('AppLayout: MiHomo already running');
         }
 
         // 应用启动时检查规则数据库更新（只检查一次）
         checkRuleDatabaseUpdates();
-        console.log('AppLayout: Rule database update check initiated');
+        logger.log('AppLayout: Rule database update check initiated');
       } catch (error) {
-        console.error('AppLayout: Init failed:', error);
+        logger.error('AppLayout: Init failed:', error);
       }
     };
 
@@ -91,7 +73,7 @@ export default function AppLayout() {
         unlisten = handler;
       })
       .catch((error) => {
-        console.error('Failed to listen proxy status events:', error);
+        logger.error('Failed to listen proxy status events:', error);
       });
 
     return () => {
@@ -154,13 +136,13 @@ export default function AppLayout() {
       return;
     }
     const target = event.target as HTMLElement | null;
-    if (!target || target.closest(dragIgnoreSelector)) {
+    if (!target || target.closest(DRAG_IGNORE_SELECTOR)) {
       return;
     }
     void getCurrentWindow()
       .startDragging()
       .catch((error) => {
-        console.warn('Failed to start dragging:', error);
+        logger.warn('Failed to start dragging:', error);
       });
   };
 

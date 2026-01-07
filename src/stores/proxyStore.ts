@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { ipc } from '@/services/ipc';
+import logger from '@/utils/logger';
 import type { ProxyStatus, ProxyGroup, TrafficData, ProxyMode, Connection } from '@/types/proxy';
 
 // 流量历史数据点
@@ -98,7 +99,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         error: null,
       }));
     } catch (error) {
-      console.error('Failed to fetch proxy status:', error);
+      logger.error('Failed to fetch proxy status:', error);
       set({ error: String(error) });
     }
   },
@@ -109,7 +110,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
       await ipc.startProxy();
       await get().fetchStatus();
     } catch (error) {
-      console.error('Failed to start proxy:', error);
+      logger.error('Failed to start proxy:', error);
       set({ error: String(error) });
       throw error;
     } finally {
@@ -130,7 +131,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         connectionStats: initialConnectionStats,
       });
     } catch (error) {
-      console.error('Failed to stop proxy:', error);
+      logger.error('Failed to stop proxy:', error);
       set({ error: String(error) });
       throw error;
     } finally {
@@ -144,7 +145,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
       await ipc.restartProxy();
       await get().fetchStatus();
     } catch (error) {
-      console.error('Failed to restart proxy:', error);
+      logger.error('Failed to restart proxy:', error);
       set({ error: String(error) });
       throw error;
     } finally {
@@ -160,7 +161,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         status: { ...state.status, mode },
       }));
     } catch (error) {
-      console.error('Failed to switch mode:', error);
+      logger.error('Failed to switch mode:', error);
       set({ error: String(error) });
       throw error;
     } finally {
@@ -173,7 +174,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
       const groups = await ipc.getProxies(mode);
       set({ groups, error: null });
     } catch (error) {
-      console.error('Failed to fetch proxy groups:', error);
+      logger.error('Failed to fetch proxy groups:', error);
       set({ error: String(error) });
     }
   },
@@ -186,7 +187,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         groups: state.groups.map((g) => (g.name === group ? { ...g, now: name } : g)),
       }));
     } catch (error) {
-      console.error('Failed to select proxy:', error);
+      logger.error('Failed to select proxy:', error);
       set({ error: String(error) });
       throw error;
     }
@@ -197,7 +198,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
       const delay = await ipc.testProxyDelay(name);
       return delay;
     } catch (error) {
-      console.error('Failed to test delay:', error);
+      logger.error('Failed to test delay:', error);
       return -1;
     }
   },
@@ -221,7 +222,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
       });
     } catch (error) {
       // 静默失败，不显示错误
-      console.debug('Failed to fetch traffic:', error);
+      logger.debug('Failed to fetch traffic:', error);
     }
   },
 
@@ -238,7 +239,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         },
       });
     } catch (error) {
-      console.debug('Failed to fetch connections:', error);
+      logger.debug('Failed to fetch connections:', error);
     }
   },
 
@@ -254,7 +255,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         },
       }));
     } catch (error) {
-      console.error('Failed to close connection:', error);
+      logger.error('Failed to close connection:', error);
       throw error;
     }
   },
@@ -270,7 +271,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         },
       });
     } catch (error) {
-      console.error('Failed to close all connections:', error);
+      logger.error('Failed to close all connections:', error);
       throw error;
     }
   },
@@ -287,7 +288,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         status: { ...state.status, system_proxy: enabled },
       }));
     } catch (error) {
-      console.error('Failed to set system proxy:', error);
+      logger.error('Failed to set system proxy:', error);
       set({ error: String(error) });
       throw error;
     } finally {
@@ -303,7 +304,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         status: { ...state.status, enhanced_mode: enabled },
       }));
     } catch (error) {
-      console.error('Failed to set TUN mode:', error);
+      logger.error('Failed to set TUN mode:', error);
       set({ error: String(error) });
       throw error;
     } finally {
@@ -319,7 +320,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         status: { ...state.status, allow_lan: enabled },
       }));
     } catch (error) {
-      console.error('Failed to set allow LAN:', error);
+      logger.error('Failed to set allow LAN:', error);
       set({ error: String(error) });
       throw error;
     } finally {
@@ -335,7 +336,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         status: { ...state.status, port, socks_port: socksPort },
       }));
     } catch (error) {
-      console.error('Failed to set ports:', error);
+      logger.error('Failed to set ports:', error);
       set({ error: String(error) });
       throw error;
     } finally {
@@ -351,7 +352,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         status: { ...state.status, ipv6: enabled },
       }));
     } catch (error) {
-      console.error('Failed to set IPv6:', error);
+      logger.error('Failed to set IPv6:', error);
       set({ error: String(error) });
       throw error;
     } finally {
@@ -367,7 +368,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         status: { ...state.status, tcp_concurrent: enabled },
       }));
     } catch (error) {
-      console.error('Failed to set TCP concurrent:', error);
+      logger.error('Failed to set TCP concurrent:', error);
       set({ error: String(error) });
       throw error;
     } finally {
