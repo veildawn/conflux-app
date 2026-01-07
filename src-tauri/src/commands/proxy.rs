@@ -478,6 +478,22 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
             crate::system::TunPermission::setup_permission()
                 .map_err(|e| format!("设置 TUN 权限失败: {}", e))?;
         }
+        
+        // Windows: 检查是否需要 UAC 权限，如果需要则先请求用户确认
+        // 这样可以避免在用户取消 UAC 后 mihomo 已经停止的问题
+        #[cfg(target_os = "windows")]
+        {
+            use crate::mihomo::MihomoManager;
+            
+            if MihomoManager::is_tun_elevation_required() {
+                log::info!("UAC elevation required for TUN mode, requesting confirmation before stopping mihomo...");
+                
+                MihomoManager::request_elevation_confirmation()
+                    .map_err(|e| format!("需要管理员权限才能启用增强模式: {}", e))?;
+                
+                log::info!("UAC elevation confirmed, proceeding with TUN mode change...");
+            }
+        }
     }
 
     // 创建配置备份

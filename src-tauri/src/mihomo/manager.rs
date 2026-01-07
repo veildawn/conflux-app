@@ -222,6 +222,84 @@ impl MihomoManager {
         }
     }
 
+    /// 检查启用 TUN 模式时是否需要 UAC 权限提升
+    /// 
+    /// 返回 true 如果：
+    /// - 服务未运行（或未安装）
+    /// - 且当前应用没有管理员权限
+    #[cfg(windows)]
+    pub fn is_tun_elevation_required() -> bool {
+        use crate::system::WinServiceManager;
+        
+        // 如果服务正在运行，不需要 UAC（通过服务启动）
+        let service_running = WinServiceManager::is_running().unwrap_or(false);
+        if service_running {
+            log::debug!("Service is running, no UAC required for TUN mode");
+            return false;
+        }
+        
+        // 如果已经是管理员权限，不需要 UAC
+        if Self::is_running_as_admin() {
+            log::debug!("Already running as admin, no UAC required for TUN mode");
+            return false;
+        }
+        
+        log::debug!("UAC elevation required for TUN mode (service not running, not admin)");
+        true
+    }
+    
+    /// 预先请求 UAC 权限确认（不启动 mihomo）
+    /// 
+    /// 这个方法用于在停止当前 mihomo 之前确认用户同意 UAC 权限提升
+    /// 成功返回 Ok(())，用户取消返回错误
+    #[cfg(windows)]
+    pub fn request_elevation_confirmation() -> Result<()> {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        
+        // 如果已经是管理员权限，直接返回成功
+        if Self::is_running_as_admin() {
+            log::info!("Already running as admin, no confirmation needed");
+            return Ok(());
+        }
+        
+        log::info!("Requesting UAC elevation confirmation...");
+        
+        // 使用一个简单的命令来触发 UAC 并立即退出
+        // 这样用户确认后，我们知道后续的 UAC 请求也会成功（或用户已做好心理准备）
+        // 使用 cmd /c exit 0 作为占位命令
+        let ps_command = r#"
+            $ErrorActionPreference = 'Stop'
+            try {
+                # 使用一个无害的命令触发 UAC
+                $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c exit 0' -Verb RunAs -WindowStyle Hidden -Wait -PassThru
+                if ($proc.ExitCode -eq 0) {
+                    exit 0
+                } else {
+                    exit 1
+                }
+            } catch {
+                Write-Error $_.Exception.Message
+                exit 1
+            }
+        "#;
+        
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_command])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| anyhow::anyhow!("执行权限确认命令失败: {}", e))?;
+        
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            log::warn!("UAC confirmation failed or was cancelled: {}", stderr);
+            return Err(anyhow::anyhow!("用户取消了管理员权限请求"));
+        }
+        
+        log::info!("UAC elevation confirmed by user");
+        Ok(())
+    }
+
     /// 检查当前进程是否已经以管理员权限运行
     #[cfg(windows)]
     fn is_running_as_admin() -> bool {
