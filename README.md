@@ -2,28 +2,48 @@
 
 基于 Tauri 2 + MiHomo 的现代化跨平台代理管理桌面应用。
 
+<p align="center">
+  <img src="src-tauri/icons/icon.png" width="128" height="128" alt="Conflux Logo">
+</p>
+
 ## 特性
 
 - 🚀 **高性能**: 基于 Rust + Tauri 2，启动快速，资源占用低
-- 🎨 **现代化 UI**: React + Tailwind CSS + Shadcn/ui
-- 🔒 **安全可靠**: 本地运行，数据安全
+- 🎨 **现代化 UI**: React + Tailwind CSS + Radix UI，界面美观流畅
+- 🔒 **安全可靠**: 本地运行，数据安全，代码开源
 - 🌐 **跨平台**: 支持 Windows、macOS、Linux
-- 📊 **实时统计**: 流量监控、连接管理、速度测试
-- 🎯 **灵活规则**: 强大的规则管理系统
+- 📊 **实时监控**: 流量统计、连接管理、速度测试
+- 🎯 **灵活规则**: 强大的规则管理系统，支持拖拽排序
+- 📦 **订阅管理**: 支持远程订阅、本地导入、自动更新
+- 🏪 **Sub-Store**: 内置高级订阅管理工具
+- 🔧 **TUN 模式**: 支持虚拟网卡全局代理
+
+## 应用截图
+
+<!--
+<p align="center">
+  <img src="docs/screenshots/home.png" width="45%" alt="活动监控">
+  <img src="docs/screenshots/proxy.png" width="45%" alt="策略管理">
+</p>
+-->
+
+> 截图即将添加...
 
 ## 下载安装
 
-前往 [Releases](https://github.com/yourusername/conflux/releases) 页面下载对应平台的安装包：
+前往 [Releases](https://github.com/Ashbaer/conflux-app/releases) 页面下载对应平台的安装包：
 
-| 平台 | 架构 | 文件格式 |
-|------|------|----------|
-| macOS | Apple Silicon (M1/M2/M3) | `.dmg` |
-| macOS | Intel (x86_64) | `.dmg` |
-| Windows | x86_64 | `.msi` / `.exe` |
+| 平台    | 架构                        | 文件格式             |
+| ------- | --------------------------- | -------------------- |
+| macOS   | Apple Silicon (M1/M2/M3/M4) | `.dmg`               |
+| macOS   | Intel (x86_64)              | `.dmg`               |
+| Windows | x86_64                      | `.msi` / `.exe`      |
+| Linux   | x86_64                      | `.AppImage` / `.deb` |
 
 ## 技术栈
 
 ### 前端
+
 - React 19
 - TypeScript 5
 - Tailwind CSS 4
@@ -32,6 +52,7 @@
 - Vite 7
 
 ### 后端
+
 - Tauri 2
 - Rust 1.77+
 - Tokio (异步运行时)
@@ -50,8 +71,8 @@
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/yourusername/conflux.git
-cd conflux
+git clone https://github.com/Ashbaer/conflux-app.git
+cd conflux-app
 ```
 
 ### 2. 安装依赖
@@ -60,20 +81,26 @@ cd conflux
 pnpm install
 ```
 
-### 3. 下载 MiHomo 二进制文件
+### 3. 下载外部依赖
 
 使用自动下载脚本（推荐）：
 
 ```bash
-./scripts/fetch-mihomo.sh
+# 下载所有外部依赖
+pnpm run fetch:all
+
+# 或分别下载
+pnpm run fetch:mihomo     # 下载 MiHomo 代理核心
+pnpm run fetch:substore   # 下载 Sub-Store
+pnpm run fetch:node       # 下载 Node.js 运行时
 ```
 
-或手动从 [MiHomo Releases](https://github.com/MetaCubeX/mihomo/releases) 下载，放置到 `src-tauri/resources/` 目录：
+或手动从 [MiHomo Releases](https://github.com/MetaCubeX/mihomo/releases) 下载，放置到 `src-tauri/binaries/` 目录，并按 Tauri sidecar 命名规范重命名：
 
-- Windows: `mihomo-windows-amd64.exe`
-- macOS (Apple Silicon): `mihomo-darwin-arm64`
-- macOS (Intel): `mihomo-darwin-amd64`
-- Linux: `mihomo-linux-amd64`
+- macOS (Apple Silicon): `mihomo-aarch64-apple-darwin`
+- macOS (Intel): `mihomo-x86_64-apple-darwin`
+- Windows: `mihomo-x86_64-pc-windows-msvc.exe`
+- Linux: `mihomo-x86_64-unknown-linux-gnu`
 
 ### 4. 开发模式
 
@@ -98,25 +125,34 @@ pnpm tauri build --target x86_64-pc-windows-msvc
 ## 项目结构
 
 ```
-conflux/
+conflux-app/
 ├── src/                    # 前端源代码
 │   ├── components/         # React 组件
+│   │   ├── layout/         # 布局组件
+│   │   ├── ui/             # UI 组件库
+│   │   └── icons/          # 图标组件
 │   ├── pages/              # 页面组件
-│   ├── services/           # IPC 服务
+│   │   ├── proxy-groups/   # 策略组管理
+│   │   ├── proxy-servers/  # 服务器管理
+│   │   └── settings/       # 设置页面
+│   ├── services/           # IPC 通信服务
 │   ├── stores/             # Zustand 状态管理
 │   ├── hooks/              # 自定义 Hooks
 │   ├── types/              # TypeScript 类型定义
 │   └── utils/              # 工具函数
 ├── src-tauri/              # Tauri 后端
 │   ├── src/
-│   │   ├── commands/       # Tauri 命令
+│   │   ├── commands/       # Tauri IPC 命令
 │   │   ├── config/         # 配置管理
 │   │   ├── mihomo/         # MiHomo 核心集成
 │   │   ├── models/         # 数据模型
-│   │   ├── system/         # 系统功能
+│   │   ├── system/         # 系统功能 (TUN/托盘)
+│   │   ├── substore/       # Sub-Store 集成
 │   │   └── utils/          # 工具函数
-│   ├── resources/          # MiHomo 二进制文件
+│   ├── binaries/           # 外部二进制文件
+│   ├── resources/          # 资源文件
 │   └── icons/              # 应用图标
+├── docs/                   # 文档
 ├── scripts/                # 构建脚本
 ├── .github/workflows/      # CI/CD 配置
 └── package.json
@@ -145,6 +181,7 @@ git push origin v0.1.0
 ```
 
 构建完成后会在 Releases 页面生成草稿，包含以下产物：
+
 - `Conflux_x.x.x_aarch64.dmg` - macOS ARM64
 - `Conflux_x.x.x_x64.dmg` - macOS x86_64
 - `Conflux_x.x.x_x64-setup.exe` - Windows NSIS 安装程序
@@ -159,6 +196,7 @@ git push origin v0.1.0
 在 GitHub Secrets 中配置以下变量启用代码签名：
 
 **macOS:**
+
 - `APPLE_CERTIFICATE` - Base64 编码的 .p12 证书
 - `APPLE_CERTIFICATE_PASSWORD` - 证书密码
 - `APPLE_SIGNING_IDENTITY` - 签名标识
@@ -167,33 +205,63 @@ git push origin v0.1.0
 - `APPLE_TEAM_ID` - Team ID
 
 **Windows:**
+
 - `TAURI_SIGNING_PRIVATE_KEY` - 签名私钥
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` - 私钥密码
 
 ## 功能列表
 
-### 阶段一 (当前) ✅
-- [x] 项目初始化
-- [x] MiHomo 核心集成
-- [x] 基础配置管理
-- [x] 基础 UI 界面
-- [x] 代理启动/停止
-- [x] 节点切换功能
-- [x] 系统托盘
+### 核心功能 ✅
 
-### 阶段二 (计划中)
-- [ ] 订阅管理
-- [ ] 高级节点管理
-- [ ] 规则管理
-- [ ] 连接管理
-- [ ] 配置文件编辑器
+- [x] MiHomo 代理核心集成
+- [x] 代理启动/停止/重启
+- [x] 系统托盘与快捷操作
+- [x] 开机自启动
 
-### 阶段三 (计划中)
-- [ ] 流量统计
-- [ ] TUN 模式
-- [ ] 系统集成优化
-- [ ] 性能优化
+### 配置管理 ✅
+
+- [x] 远程订阅支持（自动更新）
+- [x] 本地配置文件导入
+- [x] 空白配置创建
+- [x] 配置导出功能
+
+### 策略与节点 ✅
+
+- [x] 策略组管理（手动选择/自动选择/负载均衡）
+- [x] 代理服务器管理
+- [x] 节点延迟测速
+- [x] 链接解析导入节点
+- [x] 三种代理模式切换（规则/全局/直连）
+
+### 规则系统 ✅
+
+- [x] 可视化规则管理
+- [x] 规则拖拽排序
+- [x] 多种规则类型支持
+- [x] 代理源/规则源管理
+
+### 监控与日志 ✅
+
+- [x] 实时流量统计
+- [x] 上下载速度监控
+- [x] 连接数统计
+- [x] 实时日志查看
+- [x] 日志过滤与导出
+
+### 高级功能 ✅
+
+- [x] TUN 模式（虚拟网卡）
+- [x] Sub-Store 集成
+- [x] 局域网共享
+- [x] IPv6 支持
+- [x] TCP 并发优化
+- [x] DNS 配置
+
+### 计划中 🚧
+
 - [ ] 自动更新
+- [ ] 连接详情查看
+- [ ] 更多平台支持优化
 
 ## 开发命令
 
@@ -221,9 +289,10 @@ pnpm test
 pnpm format
 ```
 
-## 开发文档
+## 文档
 
-- [MiHomo API 文档](MIHOMO_API.md)
+- [📖 用户使用手册](docs/USER_GUIDE.md) - 面向新手的完整使用指南
+- [MiHomo API 文档](MIHOMO_API.md) - 开发者参考
 
 ## 许可证
 
