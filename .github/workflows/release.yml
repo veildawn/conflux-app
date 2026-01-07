@@ -20,9 +20,15 @@ env:
     See the assets below to download and install.
 
     ### Installation
-    - **macOS ARM64 (Apple Silicon)**: Download `.dmg` file for M1/M2/M3 Macs
-    - **macOS x86_64 (Intel)**: Download `.dmg` file for Intel Macs
-    - **Windows x86_64**: Download `.msi` or `.exe` installer
+    - **macOS ARM64 (Apple Silicon)**: Download `Conflux_x.x.x_aarch64.dmg` for M1/M2/M3/M4 Macs
+    - **macOS x86_64 (Intel)**: Download `Conflux_x.x.x_x64.dmg` for Intel Macs
+    - **Windows x86_64**: Download `Conflux_x.x.x_x64-setup.exe` installer
+
+    ### macOS 首次安装
+    由于应用未签名，首次安装后需要移除隔离属性才能正常运行：
+    ```bash
+    sudo xattr -rd com.apple.quarantine "/Applications/Conflux.app"
+    ```
 
 # Workflow-level permissions for GITHUB_TOKEN
 permissions:
@@ -129,7 +135,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src-tauri/resources/sub-store
-          key: substore-latest-v1
+          key: substore-${{ hashFiles('scripts/fetch-substore.sh') }}-v2
 
       - name: Fetch Sub-Store
         if: steps.cache-substore.outputs.cache-hit != 'true'
@@ -137,6 +143,29 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          chmod +x scripts/fetch-substore.sh
+          ./scripts/fetch-substore.sh
+
+      - name: Verify Sub-Store frontend
+        id: verify-frontend
+        run: |
+          # Check if frontend directory exists and has content
+          if [ ! -d "src-tauri/resources/sub-store/frontend" ] || [ -z "$(ls -A src-tauri/resources/sub-store/frontend 2>/dev/null)" ]; then
+            echo "frontend_missing=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Sub-Store frontend directory is missing or empty"
+          else
+            echo "frontend_missing=false" >> $GITHUB_OUTPUT
+            echo "✅ Sub-Store frontend directory exists"
+          fi
+
+      - name: Re-fetch Sub-Store (frontend missing)
+        if: steps.verify-frontend.outputs.frontend_missing == 'true'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          echo "Re-fetching Sub-Store due to missing frontend..."
+          rm -rf src-tauri/resources/sub-store
           chmod +x scripts/fetch-substore.sh
           ./scripts/fetch-substore.sh
 
@@ -151,7 +180,7 @@ jobs:
           fi
           echo "✅ Node.js binary present"
 
-          # Check Sub-Store
+          # Check Sub-Store bundle
           if [ ! -f "src-tauri/resources/sub-store/sub-store.bundle.js" ]; then
             echo "ERROR: Sub-Store bundle not found!"
             exit 1
@@ -164,11 +193,24 @@ jobs:
           fi
           echo "✅ Sub-Store run script present"
 
+          # Check Sub-Store frontend
+          if [ ! -d "src-tauri/resources/sub-store/frontend" ]; then
+            echo "ERROR: Sub-Store frontend directory not found!"
+            exit 1
+          fi
+          if [ ! -f "src-tauri/resources/sub-store/frontend/index.html" ]; then
+            echo "ERROR: Sub-Store frontend index.html not found!"
+            exit 1
+          fi
+          echo "✅ Sub-Store frontend present"
+
           echo ""
           echo "=== All resources verified ==="
           ls -lh src-tauri/binaries/
           ls -lh src-tauri/resources/
           ls -lh src-tauri/resources/sub-store/
+          echo "Frontend files:"
+          ls -lh src-tauri/resources/sub-store/frontend/ | head -10
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -313,7 +355,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src-tauri/resources/sub-store
-          key: substore-latest-v1
+          key: substore-${{ hashFiles('scripts/fetch-substore.sh') }}-v2
 
       - name: Fetch Sub-Store
         if: steps.cache-substore.outputs.cache-hit != 'true'
@@ -321,6 +363,29 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          chmod +x scripts/fetch-substore.sh
+          ./scripts/fetch-substore.sh
+
+      - name: Verify Sub-Store frontend
+        id: verify-frontend
+        run: |
+          # Check if frontend directory exists and has content
+          if [ ! -d "src-tauri/resources/sub-store/frontend" ] || [ -z "$(ls -A src-tauri/resources/sub-store/frontend 2>/dev/null)" ]; then
+            echo "frontend_missing=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Sub-Store frontend directory is missing or empty"
+          else
+            echo "frontend_missing=false" >> $GITHUB_OUTPUT
+            echo "✅ Sub-Store frontend directory exists"
+          fi
+
+      - name: Re-fetch Sub-Store (frontend missing)
+        if: steps.verify-frontend.outputs.frontend_missing == 'true'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          echo "Re-fetching Sub-Store due to missing frontend..."
+          rm -rf src-tauri/resources/sub-store
           chmod +x scripts/fetch-substore.sh
           ./scripts/fetch-substore.sh
 
@@ -335,7 +400,7 @@ jobs:
           fi
           echo "✅ Node.js binary present"
 
-          # Check Sub-Store
+          # Check Sub-Store bundle
           if [ ! -f "src-tauri/resources/sub-store/sub-store.bundle.js" ]; then
             echo "ERROR: Sub-Store bundle not found!"
             exit 1
@@ -347,6 +412,24 @@ jobs:
             exit 1
           fi
           echo "✅ Sub-Store run script present"
+
+          # Check Sub-Store frontend
+          if [ ! -d "src-tauri/resources/sub-store/frontend" ]; then
+            echo "ERROR: Sub-Store frontend directory not found!"
+            exit 1
+          fi
+          if [ ! -f "src-tauri/resources/sub-store/frontend/index.html" ]; then
+            echo "ERROR: Sub-Store frontend index.html not found!"
+            exit 1
+          fi
+          echo "✅ Sub-Store frontend present"
+
+          echo ""
+          echo "=== All resources verified ==="
+          ls -lh src-tauri/binaries/
+          ls -lh src-tauri/resources/sub-store/
+          echo "Frontend files:"
+          ls -lh src-tauri/resources/sub-store/frontend/ | head -10
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -500,7 +583,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src-tauri/resources/sub-store
-          key: substore-latest-v1
+          key: substore-${{ hashFiles('scripts/fetch-substore.sh') }}-v2
 
       - name: Fetch Sub-Store
         if: steps.cache-substore.outputs.cache-hit != 'true'
@@ -508,6 +591,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          chmod +x scripts/fetch-substore.sh
+          ./scripts/fetch-substore.sh
+
+      - name: Verify Sub-Store frontend
+        id: verify-frontend
+        shell: bash
+        run: |
+          # Check if frontend directory exists and has content
+          if [ ! -d "src-tauri/resources/sub-store/frontend" ] || [ -z "$(ls -A src-tauri/resources/sub-store/frontend 2>/dev/null)" ]; then
+            echo "frontend_missing=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Sub-Store frontend directory is missing or empty"
+          else
+            echo "frontend_missing=false" >> $GITHUB_OUTPUT
+            echo "✅ Sub-Store frontend directory exists"
+          fi
+
+      - name: Re-fetch Sub-Store (frontend missing)
+        if: steps.verify-frontend.outputs.frontend_missing == 'true'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          echo "Re-fetching Sub-Store due to missing frontend..."
+          rm -rf src-tauri/resources/sub-store
           chmod +x scripts/fetch-substore.sh
           ./scripts/fetch-substore.sh
 
@@ -523,7 +630,7 @@ jobs:
           fi
           echo "✅ Node.js binary present"
 
-          # Check Sub-Store
+          # Check Sub-Store bundle
           if [ ! -f "src-tauri/resources/sub-store/sub-store.bundle.js" ]; then
             echo "ERROR: Sub-Store bundle not found!"
             exit 1
@@ -535,6 +642,24 @@ jobs:
             exit 1
           fi
           echo "✅ Sub-Store run script present"
+
+          # Check Sub-Store frontend
+          if [ ! -d "src-tauri/resources/sub-store/frontend" ]; then
+            echo "ERROR: Sub-Store frontend directory not found!"
+            exit 1
+          fi
+          if [ ! -f "src-tauri/resources/sub-store/frontend/index.html" ]; then
+            echo "ERROR: Sub-Store frontend index.html not found!"
+            exit 1
+          fi
+          echo "✅ Sub-Store frontend present"
+
+          echo ""
+          echo "=== All resources verified ==="
+          ls -lh src-tauri/binaries/
+          ls -lh src-tauri/resources/sub-store/
+          echo "Frontend files:"
+          ls -lh src-tauri/resources/sub-store/frontend/ | head -10
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
