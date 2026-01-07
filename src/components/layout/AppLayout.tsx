@@ -84,10 +84,26 @@ export default function AppLayout() {
   }, [applyStatus]);
 
   useEffect(() => {
+    // 判断是否是可编辑元素
+    const isEditableElement = (target: EventTarget | null): boolean => {
+      if (!target || !(target instanceof HTMLElement)) return false;
+      const tagName = target.tagName.toLowerCase();
+      return (
+        tagName === 'input' ||
+        tagName === 'textarea' ||
+        target.isContentEditable ||
+        target.closest('input, textarea, [contenteditable="true"]') !== null
+      );
+    };
+
     const blockContextMenu = (event: MouseEvent) => {
+      // 允许在可编辑元素上显示右键菜单
+      if (isEditableElement(event.target)) return;
       event.preventDefault();
     };
     const blockCopy = (event: ClipboardEvent) => {
+      // 允许在可编辑元素上复制/剪切
+      if (isEditableElement(event.target)) return;
       event.preventDefault();
     };
 

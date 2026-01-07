@@ -150,6 +150,13 @@ pub struct DnsConfig {
     )]
     pub default_nameserver: Vec<String>,
 
+    /// 代理服务器 DNS（用于解析代理节点域名，避免 TUN 循环依赖）
+    #[serde(
+        rename = "proxy-server-nameserver",
+        default = "default_proxy_server_nameserver"
+    )]
+    pub proxy_server_nameserver: Vec<String>,
+
     /// 主 DNS 服务器
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub nameserver: Vec<String>,
@@ -185,6 +192,10 @@ pub struct DnsConfig {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_proxy_server_nameserver() -> Vec<String> {
+    vec!["223.5.5.5".to_string(), "119.29.29.29".to_string()]
 }
 
 /// TUN 配置

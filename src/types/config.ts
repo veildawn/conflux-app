@@ -37,6 +37,8 @@ export interface DnsConfig {
   'fake-ip-filter'?: string[];
   /** 默认 DNS 服务器（用于解析 DNS 服务器域名） */
   'default-nameserver'?: string[];
+  /** 代理服务器 DNS（用于解析代理节点域名，避免 TUN 模式循环依赖） */
+  'proxy-server-nameserver'?: string[];
   /** 主 DNS 服务器 */
   nameserver?: string[];
   /** 备用 DNS 服务器 */
@@ -53,6 +55,18 @@ export interface DnsConfig {
   'respect-rules'?: boolean;
   /** 缓存算法: lru, arc */
   'cache-algorithm'?: 'lru' | 'arc';
+}
+
+/**
+ * TUN 配置
+ */
+export interface TunConfig {
+  enable: boolean;
+  stack?: string;
+  'auto-route'?: boolean;
+  'auto-detect-interface'?: boolean;
+  'strict-route'?: boolean;
+  'dns-hijack'?: string[];
 }
 
 /**
@@ -76,6 +90,7 @@ export interface MihomoConfig {
   'geo-auto-update'?: boolean;
   'geo-update-interval'?: number;
   'geox-url'?: GeoxUrl;
+  tun?: TunConfig;
   dns?: DnsConfig;
   proxies: ProxyConfig[];
   'proxy-groups': ProxyGroupConfig[];

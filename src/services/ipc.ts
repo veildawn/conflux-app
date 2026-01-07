@@ -122,6 +122,13 @@ export const ipc = {
   },
 
   /**
+   * 设置 TUN Stack
+   */
+  async setTunStack(stack: string): Promise<void> {
+    return invoke('set_tun_stack', { stack });
+  },
+
+  /**
    * 设置 LAN 访问开关
    */
   async setAllowLan(enabled: boolean): Promise<void> {

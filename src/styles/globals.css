@@ -101,6 +101,21 @@
     user-select: none;
   }
 
+  /* 允许选中输入框和文本区域的内容 */
+  input,
+  textarea,
+  [contenteditable='true'],
+  .select-text {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    cursor: text;
+  }
+
+  ::selection {
+    background-color: hsl(var(--primary) / 0.2);
+    color: inherit;
+  }
+
   #root {
     background-color: transparent;
     border-radius: 12px;
@@ -169,7 +184,7 @@
   .app-bg-gradient::before,
   .app-bg-gradient::after,
   .app-bg-gradient-extra::before {
-    content: "";
+    content: '';
     position: absolute;
     width: 140%;
     height: 140%;
@@ -184,19 +199,11 @@
 
   /* Light mode gradients */
   .app-bg-gradient::before {
-    background: radial-gradient(
-      circle at 20% 20%,
-      rgba(59, 130, 246, 0.12) 0%,
-      transparent 50%
-    );
+    background: radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.12) 0%, transparent 50%);
   }
 
   .app-bg-gradient::after {
-    background: radial-gradient(
-      circle at 80% 80%,
-      rgba(168, 85, 247, 0.12) 0%,
-      transparent 50%
-    );
+    background: radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.12) 0%, transparent 50%);
   }
 
   /* Added a third point for better mesh coverage */
@@ -208,39 +215,23 @@
   }
 
   .app-bg-gradient-extra::before {
-    background: radial-gradient(
-      circle at 80% 20%,
-      rgba(236, 72, 153, 0.08) 0%,
-      transparent 40%
-    );
+    background: radial-gradient(circle at 80% 20%, rgba(236, 72, 153, 0.08) 0%, transparent 40%);
   }
 
   /* Dark mode overrides */
   .dark .app-bg-gradient::before {
     opacity: 0.25;
-    background: radial-gradient(
-      circle at 20% 20%,
-      rgba(59, 130, 246, 0.3) 0%,
-      transparent 55%
-    );
+    background: radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.3) 0%, transparent 55%);
   }
 
   .dark .app-bg-gradient::after {
     opacity: 0.25;
-    background: radial-gradient(
-      circle at 80% 80%,
-      rgba(168, 85, 247, 0.3) 0%,
-      transparent 55%
-    );
+    background: radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.3) 0%, transparent 55%);
   }
 
   .dark .app-bg-gradient-extra::before {
     opacity: 0.2;
-    background: radial-gradient(
-      circle at 80% 20%,
-      rgba(236, 72, 153, 0.25) 0%,
-      transparent 45%
-    );
+    background: radial-gradient(circle at 80% 20%, rgba(236, 72, 153, 0.25) 0%, transparent 45%);
   }
 
   .text-swap-in {

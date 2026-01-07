@@ -7,13 +7,13 @@ import logger from '@/utils/logger';
 import type { DnsConfig, MihomoConfig } from '@/types/config';
 
 /**
- * 获取默认 DNS 配置
+ * 默认 DNS 配置
  */
-export const getDefaultDnsConfig = (): DnsConfig => ({
-  enable: true,
+export const DEFAULT_DNS_CONFIG: DnsConfig = {
+  enable: false,
   listen: '0.0.0.0:1053',
   'enhanced-mode': 'fake-ip',
-  'fake-ip-range': '198.18.0.1/16',
+  'fake-ip-range': '198.10.0.1/16',
   'fake-ip-filter-mode': 'blacklist',
   'fake-ip-filter': [
     '*.lan',
@@ -27,20 +27,38 @@ export const getDefaultDnsConfig = (): DnsConfig => ({
     'www.msftconnecttest.com',
   ],
   'default-nameserver': ['223.5.5.5', '119.29.29.29'],
+  'proxy-server-nameserver': ['223.5.5.5', '119.29.29.29'],
   nameserver: ['https://223.5.5.5/dns-query', 'https://doh.pub/dns-query'],
-  fallback: ['https://1.1.1.1/dns-query', 'https://8.8.8.8/dns-query', 'tls://8.8.4.4:853'],
+  fallback: ['https://8.8.8.8'],
   'fallback-filter': {
     geoip: true,
     'geoip-code': 'CN',
     geosite: ['gfw'],
     ipcidr: ['240.0.0.0/4', '0.0.0.0/32'],
   },
-  'prefer-h3': true,
+  'prefer-h3': false,
   'use-hosts': true,
   'use-system-hosts': true,
-  'respect-rules': false,
+  'respect-rules': true,
   'cache-algorithm': 'arc',
-});
+};
+
+/**
+ * 将配置与默认值合并，确保所有字段都有值
+ * 用户配置优先，缺失的字段使用默认值
+ */
+function mergeWithDefaults(config: MihomoConfig): MihomoConfig {
+  // 后端已经负责填充默认值，前端不再进行深度合并，只处理可选字段的空值保护
+  return {
+    ...config,
+    dns: config.dns || DEFAULT_DNS_CONFIG,
+  };
+}
+
+/**
+ * @deprecated 使用 DEFAULT_DNS_CONFIG 代替
+ */
+export const getDefaultDnsConfig = (): DnsConfig => ({ ...DEFAULT_DNS_CONFIG, enable: true });
 
 /**
  * 解析 DNS 列表字符串
@@ -76,7 +94,8 @@ export function useSettingsData() {
   const loadConfig = useCallback(async () => {
     try {
       const mihomoConfig = await ipc.getConfig();
-      setConfig(mihomoConfig);
+      // 与默认值合并，确保所有字段都有值
+      setConfig(mergeWithDefaults(mihomoConfig));
       setLoading(false);
     } catch (error) {
       logger.error('Failed to load config:', error);
@@ -130,17 +149,8 @@ export function useSettingsData() {
   const handleDnsConfigChange = useCallback(
     async (updates: Partial<DnsConfig>) => {
       if (!config) return;
-      if (updates.enable === true) {
-        const currentDns = config.dns || {};
-        const hasValidConfig =
-          (currentDns.nameserver ?? []).length > 0 ||
-          (currentDns['default-nameserver'] ?? []).length > 0;
-        if (!hasValidConfig) {
-          await handleConfigChange({ dns: getDefaultDnsConfig() });
-          return;
-        }
-      }
-      const nextDns = { ...(config.dns || {}), ...updates };
+      // config.dns 已经与默认值合并，直接更新即可
+      const nextDns = { ...config.dns, ...updates };
       await handleConfigChange({ dns: nextDns });
     },
     [config, handleConfigChange]

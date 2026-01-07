@@ -381,6 +381,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -599,8 +600,10 @@ fn main() {
             commands::proxy::close_all_connections,
             // TUN 模式命令
             commands::proxy::set_tun_mode,
+            commands::proxy::set_tun_stack,
             commands::proxy::check_tun_permission,
             commands::proxy::setup_tun_permission,
+            commands::proxy::check_tun_consistency,
             // 规则命令
             commands::proxy::get_rules_from_api,
             // 版本信息

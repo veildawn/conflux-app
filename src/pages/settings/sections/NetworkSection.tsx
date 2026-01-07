@@ -1,4 +1,4 @@
-import { Network, Globe, Zap, LayoutGrid } from 'lucide-react';
+import { Network, Globe, Zap, LayoutGrid, Layers } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import {
@@ -64,6 +64,52 @@ export function NetworkSection({
     }
   };
 
+  const handleTunEnableChange = async (checked: boolean) => {
+    try {
+      await ipc.setTunMode(checked);
+      setConfig((prev) => {
+        if (!prev) return prev;
+        const currentTun = prev.tun || {
+          enable: false,
+          stack: 'system',
+          'auto-route': true,
+          'auto-detect-interface': true,
+          'dns-hijack': ['any:53'],
+        };
+        return {
+          ...prev,
+          tun: { ...currentTun, enable: checked },
+        };
+      });
+      toast({ title: checked ? 'TUN 模式已启用' : 'TUN 模式已禁用' });
+    } catch (error) {
+      toast({ title: '设置失败', description: String(error), variant: 'destructive' });
+    }
+  };
+
+  const handleTunStackChange = async (stack: string) => {
+    try {
+      await ipc.setTunStack(stack);
+      setConfig((prev) => {
+        if (!prev) return prev;
+        const currentTun = prev.tun || {
+          enable: false,
+          stack: 'system',
+          'auto-route': true,
+          'auto-detect-interface': true,
+          'dns-hijack': ['any:53'],
+        };
+        return {
+          ...prev,
+          tun: { ...currentTun, stack },
+        };
+      });
+      toast({ title: 'TUN 协议栈已更新' });
+    } catch (error) {
+      toast({ title: '设置失败', description: String(error), variant: 'destructive' });
+    }
+  };
+
   return (
     <div>
       <SectionHeader title="网络" />
@@ -115,6 +161,42 @@ export function NetworkSection({
                 onCheckedChange={onAllowLanToggle}
                 className="scale-90"
               />
+            </div>
+          </div>
+        </BentoCard>
+
+        {/* TUN 模式 */}
+        <BentoCard
+          title="TUN 模式"
+          icon={Layers}
+          iconColor="text-cyan-500"
+          className="md:col-span-1"
+        >
+          <div className="p-5 pt-2 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600 dark:text-gray-300">启用 TUN 模式</span>
+              <Switch
+                checked={!!config?.tun?.enable}
+                onCheckedChange={handleTunEnableChange}
+                className="scale-90"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600 dark:text-gray-300">协议栈 (Stack)</span>
+              <Select
+                value={config?.tun?.stack || 'system'}
+                onValueChange={handleTunStackChange}
+                disabled={!config?.tun?.enable}
+              >
+                <SelectTrigger className={cn('w-28', CONTROL_BASE_CLASS)}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="system">System</SelectItem>
+                  <SelectItem value="gvisor">gVisor</SelectItem>
+                  <SelectItem value="mixed">Mixed</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </BentoCard>

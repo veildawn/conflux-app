@@ -41,6 +41,7 @@ tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
 futures-util = "0.3"
 tauri-plugin-dialog = "2.0.0-rc.8"
 resvg = "0.43"
+tauri-plugin-fs = "2"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

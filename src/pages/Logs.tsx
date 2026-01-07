@@ -15,6 +15,8 @@ import {
   Bug,
 } from 'lucide-react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -280,18 +282,24 @@ export default function Logs() {
   };
 
   // 导出日志
-  const handleExport = () => {
-    const content = logs
-      .map((log) => `[${log.timestamp}] [${log.type.toUpperCase()}] ${log.payload}`)
-      .join('\n');
+  const handleExport = async () => {
+    try {
+      const logsToExport = filteredLogs.length > 0 ? filteredLogs : logs;
+      const content = logsToExport
+        .map((log) => `[${log.timestamp}] [${log.type.toUpperCase()}] ${log.payload}`)
+        .join('\n');
 
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `conflux-logs-${new Date().toISOString().split('T')[0]}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+      const filePath = await save({
+        filters: [{ name: 'Log File', extensions: ['txt'] }],
+        defaultPath: `conflux-logs-${new Date().toISOString().split('T')[0]}.txt`,
+      });
+
+      if (filePath) {
+        await writeTextFile(filePath, content);
+      }
+    } catch (error) {
+      console.error('Failed to export logs:', error);
+    }
   };
 
   // 滚动到底部

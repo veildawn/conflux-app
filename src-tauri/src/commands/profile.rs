@@ -76,7 +76,12 @@ pub async fn rename_profile(id: String, new_name: String) -> Result<ProfileMetad
 /// 激活 Profile
 #[tauri::command]
 pub async fn activate_profile(id: String, state: State<'_, AppState>) -> Result<(), String> {
+    use crate::commands::reload::{reload_config, ConfigBackup, ReloadOptions};
+
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
+
+    // 创建配置备份
+    let backup = ConfigBackup::create(&state).map_err(|e| e.to_string())?;
 
     // 加载基础配置
     let base_config = state
@@ -96,15 +101,19 @@ pub async fn activate_profile(id: String, state: State<'_, AppState>) -> Result<
         .map_err(|e| e.to_string())?;
 
     // 如果 MiHomo 正在运行，重新加载配置
-    if state.mihomo_manager.is_running().await {
-        let config_path = state.config_manager.mihomo_config_path();
-        state
-            .mihomo_api
-            .reload_configs(config_path.to_str().unwrap_or(""), true)
-            .await
-            .map_err(|e| format!("Failed to reload config: {}", e))?;
+    let options = ReloadOptions::safe();
+    if let Err(e) = reload_config(None, &options).await {
+        // 重载失败，回滚配置
+        log::error!("Profile activation failed, rolling back: {}", e);
+        if let Err(rollback_err) = backup.rollback() {
+            log::error!("Failed to rollback config: {}", rollback_err);
+        } else {
+            let _ = reload_config(None, &ReloadOptions::quick()).await;
+        }
+        return Err(format!("激活配置失败: {}", e));
     }
 
+    backup.cleanup();
     Ok(())
 }
 
@@ -114,6 +123,8 @@ pub async fn refresh_profile(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<ProfileMetadata, String> {
+    use crate::commands::reload::{reload_config, ConfigBackup, ReloadOptions};
+
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
 
     // 检查是否是当前活跃的 Profile
@@ -130,6 +141,9 @@ pub async fn refresh_profile(
 
     // 如果是活跃 Profile，重新激活以应用更新
     if is_active {
+        // 创建配置备份
+        let backup = ConfigBackup::create(&state).map_err(|e| e.to_string())?;
+
         let base_config = state
             .config_manager
             .load_mihomo_config()
@@ -144,13 +158,20 @@ pub async fn refresh_profile(
             .save_mihomo_config(&runtime_config)
             .map_err(|e| e.to_string())?;
 
-        if state.mihomo_manager.is_running().await {
-            let config_path = state.config_manager.mihomo_config_path();
-            state
-                .mihomo_api
-                .reload_configs(config_path.to_str().unwrap_or(""), true)
-                .await
-                .map_err(|e| format!("Failed to reload config: {}", e))?;
+        // 使用统一的重载机制
+        let options = ReloadOptions::safe();
+        if let Err(e) = reload_config(None, &options).await {
+            // 重载失败，回滚配置（但保留已刷新的远程配置）
+            log::warn!("Config reload failed after profile refresh: {}", e);
+            if let Err(rollback_err) = backup.rollback() {
+                log::error!("Failed to rollback config: {}", rollback_err);
+            } else {
+                let _ = reload_config(None, &ReloadOptions::quick()).await;
+            }
+            // 不返回错误，因为远程配置已成功刷新，只是重载失败
+            log::warn!("Profile refreshed but config reload failed, may need to restart proxy");
+        } else {
+            backup.cleanup();
         }
     }
 
@@ -587,7 +608,14 @@ pub async fn update_rule_provider_in_profile(
 // ==================== 辅助函数 ====================
 
 /// 重载活跃 Profile 的辅助函数
+///
+/// 使用统一的配置重载机制，提供：
+/// - 配置备份和回滚
+/// - 重试机制
+/// - 错误恢复
 async fn reload_active_profile(state: &State<'_, AppState>) -> Result<(), String> {
+    use crate::commands::reload::{reload_config, ConfigBackup, ReloadOptions};
+
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
     let active_id = match workspace
         .get_active_profile_id()
@@ -596,6 +624,9 @@ async fn reload_active_profile(state: &State<'_, AppState>) -> Result<(), String
         Some(id) => id,
         None => return Ok(()),
     };
+
+    // 创建配置备份
+    let backup = ConfigBackup::create(state).map_err(|e| e.to_string())?;
 
     let base_config = state
         .config_manager
@@ -609,13 +640,20 @@ async fn reload_active_profile(state: &State<'_, AppState>) -> Result<(), String
         .save_mihomo_config(&runtime_config)
         .map_err(|e| e.to_string())?;
 
-    if state.mihomo_manager.is_running().await {
-        let config_path = state.config_manager.mihomo_config_path();
-        state
-            .mihomo_api
-            .reload_configs(config_path.to_str().unwrap_or(""), true)
-            .await
-            .map_err(|e| format!("Failed to reload config: {}", e))?;
+    // 使用统一的重载机制
+    let options = ReloadOptions::safe();
+    if let Err(e) = reload_config(None, &options).await {
+        // 重载失败，尝试回滚
+        log::error!("Profile reload failed, rolling back: {}", e);
+        if let Err(rollback_err) = backup.rollback() {
+            log::error!("Failed to rollback config: {}", rollback_err);
+        } else {
+            // 尝试用回滚后的配置重新加载
+            let _ = reload_config(None, &ReloadOptions::quick()).await;
+        }
+        return Err(format!("配置重载失败: {}", e));
     }
+
+    backup.cleanup();
     Ok(())
 }
