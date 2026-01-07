@@ -205,6 +205,56 @@ impl SubStoreManager {
         Ok(substore_data_dir)
     }
 
+    /// 清理残留的 Sub-Store 进程
+    /// 在启动新进程前调用，确保没有孤儿进程（例如热重载后遗留的进程）
+    pub fn cleanup_stale_processes() {
+        log::info!("Cleaning up stale Sub-Store processes...");
+
+        #[cfg(unix)]
+        {
+            use std::process::Command;
+            // 杀死所有 run-substore.js 相关进程
+            let _ = Command::new("pkill")
+                .args(["-9", "-f", "run-substore.js"])
+                .output();
+            log::info!("Killed stale Sub-Store processes via pkill");
+        }
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            use std::process::Command;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            // Windows 上使用 wmic 精确匹配命令行中包含 run-substore.js 的 node 进程
+            // 先查找 PID
+            if let Ok(output) = Command::new("wmic")
+                .args([
+                    "process",
+                    "where",
+                    "commandline like '%run-substore.js%'",
+                    "get",
+                    "processid",
+                ])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output()
+            {
+                if let Ok(stdout) = String::from_utf8(output.stdout) {
+                    for line in stdout.lines() {
+                        if let Ok(pid) = line.trim().parse::<u32>() {
+                            log::info!("Killing stale Sub-Store process with PID: {}", pid);
+                            let _ = Command::new("taskkill")
+                                .args(["/F", "/PID", &pid.to_string()])
+                                .creation_flags(CREATE_NO_WINDOW)
+                                .output();
+                        }
+                    }
+                }
+            }
+        }
+
+        log::info!("Sub-Store cleanup completed");
+    }
+
     /// 启动 Sub-Store 进程
     pub async fn start(&mut self, app_handle: AppHandle) -> Result<()> {
         let mut process_guard = self.process.lock().await;
@@ -214,6 +264,9 @@ impl SubStoreManager {
             log::info!("Sub-Store is already running");
             return Ok(());
         }
+
+        // 在启动新进程前，清理可能存在的孤儿进程（例如热重载后遗留的）
+        Self::cleanup_stale_processes();
 
         log::info!("Starting Sub-Store...");
 
