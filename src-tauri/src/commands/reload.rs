@@ -57,11 +57,11 @@ impl ReloadOptions {
         }
     }
 
-    /// 创建安全重载选项（多重试，带回滚）
+    /// 创建安全重载选项（带回滚）
     pub fn safe() -> Self {
         Self {
             max_retries: 3,
-            retry_interval_ms: 500,
+            retry_interval_ms: 300,
             rollback_on_failure: true,
             sync_status: true,
             wait_for_healthy: true,
@@ -131,46 +131,89 @@ impl Drop for ConfigBackup {
     }
 }
 
-/// 重载配置（带重试机制）
+/// 等待 API 就绪
 ///
-/// 这是配置重载的核心函数，提供：
-/// - 自动重试
-/// - 配置备份和回滚
-/// - 状态同步
+/// 在核心启动过程中，进程可能已存在但 API 尚未就绪。
+/// 此函数会等待 API 能够正常响应，避免后续操作失败。
+async fn wait_for_api_ready(timeout_secs: u64) -> Result<(), String> {
+    let state = get_app_state();
+    let max_attempts = timeout_secs * 2; // 每 500ms 检查一次
+
+    for attempt in 1..=max_attempts {
+        match state.mihomo_api.get_version().await {
+            Ok(_) => {
+                if attempt > 1 {
+                    log::info!("API ready after {} attempts", attempt);
+                }
+                return Ok(());
+            }
+            Err(e) => {
+                // 检查进程是否还在运行
+                if !state.mihomo_manager.is_running().await {
+                    return Err("代理核心已停止运行".to_string());
+                }
+
+                if attempt == max_attempts {
+                    return Err(format!("等待 API 就绪超时: {}", e));
+                }
+
+                log::debug!("Waiting for API ready (attempt {}): {}", attempt, e);
+                sleep(Duration::from_millis(500)).await;
+            }
+        }
+    }
+
+    Err("等待 API 就绪超时".to_string())
+}
+
+/// 重载配置
+///
+/// 这是配置重载的核心函数，流程：
+/// 1. 检查核心进程是否运行，未运行则跳过（配置已保存，下次启动会加载）
+/// 2. 等待 API 就绪（处理核心正在启动的情况）
+/// 3. 执行配置重载
+/// 4. 验证重载成功
 pub async fn reload_config(app: Option<&AppHandle>, options: &ReloadOptions) -> Result<(), String> {
     let state = get_app_state();
 
-    // 如果 mihomo 没有运行，直接返回
+    // 如果 mihomo 进程没有运行，直接返回成功
+    // 配置已保存，下次启动核心时会自动加载新配置
     if !state.mihomo_manager.is_running().await {
-        log::debug!("MiHomo is not running, skip reload");
+        log::debug!("MiHomo is not running, skip reload (config saved for next start)");
         return Ok(());
     }
+
+    // 等待 API 就绪（处理核心正在启动的情况）
+    // 这是关键：不要在 API 未就绪时盲目发送请求
+    log::debug!("Waiting for API to be ready before reload...");
+    wait_for_api_ready(10).await?;
 
     let config_path = state.config_manager.mihomo_config_path();
     let config_path_str = config_path.to_str().unwrap_or("");
 
+    // API 已就绪，执行配置重载（带少量重试处理瞬时错误）
     let mut last_error = String::new();
+    let reload_retries = options.max_retries.min(5); // 限制重载重试次数，因为 API 已就绪
 
-    for attempt in 1..=options.max_retries {
-        log::debug!("Config reload attempt {}/{}", attempt, options.max_retries);
+    for attempt in 1..=reload_retries {
+        log::debug!("Config reload attempt {}/{}", attempt, reload_retries);
 
         match state.mihomo_api.reload_configs(config_path_str, true).await {
             Ok(_) => {
-                log::info!("Config reloaded successfully on attempt {}", attempt);
+                log::info!("Config reloaded successfully");
 
-                // 等待健康检查
+                // 等待配置生效并验证
                 if options.wait_for_healthy {
-                    // 短暂等待让 mihomo 应用配置
                     sleep(Duration::from_millis(200)).await;
 
-                    // 检查 mihomo 是否仍在运行
+                    // 检查 mihomo 是否仍在运行（配置可能导致崩溃）
                     if !state.mihomo_manager.is_running().await {
                         log::warn!("MiHomo crashed after config reload");
                         return Err("配置重载后代理核心崩溃".to_string());
                     }
                 }
 
-                // 同步状态
+                // 同步状态到前端
                 if options.sync_status {
                     if let Some(app) = app {
                         sync_proxy_status(app).await;
@@ -187,23 +230,29 @@ pub async fn reload_config(app: Option<&AppHandle>, options: &ReloadOptions) -> 
                     last_error
                 );
 
-                // 如果 mihomo 已经停止运行，不需要再重试
+                // 如果是配置内容错误（核心已响应但拒绝配置），直接返回错误
+                if last_error.contains("Failed to reload configs:") {
+                    log::error!("Config rejected by core");
+                    return Err(format!(
+                        "配置错误: {}",
+                        last_error.replace("Failed to reload configs:", "").trim()
+                    ));
+                }
+
+                // 检查进程是否还在运行
                 if !state.mihomo_manager.is_running().await {
-                    log::error!("MiHomo stopped running during reload retries");
+                    log::error!("MiHomo stopped running during reload");
                     return Err(format!("代理核心停止运行: {}", last_error));
                 }
 
-                if attempt < options.max_retries {
+                if attempt < reload_retries {
                     sleep(Duration::from_millis(options.retry_interval_ms)).await;
                 }
             }
         }
     }
 
-    Err(format!(
-        "配置重载失败（已重试 {} 次）: {}",
-        options.max_retries, last_error
-    ))
+    Err(format!("配置重载失败: {}", last_error))
 }
 
 /// 应用配置变更（带备份和回滚）
