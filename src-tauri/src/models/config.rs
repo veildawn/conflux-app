@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// MiHomo 配置文件结构
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -264,10 +265,40 @@ pub struct DnsConfig {
     /// 缓存算法: lru, arc
     #[serde(rename = "cache-algorithm", skip_serializing_if = "Option::is_none")]
     pub cache_algorithm: Option<String>,
+
+    /// 域名策略：根据域名分流到不同 DNS 服务器
+    /// 例如: {"geosite:cn": ["223.5.5.5"], "geosite:gfw": ["https://dns.cloudflare.com/dns-query"]}
+    #[serde(
+        rename = "nameserver-policy",
+        default,
+        skip_serializing_if = "HashMap::is_empty"
+    )]
+    pub nameserver_policy: HashMap<String, Vec<String>>,
 }
 
 impl Default for DnsConfig {
     fn default() -> Self {
+        // 构建 nameserver-policy：根据域名类型分流到不同 DNS
+        let mut nameserver_policy = HashMap::new();
+        // 国内域名 → 国内 DNS（直连，避免污染）
+        nameserver_policy.insert(
+            "geosite:cn".to_string(),
+            vec!["223.5.5.5".to_string(), "119.29.29.29".to_string()],
+        );
+        // GFW 域名 → 海外 DNS（走代理）
+        nameserver_policy.insert(
+            "geosite:gfw".to_string(),
+            vec![
+                "https://dns.cloudflare.com/dns-query".to_string(),
+                "https://dns.google/dns-query".to_string(),
+            ],
+        );
+        // 私有域名 → 国内 DNS
+        nameserver_policy.insert(
+            "geosite:private".to_string(),
+            vec!["223.5.5.5".to_string(), "119.29.29.29".to_string()],
+        );
+
         Self {
             enable: true,
             listen: Some("0.0.0.0:1053".to_string()),
@@ -280,25 +311,24 @@ impl Default for DnsConfig {
                 "geosite:private".to_string(),
                 "geosite:cn".to_string(),
             ],
+            // 默认 DNS：用于解析其他 DNS 服务器的域名（必须是纯 IP）
             default_nameserver: vec!["223.5.5.5".to_string(), "119.29.29.29".to_string()],
+            // 代理服务器 DNS：用于解析代理节点域名（必须是纯 IP，避免循环依赖）
             proxy_server_nameserver: vec!["223.5.5.5".to_string(), "119.29.29.29".to_string()],
+            // 主 DNS：作为兜底，未匹配 nameserver-policy 的域名使用
             nameserver: vec![
                 "https://223.5.5.5/dns-query".to_string(),
                 "https://doh.pub/dns-query".to_string(),
             ],
-            fallback: vec!["https://8.8.8.8/dns-query".to_string()],
-            fallback_filter: Some(DnsFallbackFilter {
-                geoip: true,
-                geoip_code: Some("CN".to_string()),
-                geosite: vec!["gfw".to_string()],
-                ipcidr: vec!["240.0.0.0/4".to_string(), "0.0.0.0/32".to_string()],
-                domain: vec![],
-            }),
+            // fallback 清空：使用 nameserver-policy 后不再需要 fallback 机制
+            fallback: vec![],
+            fallback_filter: None,
             prefer_h3: false,
             use_hosts: true,
             use_system_hosts: true,
             respect_rules: true,
             cache_algorithm: Some("arc".to_string()),
+            nameserver_policy,
         }
     }
 }
