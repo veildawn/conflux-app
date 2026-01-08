@@ -7,60 +7,6 @@ import logger from '@/utils/logger';
 import type { DnsConfig, MihomoConfig } from '@/types/config';
 
 /**
- * 默认 DNS 配置
- */
-export const DEFAULT_DNS_CONFIG: DnsConfig = {
-  enable: true,
-  listen: '0.0.0.0:1053',
-  'enhanced-mode': 'fake-ip',
-  'fake-ip-range': '198.10.0.1/16',
-  'fake-ip-filter-mode': 'blacklist',
-  'fake-ip-filter': [
-    '*.lan',
-    '*.local',
-    '*.localhost',
-    '+.stun.*.*',
-    '+.stun.*.*.*',
-    'localhost.ptlogin2.qq.com',
-    'dns.msftncsi.com',
-    'www.msftncsi.com',
-    'www.msftconnecttest.com',
-  ],
-  'default-nameserver': ['223.5.5.5', '119.29.29.29'],
-  'proxy-server-nameserver': ['223.5.5.5', '119.29.29.29'],
-  nameserver: ['https://223.5.5.5/dns-query', 'https://doh.pub/dns-query'],
-  fallback: ['https://8.8.8.8/dns-query'],
-  'fallback-filter': {
-    geoip: true,
-    'geoip-code': 'CN',
-    geosite: ['gfw'],
-    ipcidr: ['240.0.0.0/4', '0.0.0.0/32'],
-  },
-  'prefer-h3': false,
-  'use-hosts': true,
-  'use-system-hosts': true,
-  'respect-rules': true,
-  'cache-algorithm': 'arc',
-};
-
-/**
- * 将配置与默认值合并，确保所有字段都有值
- * 用户配置优先，缺失的字段使用默认值
- */
-function mergeWithDefaults(config: MihomoConfig): MihomoConfig {
-  // 后端已经负责填充默认值，前端不再进行深度合并，只处理可选字段的空值保护
-  return {
-    ...config,
-    dns: config.dns || DEFAULT_DNS_CONFIG,
-  };
-}
-
-/**
- * @deprecated 使用 DEFAULT_DNS_CONFIG 代替
- */
-export const getDefaultDnsConfig = (): DnsConfig => ({ ...DEFAULT_DNS_CONFIG, enable: true });
-
-/**
  * 解析 DNS 列表字符串
  */
 export const parseDnsList = (value: string) =>
@@ -94,8 +40,8 @@ export function useSettingsData() {
   const loadConfig = useCallback(async () => {
     try {
       const mihomoConfig = await ipc.getConfig();
-      // 与默认值合并，确保所有字段都有值
-      setConfig(mergeWithDefaults(mihomoConfig));
+      // 后端已负责填充默认值，直接使用
+      setConfig(mihomoConfig);
       setLoading(false);
     } catch (error) {
       logger.error('Failed to load config:', error);

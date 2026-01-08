@@ -622,6 +622,32 @@ pub async fn set_tun_stack(app: AppHandle, stack: String) -> Result<(), String> 
     Ok(())
 }
 
+/// 设置 TUN 路由排除地址
+/// 用于排除内网网段，即使在全局模式下这些 IP 也不经过代理
+#[tauri::command]
+pub async fn set_tun_route_exclude(app: AppHandle, addresses: Vec<String>) -> Result<(), String> {
+    use crate::commands::reload::{apply_config_change, ReloadOptions};
+
+    apply_config_change(
+        Some(&app),
+        &ReloadOptions::safe(),
+        |config| {
+            if let Some(tun) = &mut config.tun {
+                tun.inet4_route_exclude_address = addresses.clone();
+            } else {
+                // If tun is None, create it (disabled by default)
+                let mut tun = crate::models::TunConfig::default();
+                tun.inet4_route_exclude_address = addresses.clone();
+                config.tun = Some(tun);
+            }
+            Ok(())
+        },
+    ).await?;
+
+    log::info!("TUN route exclude addresses set to: {:?}", addresses);
+    Ok(())
+}
+
 /// 手动设置 TUN 权限
 #[tauri::command]
 pub async fn setup_tun_permission() -> Result<(), String> {

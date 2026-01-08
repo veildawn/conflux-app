@@ -129,6 +129,14 @@ export const ipc = {
   },
 
   /**
+   * 设置 TUN 路由排除地址
+   * 用于排除内网网段，即使在全局模式下这些 IP 也不经过代理
+   */
+  async setTunRouteExclude(addresses: string[]): Promise<void> {
+    return invoke('set_tun_route_exclude', { addresses });
+  },
+
+  /**
    * 设置 LAN 访问开关
    */
   async setAllowLan(enabled: boolean): Promise<void> {

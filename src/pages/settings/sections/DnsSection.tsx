@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Server, LayoutGrid, RefreshCw, Trash2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -13,9 +14,19 @@ import {
 import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
 import { BentoCard, SettingItem, SectionHeader, CONTROL_BASE_CLASS } from '../components';
-import { parseDnsList, DEFAULT_DNS_CONFIG } from '../hooks/useSettingsData';
+import { parseDnsList } from '../hooks/useSettingsData';
 import type { DnsConfig, MihomoConfig } from '@/types/config';
 import type { ProxyStatus } from '@/types/proxy';
+
+/**
+ * 解析多行文本为数组（每行一个项目）
+ */
+function parseMultilineList(value: string): string[] {
+  return value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
 
 interface DnsSectionProps {
   config: MihomoConfig | null;
@@ -54,7 +65,8 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
     setDnsFallbackInput((dns.fallback || []).join(', '));
     setDnsDefaultNameserverInput((dns['default-nameserver'] || []).join(', '));
     setDnsProxyServerNameserverInput((dns['proxy-server-nameserver'] || []).join(', '));
-    setDnsFakeIpFilterInput((dns['fake-ip-filter'] || []).join(', '));
+    // fake-ip-filter 使用换行分隔（每行一个）
+    setDnsFakeIpFilterInput((dns['fake-ip-filter'] || []).join('\n'));
     setFakeIpRangeInput(dns['fake-ip-range'] || '');
   }, [dns]);
 
@@ -101,7 +113,7 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
   }, [dnsProxyServerNameserverInput, dns, onDnsConfigChange, toast]);
 
   const handleFakeIpFilterBlur = useCallback(() => {
-    const newValue = parseDnsList(dnsFakeIpFilterInput);
+    const newValue = parseMultilineList(dnsFakeIpFilterInput);
     if (!arraysEqual(newValue, dns?.['fake-ip-filter'] || [])) {
       onDnsConfigChange({ 'fake-ip-filter': newValue });
     }
@@ -176,16 +188,8 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
           const currentProxyServerDns = parseDnsList(dnsProxyServerNameserverInput);
 
           if (currentProxyServerDns.length === 0) {
-            const defaultProxyDns = DEFAULT_DNS_CONFIG['proxy-server-nameserver'] || [];
-
-            if (defaultProxyDns.length === 0) {
-              toast({
-                title: '无法开启',
-                description: '开启"遵循路由规则"前，请先填写 Proxy Server DNS',
-                variant: 'destructive',
-              });
-              return;
-            }
+            // 使用默认的 Proxy Server DNS（与后端 DnsConfig::default() 保持一致）
+            const defaultProxyDns = ['223.5.5.5', '119.29.29.29'];
 
             onDnsConfigChange({
               'respect-rules': checked,
@@ -300,13 +304,14 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
                           </SelectContent>
                         </Select>
                       </div>
-                      <Input
+                      <Textarea
                         value={dnsFakeIpFilterInput}
                         onChange={(e) => setDnsFakeIpFilterInput(e.target.value)}
                         onBlur={handleFakeIpFilterBlur}
-                        placeholder="域名列表，逗号分隔"
-                        className={cn('w-full font-mono text-xs', CONTROL_BASE_CLASS)}
+                        placeholder={'+.lan\n+.local\ngeosite:private\ngeosite:cn'}
+                        className={cn('w-full font-mono text-xs min-h-[80px]', CONTROL_BASE_CLASS)}
                       />
+                      <p className="text-xs text-gray-400">每行一个域名或 geosite 规则</p>
                     </div>
                     <div className="flex items-center justify-between pt-2">
                       <label className="text-sm font-medium text-gray-700 dark:text-gray-300">

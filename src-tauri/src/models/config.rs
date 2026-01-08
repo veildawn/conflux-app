@@ -109,7 +109,7 @@ pub struct DnsFallbackFilter {
 }
 
 /// DNS 配置
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsConfig {
     /// 是否启用 DNS
     #[serde(default)]
@@ -190,6 +190,43 @@ pub struct DnsConfig {
     pub cache_algorithm: Option<String>,
 }
 
+impl Default for DnsConfig {
+    fn default() -> Self {
+        Self {
+            enable: true,
+            listen: Some("0.0.0.0:1053".to_string()),
+            enhanced_mode: Some("fake-ip".to_string()),
+            fake_ip_range: Some("198.18.0.1/16".to_string()),
+            fake_ip_filter_mode: Some("blacklist".to_string()),
+            fake_ip_filter: vec![
+                "+.lan".to_string(),
+                "+.local".to_string(),
+                "geosite:private".to_string(),
+                "geosite:cn".to_string(),
+            ],
+            default_nameserver: vec!["223.5.5.5".to_string(), "119.29.29.29".to_string()],
+            proxy_server_nameserver: vec!["223.5.5.5".to_string(), "119.29.29.29".to_string()],
+            nameserver: vec![
+                "https://223.5.5.5/dns-query".to_string(),
+                "https://doh.pub/dns-query".to_string(),
+            ],
+            fallback: vec!["https://8.8.8.8/dns-query".to_string()],
+            fallback_filter: Some(DnsFallbackFilter {
+                geoip: true,
+                geoip_code: Some("CN".to_string()),
+                geosite: vec!["gfw".to_string()],
+                ipcidr: vec!["240.0.0.0/4".to_string(), "0.0.0.0/32".to_string()],
+                domain: vec![],
+            }),
+            prefer_h3: false,
+            use_hosts: true,
+            use_system_hosts: true,
+            respect_rules: true,
+            cache_algorithm: Some("arc".to_string()),
+        }
+    }
+}
+
 fn default_true() -> bool {
     true
 }
@@ -225,6 +262,16 @@ pub struct TunConfig {
     /// 例如: ["any:53", "tcp://any:53"]
     #[serde(rename = "dns-hijack", default, skip_serializing_if = "Vec::is_empty")]
     pub dns_hijack: Vec<String>,
+
+    /// IPv4 路由排除地址列表
+    /// 显式排除内网网段，即使在全局模式下这些 IP 也不经过代理
+    /// 默认值: ["192.168.0.0/16", "10.0.0.0/8", "172.16.0.0/12", "127.0.0.1/32"]
+    #[serde(
+        rename = "inet4-route-exclude-address",
+        default = "default_inet4_route_exclude_address",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub inet4_route_exclude_address: Vec<String>,
 }
 
 /// GeoX URL 配置
@@ -260,6 +307,16 @@ fn default_external_controller() -> String {
 }
 fn default_find_process_mode() -> String {
     "always".to_string()
+}
+
+/// 默认排除的内网网段
+fn default_inet4_route_exclude_address() -> Vec<String> {
+    vec![
+        "192.168.0.0/16".to_string(),
+        "10.0.0.0/8".to_string(),
+        "172.16.0.0/12".to_string(),
+        "127.0.0.1/32".to_string(),
+    ]
 }
 
 impl Default for MihomoConfig {
