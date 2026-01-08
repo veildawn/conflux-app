@@ -219,18 +219,12 @@ fn find_sidecar_binary(binary_name: &str) -> Result<Option<PathBuf>> {
     // 尝试多种可能的文件名：
     // 1. 简化名称 (Tauri 默认行为)
     // 2. 完整的 target triple 名称 (某些 Tauri 版本或配置)
-    
+
     #[cfg(target_os = "windows")]
-    let candidates = vec![
-        exe_dir.join("mihomo.exe"),
-        exe_dir.join(binary_name),
-    ];
+    let candidates = vec![exe_dir.join("mihomo.exe"), exe_dir.join(binary_name)];
 
     #[cfg(not(target_os = "windows"))]
-    let candidates = vec![
-        exe_dir.join("mihomo"),
-        exe_dir.join(binary_name),
-    ];
+    let candidates = vec![exe_dir.join("mihomo"), exe_dir.join(binary_name)];
 
     for sidecar_path in candidates {
         log::debug!("Checking sidecar path: {:?}", sidecar_path);
@@ -343,10 +337,7 @@ fn log_search_paths(binary_name: &str) -> Result<()> {
         .parent()
         .ok_or_else(|| anyhow::anyhow!("Cannot get executable directory"))?;
 
-    log::error!(
-        "MiHomo binary '{}' not found. Searched paths:",
-        binary_name
-    );
+    log::error!("MiHomo binary '{}' not found. Searched paths:", binary_name);
     log::error!("  - User data: {:?}", data_dir.join(binary_name));
     log::error!("  - Sidecar path: {:?}", exe_dir.join(binary_name));
 

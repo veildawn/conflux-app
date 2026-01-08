@@ -47,13 +47,13 @@ pub async fn install_service() -> Result<(), String> {
 }
 
 /// 卸载服务
-/// 
+///
 /// 卸载服务后，mihomo 会以普通模式运行
 #[cfg(target_os = "windows")]
 #[tauri::command]
 pub async fn uninstall_service(app: tauri::AppHandle) -> Result<(), String> {
-    use crate::system::WinServiceManager;
     use crate::commands::reload::sync_proxy_status;
+    use crate::system::WinServiceManager;
 
     // 检查是否已安装
     if !WinServiceManager::is_installed().map_err(|e| e.to_string())? {
@@ -61,19 +61,22 @@ pub async fn uninstall_service(app: tauri::AppHandle) -> Result<(), String> {
     }
 
     let state = get_app_state();
-    
+
     // 1. 检查 TUN 模式是否启用，如果启用需要先禁用
-    let config = state.config_manager.load_mihomo_config().map_err(|e| e.to_string())?;
+    let config = state
+        .config_manager
+        .load_mihomo_config()
+        .map_err(|e| e.to_string())?;
     let tun_enabled = config.tun.as_ref().map(|t| t.enable).unwrap_or(false);
 
     if tun_enabled {
         log::info!("TUN mode is enabled, disabling TUN before uninstalling service...");
-        
+
         if let Err(e) = state.config_manager.update_tun_mode(false) {
             log::error!("Failed to disable TUN mode: {}", e);
             return Err(format!("禁用 TUN 模式失败: {}", e));
         }
-        
+
         {
             let mut enhanced_mode = state.enhanced_mode.lock().await;
             *enhanced_mode = false;
@@ -96,7 +99,7 @@ pub async fn uninstall_service(app: tauri::AppHandle) -> Result<(), String> {
         let mut service_mode = state.mihomo_manager.service_mode_flag().lock().await;
         *service_mode = false;
     }
-    
+
     // 4. 清理可能的残留进程
     crate::mihomo::MihomoManager::cleanup_stale_processes();
 
@@ -130,13 +133,13 @@ pub async fn uninstall_service(_app: tauri::AppHandle) -> Result<(), String> {
 }
 
 /// 启动服务
-/// 
+///
 /// 启动服务后，mihomo 会通过服务模式运行（无论 TUN 是否启用）
 #[cfg(target_os = "windows")]
 #[tauri::command]
 pub async fn start_service(app: tauri::AppHandle) -> Result<(), String> {
-    use crate::system::WinServiceManager;
     use crate::commands::reload::sync_proxy_status;
+    use crate::system::WinServiceManager;
 
     let state = get_app_state();
 
@@ -155,7 +158,7 @@ pub async fn start_service(app: tauri::AppHandle) -> Result<(), String> {
     let mut ipc_ready = false;
     for i in 0..20 {
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-        
+
         // 检查服务 IPC 是否就绪
         if let Ok(status) = WinServiceManager::get_status().await {
             if status.running {
@@ -193,28 +196,31 @@ pub async fn start_service(_app: tauri::AppHandle) -> Result<(), String> {
 }
 
 /// 停止服务
-/// 
+///
 /// 停止服务后，mihomo 会以普通模式运行
 #[cfg(target_os = "windows")]
 #[tauri::command]
 pub async fn stop_service(app: tauri::AppHandle) -> Result<(), String> {
-    use crate::system::WinServiceManager;
     use crate::commands::reload::sync_proxy_status;
-    
+    use crate::system::WinServiceManager;
+
     let state = get_app_state();
-    
+
     // 1. 检查 TUN 模式是否启用，如果启用需要先禁用
-    let config = state.config_manager.load_mihomo_config().map_err(|e| e.to_string())?;
+    let config = state
+        .config_manager
+        .load_mihomo_config()
+        .map_err(|e| e.to_string())?;
     let tun_enabled = config.tun.as_ref().map(|t| t.enable).unwrap_or(false);
 
     if tun_enabled {
         log::info!("TUN mode is enabled, disabling TUN before stopping service...");
-        
+
         if let Err(e) = state.config_manager.update_tun_mode(false) {
             log::error!("Failed to disable TUN mode: {}", e);
             return Err(format!("禁用 TUN 模式失败: {}", e));
         }
-        
+
         {
             let mut enhanced_mode = state.enhanced_mode.lock().await;
             *enhanced_mode = false;
@@ -234,10 +240,10 @@ pub async fn stop_service(app: tauri::AppHandle) -> Result<(), String> {
         let mut service_mode = state.mihomo_manager.service_mode_flag().lock().await;
         *service_mode = false;
     }
-    
+
     // 5. 清理可能的残留进程
     crate::mihomo::MihomoManager::cleanup_stale_processes();
-    
+
     // 6. 以普通模式启动 mihomo
     log::info!("Starting mihomo in normal mode...");
     if let Err(e) = state.mihomo_manager.start().await {
@@ -296,5 +302,3 @@ pub struct ServiceStatusDummy {
     pub mihomo_running: bool,
     pub mihomo_pid: Option<u32>,
 }
-
-
