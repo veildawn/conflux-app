@@ -475,6 +475,7 @@ export default function RuleEditWindow() {
   const [rulePayload, setRulePayload] = useState('');
   const [rulePolicy, setRulePolicy] = useState('DIRECT');
   const [noResolve, setNoResolve] = useState(false);
+  const [portProtocol, setPortProtocol] = useState<'all' | 'tcp' | 'udp'>('all');
 
   // Search
   const [policyQuery, setPolicyQuery] = useState('');
@@ -497,13 +498,20 @@ export default function RuleEditWindow() {
             const index = parseInt(editIndex, 10);
             const rules = config.rules || [];
             if (index >= 0 && index < rules.length) {
-              const parsed = parseRule(rules[index]);
+              const ruleStr = rules[index];
+              const parsed = parseRule(ruleStr);
               if (parsed) {
                 setRuleType(parsed.type);
                 setRulePayload(parsed.payload);
                 setRulePolicy(parsed.policy);
+
+                // Set port protocol if present
+                if (parsed.network) {
+                  setPortProtocol(parsed.network);
+                }
+
                 // Check for no-resolve
-                if (rules[index].includes(',no-resolve')) {
+                if (ruleStr.includes(',no-resolve')) {
                   setNoResolve(true);
                 }
               }
@@ -664,6 +672,11 @@ export default function RuleEditWindow() {
         newRule += ',no-resolve';
       }
 
+      // Add network type for port rules (tcp/udp as last parameter)
+      if (['SRC-PORT', 'DST-PORT'].includes(ruleType) && portProtocol !== 'all') {
+        newRule += `,${portProtocol}`;
+      }
+
       let newRules: string[];
 
       if (isEditing && editIndex !== null) {
@@ -703,6 +716,7 @@ export default function RuleEditWindow() {
     rulePayload,
     rulePolicy,
     noResolve,
+    portProtocol,
     isEditing,
     editIndex,
     rules,
@@ -769,6 +783,7 @@ export default function RuleEditWindow() {
   };
 
   const showNoResolve = ['IP-CIDR', 'IP-CIDR6', 'GEOIP'].includes(ruleType);
+  const showPortProtocol = ['SRC-PORT', 'DST-PORT'].includes(ruleType);
 
   const currentMeta = STEP_METADATA[currentStep as keyof typeof STEP_METADATA];
 
@@ -895,6 +910,7 @@ export default function RuleEditWindow() {
                           setRuleType(v as RuleType);
                           setRulePayload('');
                           setPayloadQuery('');
+                          setPortProtocol('all');
                         }}
                       >
                         <SelectTrigger className="h-12 rounded-xl bg-white/70 border border-white/70 text-sm font-medium">
@@ -1059,6 +1075,35 @@ export default function RuleEditWindow() {
                               ))}
                             </SelectContent>
                           </Select>
+                        ) : showPortProtocol ? (
+                          /* 端口类型使用输入框 + 协议选择器 */
+                          <div className="flex gap-3">
+                            <Input
+                              value={rulePayload}
+                              onChange={(e) => setRulePayload(e.target.value)}
+                              onBlur={() => markTouched('payload')}
+                              placeholder={getPayloadPlaceholder(ruleType)}
+                              className={cn(
+                                'h-12 rounded-xl bg-white/70 border border-white/70 text-sm font-mono flex-1',
+                                touched.payload &&
+                                  errors.payload &&
+                                  'border-red-400/60 focus-visible:ring-red-400/30'
+                              )}
+                            />
+                            <Select
+                              value={portProtocol}
+                              onValueChange={(v) => setPortProtocol(v as 'all' | 'tcp' | 'udp')}
+                            >
+                              <SelectTrigger className="h-12 w-32 rounded-xl bg-white/70 border border-white/70 text-sm font-medium">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent position="popper" sideOffset={4}>
+                                <SelectItem value="all">全部协议</SelectItem>
+                                <SelectItem value="tcp">TCP</SelectItem>
+                                <SelectItem value="udp">UDP</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         ) : (
                           /* 其他类型使用输入框 */
                           <Input

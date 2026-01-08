@@ -539,13 +539,19 @@ export default function Rules() {
                     // 显示的序号 = (当前页-1) * 每页数量 + 页内索引 + 1
                     const displayIndex = (currentPage - 1) * PAGE_SIZE + pageIndex + 1;
 
+                    // 对于端口规则，在 payload 后面显示协议类型
+                    let displayPayload = parsed.payload;
+                    if (['SRC-PORT', 'DST-PORT'].includes(parsed.type) && parsed.network) {
+                      displayPayload = `${parsed.payload}/${parsed.network.toUpperCase()}`;
+                    }
+
                     return (
                       <SortableRuleRow
                         key={`${item.originalIndex}-${item.rule}`}
                         id={item.rule}
                         index={displayIndex}
                         type={parsed.type}
-                        payload={parsed.payload}
+                        payload={displayPayload}
                         policy={parsed.policy}
                         onEdit={() => openRuleWindow(item.originalIndex)}
                         onDelete={() => handleDeleteClick(item.originalIndex)}
