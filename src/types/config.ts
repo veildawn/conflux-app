@@ -55,6 +55,8 @@ export interface DnsConfig {
   'respect-rules'?: boolean;
   /** 缓存算法: lru, arc */
   'cache-algorithm'?: 'lru' | 'arc';
+  /** 域名策略：根据域名分流到不同 DNS 服务器 */
+  'nameserver-policy'?: Record<string, string[]>;
 }
 
 /**
@@ -233,7 +235,7 @@ export type PolicyType = 'DIRECT' | 'REJECT' | 'PROXY' | string;
  */
 export function parseRule(
   ruleStr: string
-): { type: RuleType; payload: string; policy: string } | null {
+): { type: RuleType; payload: string; policy: string; network?: 'tcp' | 'udp' } | null {
   const parts = ruleStr.split(',');
   if (parts.length < 2) return null;
 
@@ -245,7 +247,22 @@ export function parseRule(
   }
 
   if (parts.length < 3) return null;
-  return { type, payload: parts[1], policy: parts[2] };
+
+  const result: { type: RuleType; payload: string; policy: string; network?: 'tcp' | 'udp' } = {
+    type,
+    payload: parts[1],
+    policy: parts[2],
+  };
+
+  // 对于端口规则，检查是否有网络类型参数 (tcp/udp)
+  if (['SRC-PORT', 'DST-PORT'].includes(type) && parts[3]) {
+    const network = parts[3].toLowerCase();
+    if (network === 'tcp' || network === 'udp') {
+      result.network = network;
+    }
+  }
+
+  return result;
 }
 
 /**
