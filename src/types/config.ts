@@ -77,6 +77,29 @@ export interface TunConfig {
 /**
  * MiHomo 配置
  */
+/**
+ * Sniffer 协议配置
+ */
+export interface SniffProtocolConfig {
+  ports: string[];
+  'override-destination'?: boolean;
+}
+
+/**
+ * Sniffer 配置（域名嗅探）
+ */
+export interface SnifferConfig {
+  enable: boolean;
+  'override-destination'?: boolean;
+  'parse-pure-ip'?: boolean;
+  sniff?: {
+    TLS?: SniffProtocolConfig;
+    HTTP?: SniffProtocolConfig;
+  };
+  'force-domain'?: string[];
+  'skip-domain'?: string[];
+}
+
 export interface MihomoConfig {
   port: number;
   'socks-port': number;
@@ -84,6 +107,8 @@ export interface MihomoConfig {
   'allow-lan': boolean;
   ipv6?: boolean;
   'tcp-concurrent'?: boolean;
+  /** 域名嗅探配置（mihomo 使用 sniffer 配置块） */
+  sniffer?: SnifferConfig;
   mode: string;
   'log-level': string;
   'external-controller': string;

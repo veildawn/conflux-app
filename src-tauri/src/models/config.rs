@@ -82,11 +82,87 @@ pub struct MihomoConfig {
     #[serde(rename = "tcp-concurrent", default)]
     pub tcp_concurrent: bool,
 
+    /// 域名嗅探配置（mihomo 使用 sniffer 配置块）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sniffer: Option<SnifferConfig>,
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tun: Option<TunConfig>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dns: Option<DnsConfig>,
+}
+
+/// Sniffer 配置（域名嗅探）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnifferConfig {
+    /// 是否启用域名嗅探
+    #[serde(default)]
+    pub enable: bool,
+
+    /// 覆盖目标地址（使用嗅探到的域名替代 IP）
+    #[serde(rename = "override-destination", default = "default_true")]
+    pub override_destination: bool,
+
+    /// 强制嗅探纯 IP 连接
+    #[serde(rename = "parse-pure-ip", default)]
+    pub parse_pure_ip: bool,
+
+    /// 要嗅探的协议和端口配置
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sniff: Option<SniffProtocols>,
+
+    /// 强制嗅探的域名（支持通配符）
+    #[serde(rename = "force-domain", default, skip_serializing_if = "Vec::is_empty")]
+    pub force_domain: Vec<String>,
+
+    /// 跳过嗅探的域名（支持通配符）
+    #[serde(rename = "skip-domain", default, skip_serializing_if = "Vec::is_empty")]
+    pub skip_domain: Vec<String>,
+}
+
+/// 嗅探协议配置
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SniffProtocols {
+    #[serde(rename = "TLS", skip_serializing_if = "Option::is_none")]
+    pub tls: Option<SniffProtocolConfig>,
+
+    #[serde(rename = "HTTP", skip_serializing_if = "Option::is_none")]
+    pub http: Option<SniffProtocolConfig>,
+}
+
+/// 单个协议的嗅探配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SniffProtocolConfig {
+    /// 要嗅探的端口列表
+    #[serde(default)]
+    pub ports: Vec<String>,
+
+    /// 是否覆盖目标地址
+    #[serde(rename = "override-destination", default = "default_true")]
+    pub override_destination: bool,
+}
+
+impl Default for SnifferConfig {
+    fn default() -> Self {
+        Self {
+            enable: true,
+            override_destination: true,
+            parse_pure_ip: true,
+            sniff: Some(SniffProtocols {
+                tls: Some(SniffProtocolConfig {
+                    ports: vec!["443".to_string(), "8443".to_string()],
+                    override_destination: true,
+                }),
+                http: Some(SniffProtocolConfig {
+                    ports: vec!["80".to_string(), "8080-8880".to_string()],
+                    override_destination: true,
+                }),
+            }),
+            force_domain: vec![],
+            skip_domain: vec![],
+        }
+    }
 }
 
 /// DNS Fallback 过滤器配置
@@ -182,7 +258,7 @@ pub struct DnsConfig {
     pub use_system_hosts: bool,
 
     /// DNS 连接是否遵循路由规则
-    #[serde(rename = "respect-rules", default)]
+    #[serde(rename = "respect-rules", default = "default_true")]
     pub respect_rules: bool,
 
     /// 缓存算法: lru, arc
@@ -236,7 +312,7 @@ fn default_proxy_server_nameserver() -> Vec<String> {
 }
 
 /// TUN 配置
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TunConfig {
     #[serde(default)]
     pub enable: bool,
@@ -272,6 +348,20 @@ pub struct TunConfig {
         skip_serializing_if = "Vec::is_empty"
     )]
     pub inet4_route_exclude_address: Vec<String>,
+}
+
+impl Default for TunConfig {
+    fn default() -> Self {
+        Self {
+            enable: false,
+            stack: None,
+            auto_route: None,
+            auto_detect_interface: None,
+            strict_route: Some(false),
+            dns_hijack: vec![],
+            inet4_route_exclude_address: default_inet4_route_exclude_address(),
+        }
+    }
 }
 
 /// GeoX URL 配置
@@ -348,6 +438,7 @@ impl Default for MihomoConfig {
             rules: vec!["GEOIP,CN,DIRECT".to_string(), "MATCH,PROXY".to_string()],
             ipv6: false,
             tcp_concurrent: false,
+            sniffer: Some(SnifferConfig::default()),
             tun: None,
             dns: None,
         }

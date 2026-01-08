@@ -601,6 +601,7 @@ fn main() {
             // TUN 模式命令
             commands::proxy::set_tun_mode,
             commands::proxy::set_tun_stack,
+            commands::proxy::set_strict_route,
             commands::proxy::set_tun_route_exclude,
             commands::proxy::check_tun_permission,
             commands::proxy::setup_tun_permission,
@@ -615,6 +616,7 @@ fn main() {
             commands::proxy::set_ports,
             commands::proxy::set_ipv6,
             commands::proxy::set_tcp_concurrent,
+            commands::proxy::set_sniffing,
             commands::proxy::set_mixed_port,
             commands::proxy::set_find_process_mode,
             commands::proxy::get_app_version,
