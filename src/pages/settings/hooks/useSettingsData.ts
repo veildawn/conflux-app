@@ -10,7 +10,7 @@ import type { DnsConfig, MihomoConfig } from '@/types/config';
  * 默认 DNS 配置
  */
 export const DEFAULT_DNS_CONFIG: DnsConfig = {
-  enable: false,
+  enable: true,
   listen: '0.0.0.0:1053',
   'enhanced-mode': 'fake-ip',
   'fake-ip-range': '198.10.0.1/16',
@@ -29,7 +29,7 @@ export const DEFAULT_DNS_CONFIG: DnsConfig = {
   'default-nameserver': ['223.5.5.5', '119.29.29.29'],
   'proxy-server-nameserver': ['223.5.5.5', '119.29.29.29'],
   nameserver: ['https://223.5.5.5/dns-query', 'https://doh.pub/dns-query'],
-  fallback: ['https://8.8.8.8'],
+  fallback: ['https://8.8.8.8/dns-query'],
   'fallback-filter': {
     geoip: true,
     'geoip-code': 'CN',
