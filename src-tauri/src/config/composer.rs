@@ -112,39 +112,19 @@ impl Composer {
         let manual_group_name = "🚀 节点选择";
         let auto_group_name = "⚡ 自动选择";
 
-        let mut auto_proxies = Vec::new();
-        let mut auto_seen = std::collections::HashSet::new();
-        for proxy in &proxies {
-            if auto_seen.insert(proxy.name.clone()) {
-                auto_proxies.push(proxy.name.clone());
-            }
-        }
-
-        let mut manual_proxies = Vec::new();
-        let mut manual_seen = std::collections::HashSet::new();
-        for name in [auto_group_name, "DIRECT"] {
-            let name = name.to_string();
-            if manual_seen.insert(name.clone()) {
-                manual_proxies.push(name);
-            }
-        }
-        for proxy in &proxies {
-            if manual_seen.insert(proxy.name.clone()) {
-                manual_proxies.push(proxy.name.clone());
-            }
-        }
-
         let proxy_groups = vec![
             ProxyGroupConfig {
                 name: manual_group_name.to_string(),
                 group_type: "select".to_string(),
-                proxies: manual_proxies,
+                proxies: vec![auto_group_name.to_string(), "DIRECT".to_string()],
+                include_all: Some(true),
                 ..Default::default()
             },
             ProxyGroupConfig {
                 name: auto_group_name.to_string(),
                 group_type: "url-test".to_string(),
-                proxies: auto_proxies,
+                proxies: vec![],
+                include_all: Some(true),
                 url: Some("http://www.gstatic.com/generate_204".to_string()),
                 interval: Some(300),
                 ..Default::default()
@@ -541,7 +521,8 @@ rules:
         let config = Composer::build_nodes_only_template(proxies);
         assert_eq!(config.proxy_groups.len(), 2);
         assert_eq!(config.proxy_groups[0].name, "🚀 节点选择");
-        assert!(config.proxy_groups[0]
+        assert_eq!(config.proxy_groups[0].include_all, Some(true));
+        assert!(!config.proxy_groups[0]
             .proxies
             .contains(&"node-1".to_string()));
         assert_eq!(config.rules.last().unwrap(), "MATCH,🚀 节点选择");
