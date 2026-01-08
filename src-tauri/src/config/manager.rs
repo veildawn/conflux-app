@@ -246,6 +246,15 @@ impl ConfigManager {
                     "tcp://any:53".to_string(),
                 ];
             }
+            
+            // TUN + fake-ip 模式下必须启用 sniffer（域名嗅探）
+            // 否则无法从 fake-ip 流量中提取真实域名
+            let mut sniffer = config.sniffer.unwrap_or_default();
+            if !sniffer.enable {
+                sniffer.enable = true;
+                log::info!("Enabled sniffer for TUN mode");
+            }
+            config.sniffer = Some(sniffer);
         } else {
             // 当禁用 TUN 模式时，清空 dns-hijack 列表
             // 防止某些版本的核心在禁用 TUN 时仍然尝试劫持 DNS

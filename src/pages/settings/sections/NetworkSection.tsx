@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from 'react';
 import { Network, Globe, Zap, LayoutGrid, Layers, Shield } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,14 @@ const DEFAULT_INET4_ROUTE_EXCLUDE_ADDRESS = [
   '172.16.0.0/12',
   '127.0.0.1/32',
 ];
+
+/**
+ * 比较两个字符串数组是否相等
+ */
+function arraysEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((val, i) => val === b[i]);
+}
 
 interface NetworkSectionProps {
   config: MihomoConfig | null;
@@ -52,6 +61,23 @@ export function NetworkSection({
   onTcpConcurrentToggle,
   toast,
 }: NetworkSectionProps) {
+  // 路由排除地址的本地输入状态
+  // 使用函数初始化，避免在 useEffect 中调用 setState
+  const [routeExcludeInput, setRouteExcludeInput] = useState(() => {
+    const addresses =
+      config?.tun?.['inet4-route-exclude-address'] ?? DEFAULT_INET4_ROUTE_EXCLUDE_ADDRESS;
+    return addresses.join('\n');
+  });
+
+  // 当 config.tun 变化时，同步到本地状态（仅在外部配置变化时更新）
+  const tunConfigKey = JSON.stringify(config?.tun?.['inet4-route-exclude-address']);
+  useEffect(() => {
+    const addresses =
+      config?.tun?.['inet4-route-exclude-address'] ?? DEFAULT_INET4_ROUTE_EXCLUDE_ADDRESS;
+    setRouteExcludeInput(addresses.join('\n'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tunConfigKey]);
+
   const handleMixedPortChange = async (value: string) => {
     const port = value === '' ? undefined : Number.parseInt(value, 10);
     try {
@@ -119,13 +145,9 @@ export function NetworkSection({
     }
   };
 
-  const handleRouteExcludeChange = async (value: string) => {
-    const addresses = value
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean);
+  const handleStrictRouteChange = async (checked: boolean) => {
     try {
-      await ipc.setTunRouteExclude(addresses);
+      await ipc.setStrictRoute(checked);
       setConfig((prev) => {
         if (!prev) return prev;
         const currentTun = prev.tun || {
@@ -137,18 +159,51 @@ export function NetworkSection({
         };
         return {
           ...prev,
-          tun: { ...currentTun, 'inet4-route-exclude-address': addresses },
+          tun: { ...currentTun, 'strict-route': checked },
+        };
+      });
+      toast({ title: checked ? '严格路由已启用' : '严格路由已禁用' });
+    } catch (error) {
+      toast({ title: '设置失败', description: String(error), variant: 'destructive' });
+    }
+  };
+
+  // 在失去焦点时保存路由排除地址
+  const handleRouteExcludeBlur = useCallback(async () => {
+    const newAddresses = routeExcludeInput
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const currentAddresses =
+      config?.tun?.['inet4-route-exclude-address'] ?? DEFAULT_INET4_ROUTE_EXCLUDE_ADDRESS;
+
+    // 只在值改变时才更新
+    if (arraysEqual(newAddresses, currentAddresses)) {
+      return;
+    }
+
+    try {
+      await ipc.setTunRouteExclude(newAddresses);
+      setConfig((prev) => {
+        if (!prev) return prev;
+        const currentTun = prev.tun || {
+          enable: false,
+          stack: 'system',
+          'auto-route': true,
+          'auto-detect-interface': true,
+          'dns-hijack': ['any:53'],
+        };
+        return {
+          ...prev,
+          tun: { ...currentTun, 'inet4-route-exclude-address': newAddresses },
         };
       });
       toast({ title: '路由排除地址已更新' });
     } catch (error) {
       toast({ title: '设置失败', description: String(error), variant: 'destructive' });
     }
-  };
-
-  // 获取当前的路由排除地址，如果未设置则使用默认值
-  const currentRouteExclude =
-    config?.tun?.['inet4-route-exclude-address'] ?? DEFAULT_INET4_ROUTE_EXCLUDE_ADDRESS;
+  }, [routeExcludeInput, config?.tun, setConfig, toast]);
 
   return (
     <div>
@@ -238,6 +293,15 @@ export function NetworkSection({
                 </SelectContent>
               </Select>
             </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600 dark:text-gray-300">严格路由</span>
+              <Switch
+                checked={!!config?.tun?.['strict-route']}
+                onCheckedChange={handleStrictRouteChange}
+                disabled={!config?.tun?.enable}
+                className="scale-90"
+              />
+            </div>
           </div>
         </BentoCard>
 
@@ -253,8 +317,9 @@ export function NetworkSection({
               排除内网网段，即使在全局模式下这些 IP 也不经过代理（每行一个 CIDR）
             </p>
             <Textarea
-              value={currentRouteExclude.join('\n')}
-              onChange={(e) => handleRouteExcludeChange(e.target.value)}
+              value={routeExcludeInput}
+              onChange={(e) => setRouteExcludeInput(e.target.value)}
+              onBlur={handleRouteExcludeBlur}
               placeholder="192.168.0.0/16&#10;10.0.0.0/8&#10;172.16.0.0/12&#10;127.0.0.1/32"
               className={cn('min-h-[100px] font-mono text-xs', CONTROL_BASE_CLASS)}
               disabled={!config?.tun?.enable}

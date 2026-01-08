@@ -129,6 +129,13 @@ export const ipc = {
   },
 
   /**
+   * 设置 TUN 严格路由开关
+   */
+  async setStrictRoute(enabled: boolean): Promise<void> {
+    return invoke('set_strict_route', { enabled });
+  },
+
+  /**
    * 设置 TUN 路由排除地址
    * 用于排除内网网段，即使在全局模式下这些 IP 也不经过代理
    */
@@ -162,6 +169,13 @@ export const ipc = {
    */
   async setTcpConcurrent(enabled: boolean): Promise<void> {
     return invoke('set_tcp_concurrent', { enabled });
+  },
+
+  /**
+   * 设置域名嗅探开关
+   */
+  async setSniffing(enabled: boolean): Promise<void> {
+    return invoke('set_sniffing', { enabled });
   },
 
   /**

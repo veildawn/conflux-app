@@ -212,6 +212,31 @@ pub async fn set_tcp_concurrent(app: AppHandle, enabled: bool) -> Result<(), Str
     ).await
 }
 
+/// 设置域名嗅探开关
+#[tauri::command]
+pub async fn set_sniffing(app: AppHandle, enabled: bool) -> Result<(), String> {
+    use crate::commands::reload::{apply_config_change, ReloadOptions};
+
+    apply_config_change(
+        Some(&app),
+        &ReloadOptions::default(),
+        |config| {
+            if enabled {
+                // 启用 sniffer，使用默认配置
+                let mut sniffer = config.sniffer.clone().unwrap_or_default();
+                sniffer.enable = true;
+                config.sniffer = Some(sniffer);
+            } else {
+                // 禁用 sniffer
+                if let Some(ref mut sniffer) = config.sniffer {
+                    sniffer.enable = false;
+                }
+            }
+            Ok(())
+        },
+    ).await
+}
+
 /// 切换代理模式
 #[tauri::command]
 pub async fn switch_mode(app: AppHandle, mode: String) -> Result<(), String> {
@@ -623,6 +648,27 @@ pub async fn set_tun_stack(app: AppHandle, stack: String) -> Result<(), String> 
 }
 
 /// 设置 TUN 路由排除地址
+/// 设置 TUN 严格路由开关
+#[tauri::command]
+pub async fn set_strict_route(app: AppHandle, enabled: bool) -> Result<(), String> {
+    use crate::commands::reload::{apply_config_change, ReloadOptions};
+
+    apply_config_change(
+        Some(&app),
+        &ReloadOptions::safe(),
+        |config| {
+            if let Some(tun) = &mut config.tun {
+                tun.strict_route = Some(enabled);
+            } else {
+                let mut tun = crate::models::TunConfig::default();
+                tun.strict_route = Some(enabled);
+                config.tun = Some(tun);
+            }
+            Ok(())
+        },
+    ).await
+}
+
 /// 用于排除内网网段，即使在全局模式下这些 IP 也不经过代理
 #[tauri::command]
 pub async fn set_tun_route_exclude(app: AppHandle, addresses: Vec<String>) -> Result<(), String> {
