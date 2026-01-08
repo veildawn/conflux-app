@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::models::{AppSettings, MihomoConfig};
+use crate::models::{AppSettings, DnsConfig, MihomoConfig};
 use crate::utils::{get_app_settings_path, get_mihomo_config_path};
 
 /// 配置管理器
@@ -37,6 +37,17 @@ impl ConfigManager {
         let content = fs::read_to_string(&self.mihomo_config_path)?;
         let mut config: MihomoConfig = serde_yaml::from_str(&content)?;
         let mut changed = false;
+
+        // 确保 DNS 配置的默认值被正确填充
+        if let Some(dns) = &mut config.dns {
+            let default_dns = DnsConfig::default();
+            // 如果 nameserver-policy 为空，使用默认值
+            if dns.nameserver_policy.is_empty() && !default_dns.nameserver_policy.is_empty() {
+                dns.nameserver_policy = default_dns.nameserver_policy;
+                log::info!("Applied default nameserver-policy to existing config");
+                changed = true;
+            }
+        }
 
         // 自动修正规则提供者行为
         if !config.rule_providers.is_empty() {

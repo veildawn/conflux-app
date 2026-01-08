@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Server, LayoutGrid, RefreshCw, Trash2 } from 'lucide-react';
+import { Server, LayoutGrid, RefreshCw, Trash2, Plus, Route } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,6 +17,40 @@ import { BentoCard, SettingItem, SectionHeader, CONTROL_BASE_CLASS } from '../co
 import { parseDnsList } from '../hooks/useSettingsData';
 import type { DnsConfig, MihomoConfig } from '@/types/config';
 import type { ProxyStatus } from '@/types/proxy';
+
+/**
+ * Nameserver Policy 条目
+ */
+interface NameserverPolicyEntry {
+  id: string;
+  domain: string;
+  servers: string;
+}
+
+/**
+ * 将 Record 转换为数组形式，方便编辑
+ */
+function policyToEntries(policy: Record<string, string[]> | undefined): NameserverPolicyEntry[] {
+  if (!policy) return [];
+  return Object.entries(policy).map(([domain, servers]) => ({
+    id: crypto.randomUUID(),
+    domain,
+    servers: servers.join(', '),
+  }));
+}
+
+/**
+ * 将数组形式转换回 Record
+ */
+function entriesToPolicy(entries: NameserverPolicyEntry[]): Record<string, string[]> {
+  const policy: Record<string, string[]> = {};
+  for (const entry of entries) {
+    if (entry.domain.trim()) {
+      policy[entry.domain.trim()] = parseDnsList(entry.servers);
+    }
+  }
+  return policy;
+}
 
 /**
  * 解析多行文本为数组（每行一个项目）
@@ -52,6 +86,8 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
   const [dnsFakeIpFilterInput, setDnsFakeIpFilterInput] = useState('');
   const [fakeIpRangeInput, setFakeIpRangeInput] = useState('');
   const [flushingFakeip, setFlushingFakeip] = useState(false);
+  // Nameserver Policy 状态
+  const [policyEntries, setPolicyEntries] = useState<NameserverPolicyEntry[]>([]);
 
   // config.dns 已经与默认值合并，所有字段都有值
   const dns = config?.dns;
@@ -68,6 +104,8 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
     // fake-ip-filter 使用换行分隔（每行一个）
     setDnsFakeIpFilterInput((dns['fake-ip-filter'] || []).join('\n'));
     setFakeIpRangeInput(dns['fake-ip-range'] || '');
+    // 同步 nameserver-policy
+    setPolicyEntries(policyToEntries(dns['nameserver-policy']));
   }, [dns]);
 
   // 保存输入框值：只在值改变时保存
@@ -228,6 +266,31 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
     }
   };
 
+  // Nameserver Policy 操作函数
+  const handleAddPolicyEntry = useCallback(() => {
+    setPolicyEntries((prev) => [...prev, { id: crypto.randomUUID(), domain: '', servers: '' }]);
+  }, []);
+
+  const handleRemovePolicyEntry = useCallback(
+    (id: string) => {
+      const newEntries = policyEntries.filter((e) => e.id !== id);
+      setPolicyEntries(newEntries);
+      onDnsConfigChange({ 'nameserver-policy': entriesToPolicy(newEntries) });
+    },
+    [policyEntries, onDnsConfigChange]
+  );
+
+  const handlePolicyEntryChange = useCallback(
+    (id: string, field: 'domain' | 'servers', value: string) => {
+      setPolicyEntries((prev) => prev.map((e) => (e.id === id ? { ...e, [field]: value } : e)));
+    },
+    []
+  );
+
+  const handlePolicyEntryBlur = useCallback(() => {
+    onDnsConfigChange({ 'nameserver-policy': entriesToPolicy(policyEntries) });
+  }, [policyEntries, onDnsConfigChange]);
+
   return (
     <div>
       <SectionHeader title="DNS" />
@@ -382,6 +445,61 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
                     className={cn('font-mono', CONTROL_BASE_CLASS)}
                   />
                 </div>
+              </div>
+            </BentoCard>
+
+            <BentoCard
+              title="域名策略"
+              icon={Route}
+              iconColor="text-green-500"
+              className="md:col-span-2"
+            >
+              <div className="p-4 pt-0 space-y-3">
+                <p className="text-xs text-gray-400">
+                  根据域名类型分流到不同 DNS 服务器，避免 DNS 污染和循环依赖
+                </p>
+                <div className="space-y-2">
+                  {policyEntries.map((entry) => (
+                    <div key={entry.id} className="flex items-center gap-2">
+                      <Input
+                        value={entry.domain}
+                        onChange={(e) =>
+                          handlePolicyEntryChange(entry.id, 'domain', e.target.value)
+                        }
+                        onBlur={handlePolicyEntryBlur}
+                        placeholder="geosite:cn"
+                        className={cn('w-36 font-mono text-xs', CONTROL_BASE_CLASS)}
+                      />
+                      <span className="text-gray-400 text-xs">→</span>
+                      <Input
+                        value={entry.servers}
+                        onChange={(e) =>
+                          handlePolicyEntryChange(entry.id, 'servers', e.target.value)
+                        }
+                        onBlur={handlePolicyEntryBlur}
+                        placeholder="223.5.5.5, 119.29.29.29"
+                        className={cn('flex-1 font-mono text-xs', CONTROL_BASE_CLASS)}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemovePolicyEntry(entry.id)}
+                        className="h-8 w-8 p-0 text-gray-400 hover:text-red-500"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddPolicyEntry}
+                  className="h-7 text-xs"
+                >
+                  <Plus className="w-3 h-3 mr-1" />
+                  添加规则
+                </Button>
               </div>
             </BentoCard>
 
