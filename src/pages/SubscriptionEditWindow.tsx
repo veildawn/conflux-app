@@ -13,7 +13,6 @@ import {
   ChevronRight,
   ChevronLeft,
   Save,
-  Search,
   LayoutGrid,
   AlertCircle,
 } from 'lucide-react';
@@ -21,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/hooks/useToast';
 import { cn } from '@/utils/cn';
 import ipc from '@/services/ipc';
@@ -81,7 +81,6 @@ export default function SubscriptionEditWindow() {
     running: boolean;
     api_url: string;
   } | null>(null);
-  const [subStoreSearch, setSubStoreSearch] = useState('');
 
   // Initialization
   useEffect(() => {
@@ -143,7 +142,7 @@ export default function SubscriptionEditWindow() {
 
   useEffect(() => {
     if (urlSource === 'substore' && selectedSub && substoreStatus) {
-      const generatedUrl = `${substoreStatus.api_url}/download/${encodeURIComponent(selectedSub)}?target=ClashMeta`;
+      const generatedUrl = `${substoreStatus.api_url}/api/download/${encodeURIComponent(selectedSub)}?target=ClashMeta`;
       setUrl(generatedUrl);
     }
   }, [selectedSub, urlSource, substoreStatus]);
@@ -182,7 +181,23 @@ export default function SubscriptionEditWindow() {
               : '新空白配置');
 
         if (activeTab === 'remote') {
-          profile = await ipc.createRemoteProfile(profileName, url);
+          // Sub-Store 模式下直接生成 URL，避免状态更新延迟问题
+          let finalUrl = url;
+          if (urlSource === 'substore') {
+            if (!selectedSub) {
+              throw new Error('请选择一个 Sub-Store 订阅');
+            }
+            // 如果 URL 为空（可能是状态同步问题），尝试重新生成
+            if (!finalUrl && substoreStatus?.api_url) {
+              finalUrl = `${substoreStatus.api_url}/api/download/${encodeURIComponent(selectedSub)}?target=ClashMeta`;
+            }
+          }
+
+          if (!finalUrl) {
+            throw new Error('订阅链接不能为空');
+          }
+
+          profile = await ipc.createRemoteProfile(profileName, finalUrl);
         } else if (activeTab === 'local') {
           profile = await ipc.createLocalProfile(profileName, filePath);
         } else {
@@ -204,7 +219,11 @@ export default function SubscriptionEditWindow() {
   const handleMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
     const target = event.target as HTMLElement | null;
-    if (!target || target.closest(dragIgnoreSelector)) return;
+    if (!target) return;
+    // 检查是否点击了可交互元素或其子元素
+    if (target.closest(dragIgnoreSelector)) return;
+    // 额外检查：确保不是点击在 SVG 图标上（可能是按钮内的图标）
+    if (target.tagName === 'svg' || target.tagName === 'path' || target.closest('svg')) return;
     void getCurrentWindow().startDragging().catch(console.warn);
   };
 
@@ -214,18 +233,14 @@ export default function SubscriptionEditWindow() {
 
   const canSave = useMemo(() => {
     if (editId) return !!name;
-    if (activeTab === 'remote') return !!url;
+    // 远程订阅：只要有 URL 就可以保存（无论是手动输入还是 Sub-Store 生成）
+    if (activeTab === 'remote') {
+      if (urlSource === 'substore') return !!selectedSub;
+      return !!url;
+    }
     if (activeTab === 'local') return !!filePath;
     return true;
-  }, [editId, name, activeTab, url, filePath]);
-
-  const filteredSubStoreSubs = useMemo(() => {
-    return substoreSubs.filter(
-      (sub) =>
-        (sub.name || '').toLowerCase().includes(subStoreSearch.toLowerCase()) ||
-        (sub.displayName || '').toLowerCase().includes(subStoreSearch.toLowerCase())
-    );
-  }, [substoreSubs, subStoreSearch]);
+  }, [editId, name, activeTab, url, filePath, urlSource, selectedSub]);
 
   const nextStep = () => {
     setDirection('forward');
@@ -471,7 +486,7 @@ export default function SubscriptionEditWindow() {
                   {/* Remote Configuration */}
                   {activeTab === 'remote' && (
                     <div className="space-y-6">
-                      <div className="p-1 bg-white/40 border border-white/60 rounded-2xl flex p-1.5 gap-1">
+                      <div className="bg-white/40 border border-white/60 rounded-2xl flex p-1.5 gap-1">
                         <button
                           onClick={() => setUrlSource('manual')}
                           className={cn(
@@ -529,20 +544,16 @@ export default function SubscriptionEditWindow() {
                             </div>
                           ) : (
                             <div className="space-y-3">
-                              <div className="relative">
-                                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-                                <Input
-                                  placeholder="搜索订阅..."
-                                  value={subStoreSearch}
-                                  onChange={(e) => setSubStoreSearch(e.target.value)}
-                                  className="h-10 pl-9 rounded-xl bg-white/60 border-white/60"
-                                />
-                              </div>
                               <div className="grid grid-cols-2 gap-3 max-h-[240px] overflow-y-auto p-1 custom-scrollbar">
-                                {filteredSubStoreSubs.map((sub) => (
+                                {substoreSubs.map((sub) => (
                                   <div
                                     key={sub.name}
-                                    onClick={() => setSelectedSub(sub.name)}
+                                    onClick={() => {
+                                      setSelectedSub(sub.name);
+                                      if (!name) {
+                                        setName(sub.displayName || sub.name);
+                                      }
+                                    }}
                                     className={cn(
                                       'p-3 rounded-2xl border transition-all cursor-pointer flex items-center gap-3',
                                       selectedSub === sub.name
@@ -573,11 +584,6 @@ export default function SubscriptionEditWindow() {
                                   </div>
                                 ))}
                               </div>
-                              {url && (
-                                <div className="p-3 bg-neutral-100/50 rounded-xl border border-neutral-200/50 text-[10px] font-mono text-neutral-500 break-all">
-                                  {url}
-                                </div>
-                              )}
                             </div>
                           )}
                         </div>
@@ -629,7 +635,7 @@ export default function SubscriptionEditWindow() {
           </div>
 
           {/* Footer Actions */}
-          <div className="absolute bottom-6 left-10 right-10 z-50">
+          <div className="absolute bottom-6 left-10 right-10 z-50" data-no-drag>
             <div className="flex items-center justify-between">
               <Button
                 variant="ghost"
@@ -673,6 +679,7 @@ export default function SubscriptionEditWindow() {
           </div>
         </div>
       </div>
+      <Toaster />
     </div>
   );
 }
