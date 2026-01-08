@@ -107,10 +107,17 @@ impl Workspace {
 
     /// 创建新 Profile（从远程 URL）
     pub async fn create_from_remote(&self, name: &str, url: &str) -> Result<ProfileMetadata> {
-        let id = uuid::Uuid::new_v4().to_string();
-        let (mut config, default_rules_applied) = Composer::fetch_and_parse_with_flags(url).await?;
+    log::info!(
+        "Creating remote profile '{}' from URL: {}",
+        name,
+        url
+    );
 
-        // 修正 rule-provider 路径
+    let (mut config, default_rules_applied) = Composer::fetch_and_parse_with_flags(url).await?;
+    
+    let id = uuid::Uuid::new_v4().to_string();
+
+    // 修正 rule-provider 路径
         Composer::fix_provider_paths(&mut config, &self.ruleset_dir)?;
 
         // 过滤无效规则

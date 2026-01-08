@@ -26,9 +26,16 @@ impl Composer {
 
     /// 从远程 URL 获取并解析配置，并返回是否自动生成默认规则
     pub async fn fetch_and_parse_with_flags(url: &str) -> Result<(ProfileConfig, bool)> {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()?;
+        let mut builder = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30));
+
+        // 如果是本地地址，禁用代理，避免受系统代理影响导致连接失败
+        if url.starts_with("http://127.0.0.1") || url.starts_with("http://localhost") {
+            log::debug!("Fetching local URL, disabling proxy: {}", url);
+            builder = builder.no_proxy();
+        }
+
+        let client = builder.build()?;
 
         let response = client
             .get(url)
