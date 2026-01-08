@@ -29,6 +29,10 @@ import {
   Loader2,
   AlertCircle,
   GripVertical,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import { getRuleIconComponent } from '@/components/icons/RuleIcons';
 import { Button } from '@/components/ui/button';
@@ -52,6 +56,13 @@ import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
 import { useToast } from '@/hooks/useToast';
 import { RULE_TYPES, parseRule, type ProfileConfig } from '@/types/config';
+
+// -----------------------------------------------------------------------------
+// Constants
+// -----------------------------------------------------------------------------
+
+const PAGE_SIZE = 100; // 每页显示的规则数量
+const DRAG_DISABLE_THRESHOLD = 500; // 超过此数量禁用拖拽排序
 
 // -----------------------------------------------------------------------------
 // Utils
@@ -177,6 +188,7 @@ export default function Rules() {
   // UI State
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Delete Dialog State
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -221,24 +233,49 @@ export default function Rules() {
     return profileConfig?.rules || [];
   }, [profileConfig]);
 
-  const filteredRules = useMemo(() => {
+  // 过滤后的规则（带原始索引）
+  const filteredRulesWithIndex = useMemo(() => {
     const normalizedFilterType = filterType === 'all' ? 'all' : normalizeRuleType(filterType);
-    return rules.filter((rule) => {
+    const result: { rule: string; originalIndex: number }[] = [];
+
+    rules.forEach((rule, index) => {
       const parsed = parseRule(rule);
-      if (!parsed) return true;
+      if (!parsed) {
+        result.push({ rule, originalIndex: index });
+        return;
+      }
       if (normalizedFilterType !== 'all' && normalizeRuleType(parsed.type) !== normalizedFilterType)
-        return false;
+        return;
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
-        return (
+        const matches =
           parsed.type.toLowerCase().includes(query) ||
           parsed.payload.toLowerCase().includes(query) ||
-          parsed.policy.toLowerCase().includes(query)
-        );
+          parsed.policy.toLowerCase().includes(query);
+        if (!matches) return;
       }
-      return true;
+      result.push({ rule, originalIndex: index });
     });
+
+    return result;
   }, [rules, searchQuery, filterType]);
+
+  // 分页计算
+  const totalPages = Math.max(1, Math.ceil(filteredRulesWithIndex.length / PAGE_SIZE));
+  const isDragDisabled =
+    rules.length > DRAG_DISABLE_THRESHOLD || searchQuery !== '' || filterType !== 'all';
+
+  // 当前页的规则
+  const pagedRules = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const end = start + PAGE_SIZE;
+    return filteredRulesWithIndex.slice(start, end);
+  }, [filteredRulesWithIndex, currentPage]);
+
+  // 搜索或过滤变化时重置到第一页
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterType]);
 
   // Open rule window
   const openRuleWindow = async (index?: number) => {
@@ -300,14 +337,20 @@ export default function Rules() {
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (!over || active.id === over.id || !activeProfileId || !profileConfig) {
+    if (!over || active.id === over.id || !activeProfileId || !profileConfig || isDragDisabled) {
       return;
     }
 
-    const oldIndex = rules.findIndex((rule) => rule === active.id);
-    const newIndex = rules.findIndex((rule) => rule === over.id);
+    // 找到拖拽项在当前页中的位置
+    const activeItem = pagedRules.find((item) => item.rule === active.id);
+    const overItem = pagedRules.find((item) => item.rule === over.id);
 
-    if (oldIndex === -1 || newIndex === -1) return;
+    if (!activeItem || !overItem) return;
+
+    const oldIndex = activeItem.originalIndex;
+    const newIndex = overItem.originalIndex;
+
+    if (oldIndex === newIndex) return;
 
     setSaving(true);
     try {
@@ -476,7 +519,7 @@ export default function Rules() {
             <div className="flex items-center justify-center h-full">
               <RefreshCw className="w-8 h-8 animate-spin text-gray-300" />
             </div>
-          ) : filteredRules.length === 0 ? (
+          ) : filteredRulesWithIndex.length === 0 ? (
             <EmptyState searchQuery={searchQuery} />
           ) : (
             <DndContext
@@ -484,26 +527,30 @@ export default function Rules() {
               collisionDetection={closestCenter}
               onDragEnd={handleDragEnd}
             >
-              <SortableContext items={filteredRules} strategy={verticalListSortingStrategy}>
+              <SortableContext
+                items={pagedRules.map((item) => item.rule)}
+                strategy={verticalListSortingStrategy}
+              >
                 <div className="divide-y divide-gray-100 dark:divide-zinc-800/50">
-                  {filteredRules.map((rule, index) => {
-                    const parsed = typeof rule === 'string' ? parseRule(rule) : null;
+                  {pagedRules.map((item, pageIndex) => {
+                    const parsed = parseRule(item.rule);
                     if (!parsed) return null;
 
-                    // Find the actual index in the full rules array
-                    const fullIndex = rules.indexOf(rule);
+                    // 显示的序号 = (当前页-1) * 每页数量 + 页内索引 + 1
+                    const displayIndex = (currentPage - 1) * PAGE_SIZE + pageIndex + 1;
 
                     return (
                       <SortableRuleRow
-                        key={rule}
-                        id={rule}
-                        index={index + 1}
+                        key={`${item.originalIndex}-${item.rule}`}
+                        id={item.rule}
+                        index={displayIndex}
                         type={parsed.type}
                         payload={parsed.payload}
                         policy={parsed.policy}
-                        onEdit={() => openRuleWindow(fullIndex)}
-                        onDelete={() => handleDeleteClick(fullIndex)}
+                        onEdit={() => openRuleWindow(item.originalIndex)}
+                        onDelete={() => handleDeleteClick(item.originalIndex)}
                         disabled={saving}
+                        dragDisabled={isDragDisabled}
                       />
                     );
                   })}
@@ -512,6 +559,19 @@ export default function Rules() {
             </DndContext>
           )}
         </div>
+
+        {/* Pagination */}
+        {filteredRulesWithIndex.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredRulesWithIndex.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setCurrentPage}
+            isDragDisabled={isDragDisabled}
+            rulesCount={rules.length}
+          />
+        )}
       </BentoCard>
 
       {/* Delete Confirmation Dialog */}
@@ -564,6 +624,7 @@ function SortableRuleRow({
   onEdit,
   onDelete,
   disabled,
+  dragDisabled,
 }: {
   id: string;
   index: number;
@@ -573,10 +634,11 @@ function SortableRuleRow({
   onEdit?: () => void;
   onDelete?: () => void;
   disabled?: boolean;
+  dragDisabled?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
-    disabled,
+    disabled: disabled || dragDisabled,
   });
 
   const style = {
@@ -599,12 +661,22 @@ function SortableRuleRow({
     >
       {/* Drag Handle */}
       <div
-        {...attributes}
-        {...listeners}
-        className="flex items-center justify-center cursor-grab active:cursor-grabbing touch-none"
+        {...(dragDisabled ? {} : { ...attributes, ...listeners })}
+        className={cn(
+          'flex items-center justify-center touch-none',
+          dragDisabled ? 'cursor-default opacity-30' : 'cursor-grab active:cursor-grabbing'
+        )}
         onClick={(e) => e.stopPropagation()}
+        title={dragDisabled ? '搜索/过滤时或规则过多时禁用拖拽' : '拖拽排序'}
       >
-        <GripVertical className="w-4 h-4 text-gray-300 hover:text-gray-500 dark:hover:text-gray-400" />
+        <GripVertical
+          className={cn(
+            'w-4 h-4',
+            dragDisabled
+              ? 'text-gray-200 dark:text-gray-700'
+              : 'text-gray-300 hover:text-gray-500 dark:hover:text-gray-400'
+          )}
+        />
       </div>
 
       {/* Index */}
@@ -706,6 +778,92 @@ function EmptyState({ searchQuery }: { searchQuery: string }) {
       <p className="text-sm mt-1 text-center max-w-xs text-gray-500">
         {searchQuery ? '请尝试更换搜索关键词或清除过滤条件' : '点击右上角的"添加规则"按钮开始配置'}
       </p>
+    </div>
+  );
+}
+
+function Pagination({
+  currentPage,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
+  isDragDisabled,
+  rulesCount,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  isDragDisabled: boolean;
+  rulesCount: number;
+}) {
+  const startItem = (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalItems);
+
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-zinc-800/50 bg-gray-50/30 dark:bg-zinc-900/30 shrink-0">
+      <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+        <span>
+          显示 {startItem}-{endItem} / 共 {totalItems} 条
+        </span>
+        {isDragDisabled && rulesCount > DRAG_DISABLE_THRESHOLD && (
+          <span className="text-amber-600 dark:text-amber-400">• 规则较多，已禁用拖拽排序</span>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-lg"
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          title="第一页"
+        >
+          <ChevronsLeft className="w-4 h-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-lg"
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          title="上一页"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+
+        <div className="flex items-center gap-1 mx-2">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            {currentPage}
+          </span>
+          <span className="text-sm text-gray-400">/</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">{totalPages}</span>
+        </div>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-lg"
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          title="下一页"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-lg"
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages}
+          title="最后一页"
+        >
+          <ChevronsRight className="w-4 h-4" />
+        </Button>
+      </div>
     </div>
   );
 }
