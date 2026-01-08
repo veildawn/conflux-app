@@ -1,6 +1,7 @@
-import { Network, Globe, Zap, LayoutGrid, Layers } from 'lucide-react';
+import { Network, Globe, Zap, LayoutGrid, Layers, Shield } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -13,6 +14,14 @@ import { BentoCard, SettingItem, Divider, SectionHeader, CONTROL_BASE_CLASS } fr
 import { ipc } from '@/services/ipc';
 import type { MihomoConfig } from '@/types/config';
 import type { ProxyStatus } from '@/types/proxy';
+
+// 默认排除的内网网段
+const DEFAULT_INET4_ROUTE_EXCLUDE_ADDRESS = [
+  '192.168.0.0/16',
+  '10.0.0.0/8',
+  '172.16.0.0/12',
+  '127.0.0.1/32',
+];
 
 interface NetworkSectionProps {
   config: MihomoConfig | null;
@@ -110,6 +119,37 @@ export function NetworkSection({
     }
   };
 
+  const handleRouteExcludeChange = async (value: string) => {
+    const addresses = value
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    try {
+      await ipc.setTunRouteExclude(addresses);
+      setConfig((prev) => {
+        if (!prev) return prev;
+        const currentTun = prev.tun || {
+          enable: false,
+          stack: 'system',
+          'auto-route': true,
+          'auto-detect-interface': true,
+          'dns-hijack': ['any:53'],
+        };
+        return {
+          ...prev,
+          tun: { ...currentTun, 'inet4-route-exclude-address': addresses },
+        };
+      });
+      toast({ title: '路由排除地址已更新' });
+    } catch (error) {
+      toast({ title: '设置失败', description: String(error), variant: 'destructive' });
+    }
+  };
+
+  // 获取当前的路由排除地址，如果未设置则使用默认值
+  const currentRouteExclude =
+    config?.tun?.['inet4-route-exclude-address'] ?? DEFAULT_INET4_ROUTE_EXCLUDE_ADDRESS;
+
   return (
     <div>
       <SectionHeader title="网络" />
@@ -198,6 +238,27 @@ export function NetworkSection({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+        </BentoCard>
+
+        {/* 路由排除地址 */}
+        <BentoCard
+          title="路由排除地址"
+          icon={Shield}
+          iconColor="text-orange-500"
+          className="md:col-span-1"
+        >
+          <div className="p-5 pt-2 flex flex-col gap-3">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              排除内网网段，即使在全局模式下这些 IP 也不经过代理（每行一个 CIDR）
+            </p>
+            <Textarea
+              value={currentRouteExclude.join('\n')}
+              onChange={(e) => handleRouteExcludeChange(e.target.value)}
+              placeholder="192.168.0.0/16&#10;10.0.0.0/8&#10;172.16.0.0/12&#10;127.0.0.1/32"
+              className={cn('min-h-[100px] font-mono text-xs', CONTROL_BASE_CLASS)}
+              disabled={!config?.tun?.enable}
+            />
           </div>
         </BentoCard>
 

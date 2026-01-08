@@ -67,6 +67,11 @@ export interface TunConfig {
   'auto-detect-interface'?: boolean;
   'strict-route'?: boolean;
   'dns-hijack'?: string[];
+  /**
+   * IPv4 路由排除地址列表
+   * 显式排除内网网段，即使在全局模式下这些 IP 也不经过代理
+   */
+  'inet4-route-exclude-address'?: string[];
 }
 
 /**
