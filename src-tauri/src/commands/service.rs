@@ -2,6 +2,7 @@
 //!
 //! 仅在 Windows 平台上可用
 
+#[cfg(target_os = "windows")]
 use crate::commands::get_app_state;
 
 /// 获取服务状态

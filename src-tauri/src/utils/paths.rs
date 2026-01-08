@@ -145,10 +145,21 @@ pub fn ensure_mihomo_in_data_dir() -> Result<PathBuf> {
     let source_path = sidecar_path.or(dev_path);
 
     if user_binary_path.exists() {
-        if let Some(source_path) = source_path {
-            if should_refresh_binary(&source_path, &user_binary_path)? {
-                std::fs::copy(&source_path, &user_binary_path)?;
+        if let Some(ref source_path) = source_path {
+            if should_refresh_binary(source_path, &user_binary_path)? {
+                std::fs::copy(source_path, &user_binary_path)?;
+                // 设置执行权限 (macOS/Linux)
+                #[cfg(unix)]
+                set_executable_permission(&user_binary_path)?;
                 log::info!("Refreshed MiHomo in data dir from {:?}", source_path);
+            }
+        }
+        // 确保现有文件有执行权限
+        #[cfg(unix)]
+        {
+            if !has_executable_permission(&user_binary_path) {
+                set_executable_permission(&user_binary_path)?;
+                log::info!("Fixed executable permission for {:?}", user_binary_path);
             }
         }
         return Ok(user_binary_path);
@@ -156,6 +167,9 @@ pub fn ensure_mihomo_in_data_dir() -> Result<PathBuf> {
 
     if let Some(source_path) = source_path {
         std::fs::copy(&source_path, &user_binary_path)?;
+        // 设置执行权限 (macOS/Linux)
+        #[cfg(unix)]
+        set_executable_permission(&user_binary_path)?;
         log::info!("Copied MiHomo to data dir from {:?}", source_path);
         return Ok(user_binary_path);
     }
@@ -165,8 +179,33 @@ pub fn ensure_mihomo_in_data_dir() -> Result<PathBuf> {
     ))
 }
 
+/// 设置文件的执行权限 (Unix only)
+#[cfg(unix)]
+fn set_executable_permission(path: &PathBuf) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let metadata = std::fs::metadata(path)?;
+    let mut permissions = metadata.permissions();
+    // 设置 755 权限 (rwxr-xr-x)
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(path, permissions)?;
+    log::debug!("Set executable permission (755) for {:?}", path);
+    Ok(())
+}
+
+/// 检查文件是否有执行权限 (Unix only)
+#[cfg(unix)]
+fn has_executable_permission(path: &PathBuf) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    if let Ok(metadata) = std::fs::metadata(path) {
+        let mode = metadata.permissions().mode();
+        // 检查所有者执行位
+        return (mode & 0o100) != 0;
+    }
+    false
+}
+
 /// 查找 Sidecar 二进制文件路径
-/// Tauri externalBin 打包后文件名会简化（去掉 target triple）
+/// Tauri externalBin 打包后文件名可能简化（去掉 target triple）或保留完整名称
 #[allow(unused_variables)]
 fn find_sidecar_binary(binary_name: &str) -> Result<Option<PathBuf>> {
     let current_exe = std::env::current_exe()?;
@@ -177,16 +216,46 @@ fn find_sidecar_binary(binary_name: &str) -> Result<Option<PathBuf>> {
     log::debug!("Current exe: {:?}", current_exe);
     log::debug!("Exe directory: {:?}", exe_dir);
 
-    // Tauri 打包后文件名简化为 mihomo / mihomo.exe
+    // 尝试多种可能的文件名：
+    // 1. 简化名称 (Tauri 默认行为)
+    // 2. 完整的 target triple 名称 (某些 Tauri 版本或配置)
+    
     #[cfg(target_os = "windows")]
-    let sidecar_path = exe_dir.join("mihomo.exe");
+    let candidates = vec![
+        exe_dir.join("mihomo.exe"),
+        exe_dir.join(binary_name),
+    ];
 
     #[cfg(not(target_os = "windows"))]
-    let sidecar_path = exe_dir.join("mihomo");
+    let candidates = vec![
+        exe_dir.join("mihomo"),
+        exe_dir.join(binary_name),
+    ];
 
-    log::debug!("Checking sidecar path: {:?}", sidecar_path);
-    if sidecar_path.exists() {
-        return Ok(Some(sidecar_path));
+    for sidecar_path in candidates {
+        log::debug!("Checking sidecar path: {:?}", sidecar_path);
+        if sidecar_path.exists() {
+            return Ok(Some(sidecar_path));
+        }
+    }
+
+    // macOS 特殊处理：检查 .app bundle 内的 Resources 目录
+    #[cfg(target_os = "macos")]
+    {
+        // .app/Contents/MacOS -> .app/Contents/Resources
+        if let Some(contents_dir) = exe_dir.parent() {
+            let resources_dir = contents_dir.join("Resources");
+            let resource_candidates = vec![
+                resources_dir.join("mihomo"),
+                resources_dir.join(binary_name),
+            ];
+            for resource_path in resource_candidates {
+                log::debug!("Checking macOS Resources path: {:?}", resource_path);
+                if resource_path.exists() {
+                    return Ok(Some(resource_path));
+                }
+            }
+        }
     }
 
     // Linux 特殊处理：系统安装路径
