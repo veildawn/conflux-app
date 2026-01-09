@@ -37,6 +37,7 @@ struct ServiceResponse {
 struct StatusResponse {
     running: bool,
     pid: Option<u32>,
+    #[allow(dead_code)]
     version: String,
 }
 
@@ -78,6 +79,7 @@ impl WinServiceManager {
     }
 
     /// Check if service IPC is responding
+    #[allow(dead_code)]
     pub async fn is_service_healthy() -> bool {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(2))
