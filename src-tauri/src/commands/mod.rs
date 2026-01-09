@@ -6,6 +6,7 @@ pub mod reload;
 pub mod service;
 pub mod substore;
 pub mod system;
+pub mod webdav;
 
 use anyhow::Result;
 use once_cell::sync::OnceCell;

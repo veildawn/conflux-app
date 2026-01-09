@@ -153,10 +153,10 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
 /// 设置 LAN 访问开关
 #[tauri::command]
 pub async fn set_allow_lan(app: AppHandle, enabled: bool) -> Result<(), String> {
-    use crate::commands::reload::{apply_config_change, ReloadOptions};
+    use crate::commands::reload::{apply_mihomo_settings_change, ReloadOptions};
 
-    apply_config_change(Some(&app), &ReloadOptions::default(), |config| {
-        config.allow_lan = enabled;
+    apply_mihomo_settings_change(Some(&app), &ReloadOptions::default(), |settings| {
+        settings.allow_lan = enabled;
         Ok(())
     })
     .await
@@ -165,12 +165,12 @@ pub async fn set_allow_lan(app: AppHandle, enabled: bool) -> Result<(), String> 
 /// 设置 HTTP/SOCKS 端口
 #[tauri::command]
 pub async fn set_ports(app: AppHandle, port: u16, socks_port: u16) -> Result<(), String> {
-    use crate::commands::reload::{apply_config_change, ReloadOptions};
+    use crate::commands::reload::{apply_mihomo_settings_change, ReloadOptions};
 
     // 端口变更使用安全模式，因为可能影响系统代理设置
-    apply_config_change(Some(&app), &ReloadOptions::safe(), |config| {
-        config.port = port;
-        config.socks_port = socks_port;
+    apply_mihomo_settings_change(Some(&app), &ReloadOptions::safe(), |settings| {
+        settings.port = port;
+        settings.socks_port = socks_port;
         Ok(())
     })
     .await
@@ -179,10 +179,10 @@ pub async fn set_ports(app: AppHandle, port: u16, socks_port: u16) -> Result<(),
 /// 设置 IPv6 开关
 #[tauri::command]
 pub async fn set_ipv6(app: AppHandle, enabled: bool) -> Result<(), String> {
-    use crate::commands::reload::{apply_config_change, ReloadOptions};
+    use crate::commands::reload::{apply_mihomo_settings_change, ReloadOptions};
 
-    apply_config_change(Some(&app), &ReloadOptions::default(), |config| {
-        config.ipv6 = enabled;
+    apply_mihomo_settings_change(Some(&app), &ReloadOptions::default(), |settings| {
+        settings.ipv6 = enabled;
         Ok(())
     })
     .await
@@ -191,10 +191,10 @@ pub async fn set_ipv6(app: AppHandle, enabled: bool) -> Result<(), String> {
 /// 设置 TCP 并发开关
 #[tauri::command]
 pub async fn set_tcp_concurrent(app: AppHandle, enabled: bool) -> Result<(), String> {
-    use crate::commands::reload::{apply_config_change, ReloadOptions};
+    use crate::commands::reload::{apply_mihomo_settings_change, ReloadOptions};
 
-    apply_config_change(Some(&app), &ReloadOptions::default(), |config| {
-        config.tcp_concurrent = enabled;
+    apply_mihomo_settings_change(Some(&app), &ReloadOptions::default(), |settings| {
+        settings.tcp_concurrent = enabled;
         Ok(())
     })
     .await
@@ -572,6 +572,20 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
             // 清理备份
             backup.cleanup();
 
+            // 同步保存到 settings.json
+            if let Ok(mut app_settings) = state.config_manager.load_app_settings() {
+                app_settings.mihomo.tun.enable = enabled;
+                if enabled {
+                    // 同步 TUN 默认配置
+                    if app_settings.mihomo.tun.stack.is_none() {
+                        app_settings.mihomo.tun.stack = Some("system".to_string());
+                    }
+                }
+                if let Err(e) = state.config_manager.save_app_settings(&app_settings) {
+                    log::warn!("Failed to sync TUN setting to settings.json: {}", e);
+                }
+            }
+
             log::info!("TUN mode set to: {}", enabled);
             sync_proxy_status(&app).await;
             Ok(())
@@ -609,67 +623,42 @@ pub async fn check_tun_permission() -> Result<bool, String> {
 /// 设置 TUN Stack
 #[tauri::command]
 pub async fn set_tun_stack(app: AppHandle, stack: String) -> Result<(), String> {
-    use crate::commands::reload::{apply_config_change, ReloadOptions};
+    use crate::commands::reload::{apply_mihomo_settings_change, ReloadOptions};
 
     let valid_stacks = ["gvisor", "system", "mixed"];
     if !valid_stacks.contains(&stack.as_str()) {
         return Err(format!("无效的 stack 类型: {}", stack));
     }
 
-    apply_config_change(
-        Some(&app),
-        &ReloadOptions::safe(), // Stack change might require restart of network stack, so use safe reload
-        |config| {
-            if let Some(tun) = &mut config.tun {
-                tun.stack = Some(stack.clone());
-            } else {
-                // If tun is None, create it (disabled by default)
-                let mut tun = crate::models::TunConfig::default();
-                tun.stack = Some(stack.clone());
-                config.tun = Some(tun);
-            }
-            Ok(())
-        },
-    )
+    apply_mihomo_settings_change(Some(&app), &ReloadOptions::safe(), |settings| {
+        settings.tun.stack = Some(stack.clone());
+        Ok(())
+    })
     .await?;
 
     log::info!("TUN stack set to: {}", stack);
     Ok(())
 }
 
-/// 设置 TUN 路由排除地址
 /// 设置 TUN 严格路由开关
 #[tauri::command]
 pub async fn set_strict_route(app: AppHandle, enabled: bool) -> Result<(), String> {
-    use crate::commands::reload::{apply_config_change, ReloadOptions};
+    use crate::commands::reload::{apply_mihomo_settings_change, ReloadOptions};
 
-    apply_config_change(Some(&app), &ReloadOptions::safe(), |config| {
-        if let Some(tun) = &mut config.tun {
-            tun.strict_route = Some(enabled);
-        } else {
-            let mut tun = crate::models::TunConfig::default();
-            tun.strict_route = Some(enabled);
-            config.tun = Some(tun);
-        }
+    apply_mihomo_settings_change(Some(&app), &ReloadOptions::safe(), |settings| {
+        settings.tun.strict_route = Some(enabled);
         Ok(())
     })
     .await
 }
 
-/// 用于排除内网网段，即使在全局模式下这些 IP 也不经过代理
+/// 设置 TUN 路由排除地址（用于排除内网网段）
 #[tauri::command]
 pub async fn set_tun_route_exclude(app: AppHandle, addresses: Vec<String>) -> Result<(), String> {
-    use crate::commands::reload::{apply_config_change, ReloadOptions};
+    use crate::commands::reload::{apply_mihomo_settings_change, ReloadOptions};
 
-    apply_config_change(Some(&app), &ReloadOptions::safe(), |config| {
-        if let Some(tun) = &mut config.tun {
-            tun.inet4_route_exclude_address = addresses.clone();
-        } else {
-            // If tun is None, create it (disabled by default)
-            let mut tun = crate::models::TunConfig::default();
-            tun.inet4_route_exclude_address = addresses.clone();
-            config.tun = Some(tun);
-        }
+    apply_mihomo_settings_change(Some(&app), &ReloadOptions::safe(), |settings| {
+        settings.tun.inet4_route_exclude_address = addresses.clone();
         Ok(())
     })
     .await?;
@@ -916,10 +905,12 @@ pub async fn update_rule_provider(name: String) -> Result<(), String> {
 /// 设置混合端口
 #[tauri::command]
 pub async fn set_mixed_port(app: AppHandle, port: Option<u16>) -> Result<(), String> {
-    use crate::commands::reload::{apply_config_change, ReloadOptions};
+    use crate::commands::reload::{apply_mihomo_settings_change, ReloadOptions};
 
-    apply_config_change(Some(&app), &ReloadOptions::default(), |config| {
-        config.mixed_port = port;
+    let port_value = port.unwrap_or(7893);
+
+    apply_mihomo_settings_change(Some(&app), &ReloadOptions::default(), |settings| {
+        settings.mixed_port = port_value;
         Ok(())
     })
     .await
@@ -928,7 +919,7 @@ pub async fn set_mixed_port(app: AppHandle, port: Option<u16>) -> Result<(), Str
 /// 设置进程查找模式
 #[tauri::command]
 pub async fn set_find_process_mode(app: AppHandle, mode: String) -> Result<(), String> {
-    use crate::commands::reload::{apply_config_change, ReloadOptions};
+    use crate::commands::reload::{apply_mihomo_settings_change, ReloadOptions};
 
     // 验证模式
     let valid_modes = ["always", "strict", "off"];
@@ -936,8 +927,8 @@ pub async fn set_find_process_mode(app: AppHandle, mode: String) -> Result<(), S
         return Err(format!("无效的进程查找模式: {}", mode));
     }
 
-    apply_config_change(Some(&app), &ReloadOptions::default(), |config| {
-        config.find_process_mode = mode.clone();
+    apply_mihomo_settings_change(Some(&app), &ReloadOptions::default(), |settings| {
+        settings.find_process_mode = mode.clone();
         Ok(())
     })
     .await?;
@@ -1001,7 +992,7 @@ pub async fn test_url_delay(
         .load_mihomo_config()
         .map_err(|e| e.to_string())?;
 
-    let proxy_port = config.mixed_port.unwrap_or(config.port);
+    let proxy_port = config.mixed_port;
     let proxy_url = format!("http://127.0.0.1:{}", proxy_port);
     let timeout = timeout_ms.unwrap_or(5000);
 
@@ -1072,7 +1063,7 @@ pub async fn test_urls_delay(
         .load_mihomo_config()
         .map_err(|e| e.to_string())?;
 
-    let proxy_port = config.mixed_port.unwrap_or(config.port);
+    let proxy_port = config.mixed_port;
     let proxy_url = format!("http://127.0.0.1:{}", proxy_port);
     let timeout = timeout_ms.unwrap_or(5000);
 

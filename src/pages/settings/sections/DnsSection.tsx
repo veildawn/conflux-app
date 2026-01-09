@@ -77,6 +77,21 @@ function arraysEqual(a: string[], b: string[]): boolean {
   return a.every((val, i) => val === b[i]);
 }
 
+/**
+ * 比较两个 nameserver-policy 是否相等
+ */
+function policiesEqual(
+  a: Record<string, string[]> | undefined,
+  b: Record<string, string[]> | undefined
+): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  const keysA = Object.keys(a).sort();
+  const keysB = Object.keys(b).sort();
+  if (!arraysEqual(keysA, keysB)) return false;
+  return keysA.every((key) => arraysEqual(a[key], b[key]));
+}
+
 export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSectionProps) {
   // 输入框本地状态（用于编辑时的临时值）
   const [dnsNameserverInput, setDnsNameserverInput] = useState('');
@@ -288,8 +303,11 @@ export function DnsSection({ config, status, onDnsConfigChange, toast }: DnsSect
   );
 
   const handlePolicyEntryBlur = useCallback(() => {
-    onDnsConfigChange({ 'nameserver-policy': entriesToPolicy(policyEntries) });
-  }, [policyEntries, onDnsConfigChange]);
+    const newPolicy = entriesToPolicy(policyEntries);
+    if (!policiesEqual(newPolicy, dns?.['nameserver-policy'])) {
+      onDnsConfigChange({ 'nameserver-policy': newPolicy });
+    }
+  }, [policyEntries, dns, onDnsConfigChange]);
 
   return (
     <div>

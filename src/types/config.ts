@@ -105,7 +105,7 @@ export interface SnifferConfig {
 export interface MihomoConfig {
   port: number;
   'socks-port': number;
-  'mixed-port'?: number;
+  'mixed-port': number;
   'allow-lan': boolean;
   ipv6?: boolean;
   'tcp-concurrent'?: boolean;
@@ -357,6 +357,100 @@ export interface Profile {
 }
 
 /**
+ * WebDAV 同步配置
+ */
+export interface WebDavConfig {
+  /** 是否启用 */
+  enabled: boolean;
+  /** WebDAV 服务器地址 */
+  url: string;
+  /** 用户名 */
+  username: string;
+  /** 密码 */
+  password: string;
+  /** 配置变更后自动上传 */
+  autoUpload: boolean;
+  /** 上次同步时间 */
+  lastSyncTime?: string;
+}
+
+/**
+ * 文件同步状态
+ */
+export interface FileSyncState {
+  /** 文件路径 */
+  path: string;
+  /** 文件 hash */
+  hash: string;
+  /** 同步时间 */
+  syncedAt: string;
+}
+
+/**
+ * 同步状态
+ */
+export interface SyncState {
+  /** 上次同步时间 */
+  lastSyncTime?: string;
+  /** 各文件的同步状态 */
+  files: Record<string, FileSyncState>;
+}
+
+/**
+ * 冲突信息
+ */
+export interface ConflictInfo {
+  /** 本地修改时间 */
+  localModified: string;
+  /** 远端修改时间 */
+  remoteModified: string;
+  /** 冲突的文件列表 */
+  conflictingFiles: string[];
+}
+
+/**
+ * 同步结果
+ */
+export interface SyncResult {
+  /** 是否成功 */
+  success: boolean;
+  /** 消息 */
+  message: string;
+  /** 上传的文件列表 */
+  uploadedFiles: string[];
+  /** 下载的文件列表 */
+  downloadedFiles: string[];
+  /** 是否有冲突 */
+  hasConflict: boolean;
+  /** 冲突信息 */
+  conflictInfo?: ConflictInfo;
+}
+
+/**
+ * MiHomo 用户设置（存储在 settings.json 中）
+ */
+export interface MihomoSettings {
+  /** HTTP 代理端口 */
+  port: number;
+  /** SOCKS5 代理端口 */
+  socksPort: number;
+  /** 混合代理端口 */
+  mixedPort: number;
+  /** 允许局域网连接 */
+  allowLan: boolean;
+  /** 启用 IPv6 */
+  ipv6: boolean;
+  /** TCP 并发 */
+  tcpConcurrent: boolean;
+  /** 进程查找模式 */
+  findProcessMode: string;
+  /** TUN 模式配置 */
+  tun: TunConfig;
+  /** DNS 配置 */
+  dns: DnsConfig;
+}
+
+/**
  * 应用设置
  */
 export interface AppSettings {
@@ -365,6 +459,10 @@ export interface AppSettings {
   systemProxy: boolean;
   closeToTray: boolean;
   ruleDatabases: RuleDatabaseItem[];
+  /** WebDAV 同步配置 */
+  webdav?: WebDavConfig;
+  /** MiHomo 用户设置 */
+  mihomo?: MihomoSettings;
 }
 
 /**

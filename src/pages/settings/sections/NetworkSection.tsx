@@ -79,9 +79,10 @@ export function NetworkSection({
   }, [tunConfigKey]);
 
   const handleMixedPortChange = async (value: string) => {
-    const port = value === '' ? undefined : Number.parseInt(value, 10);
+    const port = Number.parseInt(value, 10);
+    if (isNaN(port)) return;
     try {
-      await ipc.setMixedPort(port ?? null);
+      await ipc.setMixedPort(port);
       setConfig((prev) => (prev ? { ...prev, 'mixed-port': port } : prev));
       toast({ title: '混合端口已更新' });
     } catch (error) {
@@ -242,10 +243,9 @@ export function NetworkSection({
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600 dark:text-gray-300">Mixed Port</span>
               <Input
-                type="number"
-                value={config?.['mixed-port'] || ''}
+                type="text"
+                value={config?.['mixed-port'] ?? ''}
                 onChange={(e) => handleMixedPortChange(e.target.value)}
-                placeholder="Mixed"
                 className={cn('w-20 text-center font-mono', CONTROL_BASE_CLASS)}
               />
             </div>

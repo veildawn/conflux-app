@@ -14,6 +14,7 @@ import {
   ResourceIcon,
   GeoDataIcon,
   LogsIcon,
+  SyncIcon,
   SettingsIcon,
 } from '@/components/icons/NavIcons';
 
@@ -54,6 +55,7 @@ const navGroups: NavGroup[] = [
     title: '系统',
     items: [
       { path: '/logs', icon: LogsIcon, label: '日志' },
+      { path: '/sync', icon: SyncIcon, label: '同步' },
       { path: '/settings', icon: SettingsIcon, label: '设置' },
     ],
   },
@@ -95,7 +97,7 @@ export default function Sidebar() {
                   to={item.path}
                   draggable={false}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-[14px] transition-all duration-200 text-[13px] font-medium no-drag group',
+                    'flex items-center gap-3 px-3 py-2 rounded-[14px] transition-colors duration-150 text-[13px] font-medium no-drag group',
                     isActive
                       ? 'bg-white dark:bg-zinc-800 text-gray-900 dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-none'
                       : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100/60 dark:hover:bg-zinc-800/50 hover:text-gray-700 dark:hover:text-gray-200'

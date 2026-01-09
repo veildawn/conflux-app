@@ -25,7 +25,7 @@ export function BentoCard({
   return (
     <div
       className={cn(
-        'bg-white/70 dark:bg-zinc-900/70 backdrop-blur-md rounded-[20px] shadow-sm border border-gray-100/50 dark:border-zinc-800/50 flex flex-col relative overflow-hidden',
+        'bg-white/95 dark:bg-zinc-900/95 rounded-[20px] shadow-sm border border-gray-100/50 dark:border-zinc-800/50 flex flex-col relative overflow-hidden',
         className
       )}
     >

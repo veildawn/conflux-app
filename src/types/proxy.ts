@@ -6,7 +6,7 @@ export interface ProxyStatus {
   mode: 'rule' | 'global' | 'direct';
   port: number;
   socks_port: number;
-  mixed_port?: number;
+  mixed_port: number;
   system_proxy: boolean;
   enhanced_mode?: boolean;
   allow_lan?: boolean;

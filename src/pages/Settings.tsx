@@ -67,9 +67,27 @@ export default function Settings() {
           onHttpPortChange={handleHttpPortChange}
           onSocksPortChange={handleSocksPortChange}
           onPortBlur={handlePortBlur}
-          onAllowLanToggle={(checked) => setAllowLan(checked).catch(() => {})}
-          onIpv6Toggle={(checked) => setIpv6(checked).catch(() => {})}
-          onTcpConcurrentToggle={(checked) => setTcpConcurrent(checked).catch(() => {})}
+          onAllowLanToggle={(checked) =>
+            setAllowLan(checked)
+              .then(() => toast({ title: checked ? '局域网共享已启用' : '局域网共享已禁用' }))
+              .catch((e) =>
+                toast({ title: '设置失败', description: String(e), variant: 'destructive' })
+              )
+          }
+          onIpv6Toggle={(checked) =>
+            setIpv6(checked)
+              .then(() => toast({ title: checked ? 'IPv6 已启用' : 'IPv6 已禁用' }))
+              .catch((e) =>
+                toast({ title: '设置失败', description: String(e), variant: 'destructive' })
+              )
+          }
+          onTcpConcurrentToggle={(checked) =>
+            setTcpConcurrent(checked)
+              .then(() => toast({ title: checked ? 'TCP 并发已启用' : 'TCP 并发已禁用' }))
+              .catch((e) =>
+                toast({ title: '设置失败', description: String(e), variant: 'destructive' })
+              )
+          }
           toast={toast}
         />
 

@@ -283,3 +283,24 @@ export function SettingsIcon({ className, strokeWidth = 2 }: IconProps) {
     </svg>
   );
 }
+
+// 同步 - 云同步
+export function SyncIcon({ className, strokeWidth = 2 }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn('w-5 h-5', className)}
+    >
+      {/* 云 */}
+      <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+      {/* 同步箭头 */}
+      <path d="M12 12v4" />
+      <path d="M10 14l2 2 2-2" />
+    </svg>
+  );
+}

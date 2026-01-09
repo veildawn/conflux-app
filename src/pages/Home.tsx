@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState, useCallback } from 'react';
+import { useMemo, useEffect, useState, useCallback, memo } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -29,7 +29,7 @@ import {
 // UI Components
 // -----------------------------------------------------------------------------
 
-function BentoCard({
+const BentoCard = memo(function BentoCard({
   className,
   children,
   title,
@@ -47,7 +47,7 @@ function BentoCard({
   return (
     <div
       className={cn(
-        'bg-white/70 dark:bg-zinc-900/70 backdrop-blur-md rounded-2xl px-4 py-3 shadow-xs border border-gray-100/50 dark:border-zinc-800/50 flex flex-col relative overflow-hidden',
+        'bg-white/95 dark:bg-zinc-900/95 rounded-2xl px-4 py-3 shadow-xs border border-gray-100/50 dark:border-zinc-800/50 flex flex-col relative overflow-hidden',
         className
       )}
     >
@@ -67,9 +67,9 @@ function BentoCard({
       <div className="flex-1 z-10">{children}</div>
     </div>
   );
-}
+});
 
-function StatValue({
+const StatValue = memo(function StatValue({
   value,
   unit,
   subtext,
@@ -95,7 +95,7 @@ function StatValue({
       )}
     </div>
   );
-}
+});
 
 // -----------------------------------------------------------------------------
 // Helper Data
@@ -459,7 +459,7 @@ export default function Home() {
             <div className="flex flex-col justify-between items-end">
               <div
                 className={cn(
-                  'flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all duration-300',
+                  'flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-colors duration-200',
                   status.running
                     ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
                     : 'bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/20 text-red-600 dark:text-red-400'

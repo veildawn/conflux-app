@@ -254,7 +254,7 @@ export default function SubscriptionEditWindow() {
 
   if (loading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-white/20 backdrop-blur-xl">
+      <div className="h-screen w-screen flex items-center justify-center bg-white/90">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
       </div>
     );
@@ -265,15 +265,9 @@ export default function SubscriptionEditWindow() {
       className="relative h-screen w-screen overflow-hidden rounded-xl border border-black/5 bg-[radial-gradient(circle_at_10%_20%,rgba(230,240,255,0.7)_0%,transparent_40%),radial-gradient(circle_at_90%_80%,rgba(240,230,255,0.7)_0%,transparent_40%),radial-gradient(circle_at_50%_50%,#f8fafc_0%,#f1f5f9_100%)] text-neutral-900"
       onMouseDown={handleMouseDown}
     >
-      {/* Background Blobs */}
-      <div className="absolute inset-0 pointer-events-none rounded-xl overflow-hidden">
-        <div className="absolute left-[-10%] top-[-10%] h-[50%] w-[50%] rounded-full bg-blue-100/40 blur-3xl" />
-        <div className="absolute right-[-10%] bottom-[-10%] h-[50%] w-[50%] rounded-full bg-indigo-100/40 blur-3xl" />
-      </div>
-
       <div className="relative h-full w-full grid grid-cols-[240px_1fr]">
         {/* Sidebar */}
-        <div className="flex flex-col bg-white/40 px-6 pt-10 pb-6 border-r border-black/5 backdrop-blur-3xl">
+        <div className="flex flex-col bg-white/90 px-6 pt-10 pb-6 border-r border-black/5">
           <div className="flex flex-col gap-2">
             <div
               className={cn(
@@ -331,7 +325,7 @@ export default function SubscriptionEditWindow() {
         </div>
 
         {/* Content */}
-        <div className="relative flex flex-col overflow-hidden bg-white/20 backdrop-blur-2xl">
+        <div className="relative flex flex-col overflow-hidden bg-white/80">
           {/* Header */}
           <div className="px-10 pt-10 pb-6 shrink-0">
             <div className="flex items-center gap-3 mb-2">

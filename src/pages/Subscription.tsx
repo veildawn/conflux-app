@@ -52,9 +52,9 @@ function BentoCard({
   return (
     <div
       className={cn(
-        'bg-white dark:bg-zinc-900 rounded-[20px] p-5 shadow-xs border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden transition-all',
+        'bg-white dark:bg-zinc-900 rounded-[20px] p-5 shadow-xs border border-gray-100 dark:border-zinc-800 flex flex-col relative overflow-hidden',
         onClick &&
-          'cursor-pointer hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800',
+          'cursor-pointer transition-[box-shadow,border-color] duration-150 hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800',
         className
       )}
       onClick={onClick}
@@ -438,7 +438,7 @@ export default function SubscriptionPage() {
                 }
               >
                 {isApplying && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-zinc-900/50 z-20 backdrop-blur-sm rounded-[20px]">
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-zinc-900/90 z-20 rounded-[20px]">
                     <div className="flex flex-col items-center gap-2">
                       <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
                       <span className="text-xs font-medium text-blue-500">正在应用...</span>

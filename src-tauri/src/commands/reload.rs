@@ -17,6 +17,7 @@ use crate::commands::proxy::get_proxy_status;
 use crate::commands::{get_app_state, AppState};
 use crate::models::MihomoConfig;
 use crate::tray_menu::TrayMenuState;
+use crate::webdav::SyncManager;
 
 /// 配置重载选项
 #[derive(Clone)]
@@ -220,6 +221,9 @@ pub async fn reload_config(app: Option<&AppHandle>, options: &ReloadOptions) -> 
                     }
                 }
 
+                // 触发 WebDAV 自动上传（如果启用）
+                trigger_auto_upload().await;
+
                 return Ok(());
             }
             Err(e) => {
@@ -326,6 +330,115 @@ where
             Err(e)
         }
     }
+}
+
+/// 应用 MiHomo 设置变更（保存到 settings.json，然后应用到 config.yaml）
+///
+/// 这个函数用于修改用户设置（端口、DNS、TUN 等），流程：
+/// 1. 修改 settings.json 中的 mihomo 设置
+/// 2. 将设置应用到当前 config.yaml
+/// 3. 重载 MiHomo
+pub async fn apply_mihomo_settings_change<F>(
+    app: Option<&AppHandle>,
+    options: &ReloadOptions,
+    apply_fn: F,
+) -> Result<(), String>
+where
+    F: FnOnce(&mut crate::models::MihomoSettings) -> Result<(), String>,
+{
+    let state = get_app_state();
+
+    // 创建配置备份
+    let backup = if options.rollback_on_failure {
+        Some(ConfigBackup::create(state).map_err(|e| e.to_string())?)
+    } else {
+        None
+    };
+
+    // 1. 加载 settings.json
+    let mut app_settings = state
+        .config_manager
+        .load_app_settings()
+        .map_err(|e| e.to_string())?;
+
+    // 2. 应用设置变更
+    apply_fn(&mut app_settings.mihomo)?;
+
+    // 3. 保存 settings.json
+    state
+        .config_manager
+        .save_app_settings(&app_settings)
+        .map_err(|e| e.to_string())?;
+
+    // 4. 加载当前 config.yaml 并应用设置
+    let mut config = state
+        .config_manager
+        .load_mihomo_config()
+        .map_err(|e| e.to_string())?;
+
+    // 将 MihomoSettings 应用到 MihomoConfig
+    apply_settings_to_config(&app_settings.mihomo, &mut config);
+
+    // 5. 验证并保存 config.yaml
+    state
+        .config_manager
+        .validate_mihomo_config(&config)
+        .map_err(|e| e.to_string())?;
+
+    state
+        .config_manager
+        .save_mihomo_config(&config)
+        .map_err(|e| e.to_string())?;
+
+    // 6. 重载配置
+    match reload_config(app, options).await {
+        Ok(_) => {
+            if let Some(backup) = backup {
+                backup.cleanup();
+            }
+            Ok(())
+        }
+        Err(e) => {
+            if let Some(ref backup) = backup {
+                if options.rollback_on_failure {
+                    log::warn!("Settings change failed, attempting rollback...");
+                    if let Err(rollback_err) = backup.rollback() {
+                        log::error!("Failed to rollback: {}", rollback_err);
+                    } else {
+                        let _ = reload_config(app, &ReloadOptions::quick()).await;
+                        log::info!("Settings rolled back successfully");
+                    }
+                }
+            }
+            Err(e)
+        }
+    }
+}
+
+/// 将 MihomoSettings 应用到 MihomoConfig
+pub fn apply_settings_to_config(
+    settings: &crate::models::MihomoSettings,
+    config: &mut MihomoConfig,
+) {
+    config.port = settings.port;
+    config.socks_port = settings.socks_port;
+    config.mixed_port = settings.mixed_port;
+    config.allow_lan = settings.allow_lan;
+    config.ipv6 = settings.ipv6;
+    config.tcp_concurrent = settings.tcp_concurrent;
+    config.find_process_mode = settings.find_process_mode.clone();
+    config.tun = Some(settings.tun.clone());
+    config.dns = Some(settings.dns.clone());
+}
+
+/// 从 MihomoSettings 构建基础配置
+/// 
+/// 用于激活 profile 时，从 settings.json 中的设置构建 base_config，
+/// 然后再合并 profile 内容（proxies/rules 等）生成完整的运行时配置。
+pub fn build_base_config_from_settings(settings: &crate::models::MihomoSettings) -> MihomoConfig {
+    let mut config = MihomoConfig::default();
+    apply_settings_to_config(settings, &mut config);
+    config
 }
 
 /// 同步代理状态到前端和托盘菜单
@@ -443,4 +556,43 @@ pub async fn check_mihomo_healthy() -> bool {
             false
         }
     }
+}
+
+/// 触发 WebDAV 自动上传（如果启用）
+pub async fn trigger_auto_upload() {
+    let state = get_app_state();
+
+    // 加载应用设置，检查是否启用了自动上传
+    let settings = match state.config_manager.load_app_settings() {
+        Ok(s) => s,
+        Err(e) => {
+            log::debug!("Failed to load app settings for auto upload: {}", e);
+            return;
+        }
+    };
+
+    // 检查 WebDAV 是否启用且开启了自动上传
+    if !settings.webdav.enabled || !settings.webdav.auto_upload {
+        return;
+    }
+
+    log::info!("Triggering WebDAV auto upload...");
+
+    // 异步执行上传，不阻塞主流程
+    let webdav_config = settings.webdav.clone();
+    tokio::spawn(async move {
+        let sync_manager = SyncManager::new(webdav_config);
+        match sync_manager.upload_all().await {
+            Ok(result) => {
+                if result.success {
+                    log::info!("WebDAV auto upload completed: {}", result.message);
+                } else {
+                    log::warn!("WebDAV auto upload failed: {}", result.message);
+                }
+            }
+            Err(e) => {
+                log::warn!("WebDAV auto upload error: {}", e);
+            }
+        }
+    });
 }

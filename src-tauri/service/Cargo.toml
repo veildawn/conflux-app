@@ -10,13 +10,13 @@ path = "src/main.rs"
 
 [dependencies]
 # Windows service framework
-windows-service = "0.7"
+windows-service = "0.8"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 
 # HTTP server for IPC
-warp = "0.3"
+warp = "0.4"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -30,10 +30,10 @@ env_logger = "0.11"
 anyhow = "1"
 
 # Process management
-sysinfo = "0.33"
+sysinfo = "0.37"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.52", features = [
+windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_System_Services",
     "Win32_Security",

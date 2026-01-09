@@ -120,15 +120,10 @@ export default function ProxyGroupEditWindow() {
       onMouseDown={handleMouseDown}
     >
       {/* Background decorations */}
-      <div className="absolute inset-0 pointer-events-none rounded-xl overflow-hidden border-none">
-        <div className="absolute left-0 top-32 h-64 w-64 rounded-full bg-white/40 blur-3xl" />
-        <div className="absolute right-10 top-1/2 h-72 w-72 -translate-y-1/2 rounded-full bg-blue-200/40 blur-3xl" />
-        <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-rose-200/40 blur-3xl" />
-      </div>
 
       <div className="relative h-full w-full grid grid-cols-[240px_1fr] border-none">
         {/* Sidebar */}
-        <div className="flex flex-col bg-white/35 px-6 pt-3 pb-6 border-r border-black/5 backdrop-blur-[50px] rounded-l-xl border-l-0 border-t-0 border-b-0">
+        <div className="flex flex-col bg-white/90 px-6 pt-3 pb-6 border-r border-black/5 rounded-l-xl border-l-0 border-t-0 border-b-0">
           <div className="flex flex-col gap-2">
             {visibleSteps.map((key, index) => {
               const meta = STEP_METADATA[key];
@@ -168,7 +163,7 @@ export default function ProxyGroupEditWindow() {
         </div>
 
         {/* Main content */}
-        <div className="relative flex flex-col overflow-hidden bg-white/25 backdrop-blur-[50px] rounded-r-xl">
+        <div className="relative flex flex-col overflow-hidden bg-white/80 rounded-r-xl">
           <div className="flex-none px-8 pt-10 pb-6">
             <h1 className="text-2xl font-semibold text-neutral-900">{currentMeta.title}</h1>
             <p className="mt-1 text-sm text-neutral-500">{currentMeta.description}</p>

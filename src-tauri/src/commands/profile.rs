@@ -1,6 +1,7 @@
 use std::path::Path;
 use tauri::State;
 
+use crate::commands::reload::trigger_auto_upload;
 use crate::commands::AppState;
 use crate::config::Workspace;
 use crate::models::{ProfileConfig, ProfileMetadata, ProxyConfig, ProxyProvider, RuleProvider};
@@ -32,10 +33,12 @@ pub async fn get_active_profile_id() -> Result<Option<String>, String> {
 #[tauri::command]
 pub async fn create_remote_profile(name: String, url: String) -> Result<ProfileMetadata, String> {
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
-    workspace
+    let result = workspace
         .create_from_remote(&name, &url)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    on_profile_changed(None, false).await?;
+    Ok(result)
 }
 
 /// 创建本地文件 Profile
@@ -45,51 +48,65 @@ pub async fn create_local_profile(
     file_path: String,
 ) -> Result<ProfileMetadata, String> {
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
-    workspace
+    let result = workspace
         .create_from_local(&name, &file_path)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    on_profile_changed(None, false).await?;
+    Ok(result)
 }
 
 /// 创建空白 Profile
 #[tauri::command]
 pub async fn create_blank_profile(name: String) -> Result<ProfileMetadata, String> {
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
-    workspace.create_blank(&name).map_err(|e| e.to_string())
+    let result = workspace.create_blank(&name).map_err(|e| e.to_string())?;
+    on_profile_changed(None, false).await?;
+    Ok(result)
 }
 
 /// 删除 Profile
 #[tauri::command]
 pub async fn delete_profile(id: String) -> Result<(), String> {
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
-    workspace.delete_profile(&id).map_err(|e| e.to_string())
+    workspace.delete_profile(&id).map_err(|e| e.to_string())?;
+    on_profile_changed(None, false).await?;
+    Ok(())
 }
 
 /// 重命名 Profile
 #[tauri::command]
 pub async fn rename_profile(id: String, new_name: String) -> Result<ProfileMetadata, String> {
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
-    workspace
+    let result = workspace
         .rename_profile(&id, &new_name)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    on_profile_changed(None, false).await?;
+    Ok(result)
 }
 
 /// 激活 Profile
+///
+/// 从 settings.json 读取用户设置（ports/DNS/TUN 等），
+/// 合并 profile 内容（proxies/rules 等），生成完整的运行时配置。
 #[tauri::command]
 pub async fn activate_profile(id: String, state: State<'_, AppState>) -> Result<(), String> {
-    use crate::commands::reload::{reload_config, ConfigBackup, ReloadOptions};
+    use crate::commands::reload::{
+        build_base_config_from_settings, reload_config, ConfigBackup, ReloadOptions,
+    };
 
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
 
     // 创建配置备份
     let backup = ConfigBackup::create(&state).map_err(|e| e.to_string())?;
 
-    // 加载基础配置
-    let base_config = state
+    // 从 settings.json 构建基础配置（包含用户设置：ports/DNS/TUN 等）
+    let app_settings = state
         .config_manager
-        .load_mihomo_config()
+        .load_app_settings()
         .map_err(|e| e.to_string())?;
+    let base_config = build_base_config_from_settings(&app_settings.mihomo);
 
-    // 生成运行时配置
+    // 生成运行时配置（合并 profile 内容：proxies/rules 等）
     let runtime_config = workspace
         .activate_profile(&id, &base_config)
         .map_err(|e| e.to_string())?;
@@ -123,7 +140,9 @@ pub async fn refresh_profile(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<ProfileMetadata, String> {
-    use crate::commands::reload::{reload_config, ConfigBackup, ReloadOptions};
+    use crate::commands::reload::{
+        build_base_config_from_settings, reload_config, ConfigBackup, ReloadOptions,
+    };
 
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
 
@@ -144,10 +163,12 @@ pub async fn refresh_profile(
         // 创建配置备份
         let backup = ConfigBackup::create(&state).map_err(|e| e.to_string())?;
 
-        let base_config = state
+        // 从 settings.json 构建基础配置
+        let app_settings = state
             .config_manager
-            .load_mihomo_config()
+            .load_app_settings()
             .map_err(|e| e.to_string())?;
+        let base_config = build_base_config_from_settings(&app_settings.mihomo);
 
         let runtime_config = workspace
             .activate_profile(&id, &base_config)
@@ -204,6 +225,8 @@ pub async fn export_profile_config(
     target_path: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    use crate::commands::reload::build_base_config_from_settings;
+
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
     let (metadata, _) = workspace.get_profile(&id).map_err(|e| e.to_string())?;
 
@@ -216,10 +239,12 @@ pub async fn export_profile_config(
             .map_err(|e| e.to_string())?
     } else {
         // 如果不是激活的 Profile，临时生成运行时配置
-        let base_config = state
+        // 从 settings.json 构建基础配置
+        let app_settings = state
             .config_manager
-            .load_mihomo_config()
+            .load_app_settings()
             .map_err(|e| e.to_string())?;
+        let base_config = build_base_config_from_settings(&app_settings.mihomo);
         workspace
             .generate_runtime_config(&id, &base_config)
             .map_err(|e| e.to_string())?
@@ -269,11 +294,7 @@ pub async fn add_proxy(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    // 如果是活跃 Profile，重新加载
-    if metadata.active {
-        reload_active_profile(&state).await?;
-    }
-
+    on_profile_changed(Some(&state), metadata.active).await?;
     Ok(())
 }
 
@@ -306,10 +327,7 @@ pub async fn update_proxy(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    if metadata.active {
-        reload_active_profile(&state).await?;
-    }
-
+    on_profile_changed(Some(&state), metadata.active).await?;
     Ok(())
 }
 
@@ -330,13 +348,11 @@ pub async fn delete_proxy(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    let active_profile_id = workspace
+    let is_active = workspace
         .get_active_profile_id()
-        .map_err(|e| e.to_string())?;
-    if active_profile_id.as_deref() == Some(profile_id.as_str()) {
-        reload_active_profile(&state).await?;
-    }
-
+        .map(|id| id.as_deref() == Some(profile_id.as_str()))
+        .unwrap_or(false);
+    on_profile_changed(Some(&state), is_active).await?;
     Ok(())
 }
 
@@ -369,10 +385,7 @@ pub async fn add_rule_to_profile(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    if metadata.active {
-        reload_active_profile(&state).await?;
-    }
-
+    on_profile_changed(Some(&state), metadata.active).await?;
     Ok(())
 }
 
@@ -397,10 +410,7 @@ pub async fn delete_rule_from_profile(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    if metadata.active {
-        reload_active_profile(&state).await?;
-    }
-
+    on_profile_changed(Some(&state), metadata.active).await?;
     Ok(())
 }
 
@@ -423,10 +433,7 @@ pub async fn add_rule_provider_to_profile(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    if metadata.active {
-        reload_active_profile(&state).await?;
-    }
-
+    on_profile_changed(Some(&state), metadata.active).await?;
     Ok(())
 }
 
@@ -459,10 +466,7 @@ pub async fn delete_rule_provider_from_profile(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    if metadata.active {
-        reload_active_profile(&state).await?;
-    }
-
+    on_profile_changed(Some(&state), metadata.active).await?;
     Ok(())
 }
 
@@ -482,10 +486,7 @@ pub async fn update_profile_config(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    if metadata.active {
-        reload_active_profile(&state).await?;
-    }
-
+    on_profile_changed(Some(&state), metadata.active).await?;
     Ok(new_metadata)
 }
 
@@ -510,10 +511,7 @@ pub async fn add_proxy_provider_to_profile(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    if metadata.active {
-        reload_active_profile(&state).await?;
-    }
-
+    on_profile_changed(Some(&state), metadata.active).await?;
     Ok(())
 }
 
@@ -539,10 +537,7 @@ pub async fn update_proxy_provider_in_profile(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    if metadata.active {
-        reload_active_profile(&state).await?;
-    }
-
+    on_profile_changed(Some(&state), metadata.active).await?;
     Ok(())
 }
 
@@ -569,10 +564,7 @@ pub async fn delete_proxy_provider_from_profile(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    if metadata.active {
-        reload_active_profile(&state).await?;
-    }
-
+    on_profile_changed(Some(&state), metadata.active).await?;
     Ok(())
 }
 
@@ -598,10 +590,7 @@ pub async fn update_rule_provider_in_profile(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    if metadata.active {
-        reload_active_profile(&state).await?;
-    }
-
+    on_profile_changed(Some(&state), metadata.active).await?;
     Ok(())
 }
 
@@ -659,10 +648,7 @@ pub async fn rename_rule_provider_in_profile(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    if metadata.active {
-        reload_active_profile(&state).await?;
-    }
-
+    on_profile_changed(Some(&state), metadata.active).await?;
     log::info!(
         "Renamed rule provider '{}' to '{}' in profile '{}'",
         old_name,
@@ -718,10 +704,7 @@ pub async fn rename_proxy_provider_in_profile(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    if metadata.active {
-        reload_active_profile(&state).await?;
-    }
-
+    on_profile_changed(Some(&state), metadata.active).await?;
     log::info!(
         "Renamed proxy provider '{}' to '{}' in profile '{}'",
         old_name,
@@ -807,10 +790,7 @@ pub async fn rename_proxy_group_in_profile(
         .update_config(&profile_id, &config)
         .map_err(|e| e.to_string())?;
 
-    if metadata.active {
-        reload_active_profile(&state).await?;
-    }
-
+    on_profile_changed(Some(&state), metadata.active).await?;
     log::info!(
         "Renamed proxy group '{}' to '{}' in profile '{}'",
         old_name,
@@ -822,14 +802,31 @@ pub async fn rename_proxy_group_in_profile(
 
 // ==================== 辅助函数 ====================
 
-/// 重载活跃 Profile 的辅助函数
+/// Profile 变更后的统一处理
 ///
-/// 使用统一的配置重载机制，提供：
-/// - 配置备份和回滚
-/// - 重试机制
-/// - 错误恢复
-async fn reload_active_profile(state: &State<'_, AppState>) -> Result<(), String> {
-    use crate::commands::reload::{reload_config, ConfigBackup, ReloadOptions};
+/// - 如果是活跃 Profile，重载配置
+/// - 触发 WebDAV 自动同步
+async fn on_profile_changed(
+    state: Option<&State<'_, AppState>>,
+    is_active: bool,
+) -> Result<(), String> {
+    // 如果是活跃 Profile 且提供了 state，重载配置
+    if is_active {
+        if let Some(state) = state {
+            reload_active_profile_internal(state).await?;
+        }
+    }
+
+    // 触发自动同步
+    trigger_auto_upload().await;
+    Ok(())
+}
+
+/// 重载活跃 Profile 的内部实现
+async fn reload_active_profile_internal(state: &State<'_, AppState>) -> Result<(), String> {
+    use crate::commands::reload::{
+        build_base_config_from_settings, reload_config, ConfigBackup, ReloadOptions,
+    };
 
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
     let active_id = match workspace
@@ -843,10 +840,13 @@ async fn reload_active_profile(state: &State<'_, AppState>) -> Result<(), String
     // 创建配置备份
     let backup = ConfigBackup::create(state).map_err(|e| e.to_string())?;
 
-    let base_config = state
+    // 从 settings.json 构建基础配置
+    let app_settings = state
         .config_manager
-        .load_mihomo_config()
+        .load_app_settings()
         .map_err(|e| e.to_string())?;
+    let base_config = build_base_config_from_settings(&app_settings.mihomo);
+
     let runtime_config = workspace
         .activate_profile(&active_id, &base_config)
         .map_err(|e| e.to_string())?;
@@ -855,7 +855,7 @@ async fn reload_active_profile(state: &State<'_, AppState>) -> Result<(), String
         .save_mihomo_config(&runtime_config)
         .map_err(|e| e.to_string())?;
 
-    // 使用统一的重载机制
+    // 使用统一的重载机制（内部会触发 auto_upload，但我们在 on_profile_changed 中统一处理）
     let options = ReloadOptions::safe();
     if let Err(e) = reload_config(None, &options).await {
         // 重载失败，尝试回滚
