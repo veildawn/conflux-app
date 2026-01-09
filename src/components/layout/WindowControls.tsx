@@ -111,8 +111,8 @@ export default function WindowControls() {
       <button
         onClick={handleMaximize}
         className="group w-3 h-3 rounded-full bg-[#28C840] hover:bg-[#22A737] active:bg-[#1D8D2E] transition-all duration-150 flex items-center justify-center shadow-sm hover:shadow-md cursor-pointer"
-        aria-label={isMaximized ? "还原窗口" : "最大化窗口"}
-        title={isMaximized ? "还原" : "最大化"}
+        aria-label={isMaximized ? '还原窗口' : '最大化窗口'}
+        title={isMaximized ? '还原' : '最大化'}
         type="button"
       >
         {isHovered && (
@@ -126,7 +126,14 @@ export default function WindowControls() {
             {isMaximized ? (
               // 还原图标：两个重叠的小方框
               <>
-                <rect x="2.5" y="4" width="5" height="5" strokeLinecap="round" strokeLinejoin="round" />
+                <rect
+                  x="2.5"
+                  y="4"
+                  width="5"
+                  height="5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
                 <path d="M4.5 4V2.5h5v5H8" strokeLinecap="round" strokeLinejoin="round" />
               </>
             ) : (

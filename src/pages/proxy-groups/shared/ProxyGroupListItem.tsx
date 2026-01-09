@@ -54,11 +54,13 @@ export function ProxyGroupListItem({
     <div className="group relative flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-900 transition-colors">
       {/* Left side: Icon + Name */}
       <div className="flex items-center gap-3.5">
-        <div className={cn(
-          "flex h-[30px] w-[30px] items-center justify-center rounded-[7px] shrink-0",
-          iconStyles
-        )}>
-          {React.createElement(Icon, { className: "h-[18px] w-[18px]", strokeWidth: 2.5 })}
+        <div
+          className={cn(
+            'flex h-[30px] w-[30px] items-center justify-center rounded-[7px] shrink-0',
+            iconStyles
+          )}
+        >
+          {React.createElement(Icon, { className: 'h-[18px] w-[18px]', strokeWidth: 2.5 })}
         </div>
         <span className="text-[15px] font-medium tracking-[-0.2px] text-[#1D1D1F] dark:text-gray-100">
           {group.name}
