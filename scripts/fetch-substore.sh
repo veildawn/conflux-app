@@ -142,6 +142,7 @@ print(data.get('tag_name', 'unknown'))
 echo "Backend release: $backend_tag"
 
 # Fetch frontend release info
+# Note: Frontend uses 'latest' because it has different release cycle than backend
 echo ""
 echo "================================================"
 echo "Fetching Frontend Release Info"
@@ -149,7 +150,7 @@ echo "================================================"
 frontend_tag=""
 frontend_available=false
 
-if fetch_release_info "$FRONTEND_REPO" "$VERSION" "$tmp_frontend_json"; then
+if fetch_release_info "$FRONTEND_REPO" "latest" "$tmp_frontend_json"; then
   frontend_tag="$("$PYTHON_BIN" -c "
 import json
 with open(r'$(python_path "$tmp_frontend_json")', encoding='utf-8') as f:
