@@ -14,7 +14,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::time::sleep;
 
 use crate::commands::proxy::get_proxy_status;
-use crate::commands::{get_app_state, AppState};
+use crate::commands::{get_app_state_or_err, try_get_app_state, AppState};
 use crate::models::MihomoConfig;
 use crate::tray_menu::TrayMenuState;
 use crate::webdav::SyncManager;
@@ -137,7 +137,7 @@ impl Drop for ConfigBackup {
 /// 在核心启动过程中，进程可能已存在但 API 尚未就绪。
 /// 此函数会等待 API 能够正常响应，避免后续操作失败。
 async fn wait_for_api_ready(timeout_secs: u64) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
     let max_attempts = timeout_secs * 2; // 每 500ms 检查一次
 
     for attempt in 1..=max_attempts {
@@ -175,7 +175,7 @@ async fn wait_for_api_ready(timeout_secs: u64) -> Result<(), String> {
 /// 3. 执行配置重载
 /// 4. 验证重载成功
 pub async fn reload_config(app: Option<&AppHandle>, options: &ReloadOptions) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     // 如果 mihomo 进程没有运行，直接返回成功
     // 配置已保存，下次启动核心时会自动加载新配置
@@ -274,7 +274,7 @@ pub async fn apply_config_change<F>(
 where
     F: FnOnce(&mut MihomoConfig) -> Result<(), String>,
 {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     // 创建配置备份
     let backup = if options.rollback_on_failure {
@@ -346,7 +346,7 @@ pub async fn apply_mihomo_settings_change<F>(
 where
     F: FnOnce(&mut crate::models::MihomoSettings) -> Result<(), String>,
 {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     // 创建配置备份
     let backup = if options.rollback_on_failure {
@@ -457,7 +457,7 @@ pub async fn sync_proxy_status(app: &AppHandle) {
 /// 3. 等待健康检查通过
 /// 4. 如果之前开启了这些功能，尝试恢复
 pub async fn safe_restart_proxy(app: &AppHandle) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     // 记录当前状态
     let was_system_proxy_enabled = *state.system_proxy_enabled.lock().await;
@@ -542,7 +542,9 @@ pub async fn safe_restart_proxy(app: &AppHandle) -> Result<(), String> {
 /// 检查 mihomo 是否健康
 #[allow(dead_code)]
 pub async fn check_mihomo_healthy() -> bool {
-    let state = get_app_state();
+    let Some(state) = try_get_app_state() else {
+        return false;
+    };
 
     if !state.mihomo_manager.is_running().await {
         return false;
@@ -560,7 +562,9 @@ pub async fn check_mihomo_healthy() -> bool {
 
 /// 触发 WebDAV 自动上传（如果启用）
 pub async fn trigger_auto_upload() {
-    let state = get_app_state();
+    let Some(state) = try_get_app_state() else {
+        return;
+    };
 
     // 加载应用设置，检查是否启用了自动上传
     let settings = match state.config_manager.load_app_settings() {

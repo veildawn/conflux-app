@@ -1,12 +1,12 @@
 use tauri::AppHandle;
 
-use super::get_app_state;
+use super::get_app_state_or_err;
 use crate::mihomo::LogLevel;
 
 /// 开始日志流
 #[tauri::command]
 pub async fn start_log_stream(app: AppHandle, level: String) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
     let log_level = LogLevel::from(level.as_str());
 
     state
@@ -19,7 +19,7 @@ pub async fn start_log_stream(app: AppHandle, level: String) -> Result<(), Strin
 /// 停止日志流
 #[tauri::command]
 pub async fn stop_log_stream() -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
     state.log_streamer.stop();
     Ok(())
 }
@@ -27,7 +27,7 @@ pub async fn stop_log_stream() -> Result<(), String> {
 /// 设置日志级别
 #[tauri::command]
 pub async fn set_log_level(level: String) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
     let log_level = LogLevel::from(level.as_str());
     state.log_streamer.set_level(log_level).await;
     Ok(())

@@ -621,35 +621,35 @@ jobs:
             COMMITS=$(git log --pretty=format:"%s" 2>/dev/null | head -30 || true)
           fi
 
-          # 分类统计
-          FEAT_COMMITS=$(echo "$COMMITS" | grep "^feat" | sed 's/^feat[:(] *//; s/)$//' || true)
+          # 分类统计并去重
+          FEAT_COMMITS=$(echo "$COMMITS" | grep "^feat" | sed 's/^feat[:(] *//; s/)$//' | sort -u || true)
           FIX_COUNT=$(echo "$COMMITS" | grep -c "^fix" || echo "0")
-          PERF_COMMITS=$(echo "$COMMITS" | grep "^perf\|^refactor\|^ci" | sed 's/^\(perf\|refactor\|ci\)[:(] *//; s/)$//' || true)
+          PERF_COMMITS=$(echo "$COMMITS" | grep "^perf\|^refactor\|^ci" | sed 's/^\(perf\|refactor\|ci\)[:(] *//; s/)$//' | sort -u || true)
 
           # 如果有智谱 API Key，使用 AI 生成描述
           if [ -n "$ZHIPU_API_KEY" ] && [ -n "$FEAT_COMMITS" ]; then
             echo "🤖 Using Zhipu AI to generate release notes..."
 
-            # 构建 AI 请求
-            FEAT_LIST=$(echo "$FEAT_COMMITS" | head -10 | tr '\n' '|' | sed 's/|$//')
+            # 构建 AI 请求 - 去重并限制数量
+            FEAT_LIST=$(echo "$FEAT_COMMITS" | sort -u | head -10 | tr '\n' '|' | sed 's/|$//')
 
             AI_RESPONSE=$(curl -s -X POST "https://open.bigmodel.cn/api/paas/v4/chat/completions" \
               -H "Authorization: Bearer $ZHIPU_API_KEY" \
               -H "Content-Type: application/json" \
               -d "{
-                \"model\": \"glm-4.6v-flash\",
+                \"model\": \"glm-4-flash\",
                 \"messages\": [
                   {
                     \"role\": \"system\",
-                    \"content\": \"你是一个专业的软件发布说明撰写者。请将 git commit 信息转换为用户友好的中文更新说明。要求：1. 每条功能用一句话描述，突出对用户的价值 2. 使用简洁易懂的语言 3. 每条前面加上合适的 emoji 4. 直接输出列表，不要加标题\"
+                    \"content\": \"将 git commit 转为简洁的中文更新说明。规则：1) 合并相似功能为一条 2) 用大白话描述，让普通用户能看懂 3) 每条加 emoji 4) 只输出列表，无需标题\"
                   },
                   {
                     \"role\": \"user\",
-                    \"content\": \"请将以下功能更新转换为用户友好的说明：${FEAT_LIST}\"
+                    \"content\": \"${FEAT_LIST}\"
                   }
                 ],
-                \"temperature\": 0.7,
-                \"max_tokens\": 500
+                \"temperature\": 0.5,
+                \"max_tokens\": 400
               }" 2>/dev/null || echo "")
 
             # 提取 AI 响应内容
@@ -662,60 +662,68 @@ jobs:
           {
             echo "CHANGELOG<<EOF"
 
-            # 新功能
-            echo "## ✨ 新功能"
-            echo ""
+            HAS_CONTENT=false
+
+            # 新功能（仅在有内容时显示）
             if [ -n "$AI_FEATURES" ]; then
+              echo "## ✨ 新功能"
+              echo ""
               echo "$AI_FEATURES"
+              echo ""
+              HAS_CONTENT=true
             elif [ -n "$FEAT_COMMITS" ]; then
-              echo "$FEAT_COMMITS" | while read -r line; do
+              echo "## ✨ 新功能"
+              echo ""
+              echo "$FEAT_COMMITS" | head -8 | while read -r line; do
                 [ -n "$line" ] && echo "- $line"
               done
-            else
-              echo "_本版本无新功能_"
+              echo ""
+              HAS_CONTENT=true
             fi
-            echo ""
 
-            # 优化改进
-            echo "## 🚀 优化改进"
-            echo ""
+            # 优化改进（仅在有内容时显示）
             if [ -n "$PERF_COMMITS" ]; then
+              echo "## 🚀 优化改进"
+              echo ""
               echo "$PERF_COMMITS" | head -5 | while read -r line; do
                 [ -n "$line" ] && echo "- $line"
               done
-            else
-              echo "_本版本无优化改进_"
+              echo ""
+              HAS_CONTENT=true
             fi
-            echo ""
 
-            # Bug 修复 - 只显示数量
-            echo "## 🐛 Bug 修复"
-            echo ""
+            # Bug 修复（仅在有修复时显示）
             if [ "$FIX_COUNT" -gt 0 ]; then
+              echo "## 🐛 Bug 修复"
+              echo ""
               echo "修复了 **${FIX_COUNT}** 个问题"
-            else
-              echo "_本版本无 Bug 修复_"
+              echo ""
+              HAS_CONTENT=true
             fi
-            echo ""
+
+            # 如果没有任何更新内容
+            if [ "$HAS_CONTENT" = false ]; then
+              echo "## 📦 版本更新"
+              echo ""
+              echo "常规维护更新"
+              echo ""
+            fi
 
             # 安装说明
             echo "---"
             echo ""
-            echo "## 📥 安装说明"
+            echo "## 📥 下载安装"
             echo ""
-            echo "| 平台 | 文件 | 说明 |"
-            echo "|------|------|------|"
-            echo "| macOS (Apple Silicon) | \`Conflux_x.x.x_aarch64.dmg\` | M1/M2/M3/M4 芯片 |"
-            echo "| macOS (Intel) | \`Conflux_x.x.x_x64.dmg\` | Intel 芯片 |"
-            echo "| Windows | \`Conflux_x.x.x_x64-setup.exe\` | 64 位 Windows |"
+            echo "| 系统 | 下载文件 | 适用设备 |"
+            echo "|:-----|:---------|:---------|"
+            echo "| macOS | \`*_aarch64.dmg\` | M 系列芯片 Mac |"
+            echo "| macOS | \`*_x64.dmg\` | Intel 芯片 Mac |"
+            echo "| Windows | \`*_x64-setup.exe\` | Windows 10/11 |"
             echo ""
-            echo "### macOS 首次安装"
-            echo ""
-            echo "由于应用未签名，首次安装后需要移除隔离属性："
-            echo ""
-            echo "\`\`\`bash"
-            echo "sudo xattr -rd com.apple.quarantine \"/Applications/Conflux.app\""
-            echo "\`\`\`"
+            echo "> **macOS 用户注意**：首次打开如遇\"已损坏\"提示，请在终端执行："
+            echo "> \`\`\`"
+            echo "> sudo xattr -rd com.apple.quarantine /Applications/Conflux.app"
+            echo "> \`\`\`"
 
             echo "EOF"
           } >> $GITHUB_OUTPUT

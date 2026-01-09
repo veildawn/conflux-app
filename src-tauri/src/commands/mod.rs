@@ -34,9 +34,25 @@ pub struct AppState {
 /// 全局应用状态（用于非命令的地方访问）
 static APP_STATE: OnceCell<AppState> = OnceCell::new();
 
-/// 获取应用状态
+/// 获取应用状态（返回 Option，调用方需要处理未初始化的情况）
+pub fn try_get_app_state() -> Option<&'static AppState> {
+    APP_STATE.get()
+}
+
+/// 获取应用状态（如果未初始化则 panic）
+/// 注意：优先使用 get_app_state_or_err() 以获得更好的错误处理
+#[allow(dead_code)]
 pub fn get_app_state() -> &'static AppState {
-    APP_STATE.get().expect("App state not initialized")
+    APP_STATE
+        .get()
+        .expect("App state not initialized. Please wait for the app to fully load.")
+}
+
+/// 获取应用状态，如果未初始化返回友好错误信息
+pub fn get_app_state_or_err() -> Result<&'static AppState, String> {
+    APP_STATE
+        .get()
+        .ok_or_else(|| "应用正在初始化中，请稍候再试...".to_string())
 }
 
 /// 需要有激活的远程订阅，并且订阅配置中存在代理节点
