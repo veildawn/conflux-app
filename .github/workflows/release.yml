@@ -778,21 +778,27 @@ jobs:
 
             # Update Cask file
             mkdir -p Casks
-            cat > Casks/conflux.rb << CASK
+            cat > Casks/conflux.rb << 'CASK'
 # typed: false
 # frozen_string_literal: true
 
 cask "conflux" do
-  version "$VERSION"
+CASK
+            echo "  version \"$VERSION\"" >> Casks/conflux.rb
+            cat >> Casks/conflux.rb << 'CASK'
 
   on_intel do
-    sha256 "$X64_SHA"
+CASK
+            echo "    sha256 \"$X64_SHA\"" >> Casks/conflux.rb
+            cat >> Casks/conflux.rb << 'CASK'
     url "https://github.com/Ashbaer/conflux-app/releases/download/v#{version}/Conflux_#{version}_x64.dmg",
         verified: "github.com/Ashbaer/conflux-app/"
   end
 
   on_arm do
-    sha256 "$ARM64_SHA"
+CASK
+            echo "    sha256 \"$ARM64_SHA\"" >> Casks/conflux.rb
+            cat >> Casks/conflux.rb << 'CASK'
     url "https://github.com/Ashbaer/conflux-app/releases/download/v#{version}/Conflux_#{version}_aarch64.dmg",
         verified: "github.com/Ashbaer/conflux-app/"
   end
