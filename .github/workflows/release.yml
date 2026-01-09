@@ -637,7 +637,7 @@ jobs:
               -H "Authorization: Bearer $ZHIPU_API_KEY" \
               -H "Content-Type: application/json" \
               -d "{
-                \"model\": \"glm-4.5-flash\",
+                \"model\": \"glm-4.6v-flash\",
                 \"messages\": [
                   {
                     \"role\": \"system\",
