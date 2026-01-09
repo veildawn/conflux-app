@@ -164,32 +164,34 @@ impl SyncManager {
         Ok(files)
     }
 
-    /// 上传所有配置到远端
+    /// 上传所有配置到远端（先清空远端，再上传本地配置）
     pub async fn upload_all(&self) -> Result<SyncResult> {
         let client = self.create_client()?;
         let mut uploaded_files = Vec::new();
         let mut state = Self::load_sync_state()?;
 
-        // 确保远端基础目录存在
+        // 1. 递归删除远端目录内容（坚果云不允许直接删除非空目录）
+        let _ = client.delete_dir_contents(REMOTE_BASE_PATH).await;
+
+        // 2. 确保目录存在
         client.ensure_dir(REMOTE_BASE_PATH).await?;
 
-        // 获取本地文件列表
+        // 3. 上传本地所有文件
         let local_files = Self::get_local_files()?;
+        state.files.clear(); // 清空旧的同步状态
 
-        for (relative_path, local_path) in local_files {
-            let content = fs::read(&local_path)?;
+        for (relative_path, local_path) in &local_files {
+            let content = fs::read(local_path)?;
             let hash = Self::compute_hash(&content);
             let remote_path = format!("{}/{}", REMOTE_BASE_PATH, relative_path);
 
-            // 上传文件
             client.upload_file(&remote_path, &content).await?;
             uploaded_files.push(relative_path.clone());
 
-            // 更新同步状态
             state.files.insert(
                 relative_path.clone(),
                 FileSyncState {
-                    path: relative_path,
+                    path: relative_path.clone(),
                     hash,
                     synced_at: chrono::Local::now().to_rfc3339(),
                 },
