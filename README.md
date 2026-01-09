@@ -36,6 +36,15 @@
 
 ## 下载安装
 
+### 通过 Homebrew 安装 (macOS)
+
+```bash
+brew tap Ashbaer/conflux
+brew install --cask conflux
+```
+
+或者直接下载安装包：
+
 前往 [Releases](https://github.com/Ashbaer/conflux-app/releases) 页面下载对应平台的安装包：
 
 | 平台    | 架构                        | 文件格式             |
