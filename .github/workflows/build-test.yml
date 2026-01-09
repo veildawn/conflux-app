@@ -16,7 +16,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  SUBSTORE_VERSION: "2.18.5-2"
+  SUBSTORE_VERSION: "latest"
 
 permissions:
   contents: read
@@ -92,7 +92,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src-tauri/resources/sub-store
-          key: substore-v${{ env.SUBSTORE_VERSION }}
+          key: substore-${{ github.run_id }}
 
       - name: Fetch Sub-Store
         if: steps.cache-substore.outputs.cache-hit != 'true'
@@ -223,7 +223,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src-tauri/resources/sub-store
-          key: substore-v${{ env.SUBSTORE_VERSION }}
+          key: substore-${{ github.run_id }}
 
       - name: Fetch Sub-Store
         if: steps.cache-substore.outputs.cache-hit != 'true'
@@ -365,7 +365,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src-tauri/resources/sub-store
-          key: substore-v${{ env.SUBSTORE_VERSION }}
+          key: substore-${{ github.run_id }}
 
       - name: Fetch Sub-Store
         if: steps.cache-substore.outputs.cache-hit != 'true'
