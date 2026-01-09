@@ -6,14 +6,14 @@ interface IconProps {
 
 // 域名图标 - DOMAIN
 export const DomainIcon = ({ className }: IconProps) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
-    className={cn("w-4 h-4", className)}
+    className={cn('w-4 h-4', className)}
   >
     <circle cx="12" cy="12" r="10" />
     <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
@@ -23,14 +23,14 @@ export const DomainIcon = ({ className }: IconProps) => (
 
 // 域名后缀图标 - DOMAIN-SUFFIX
 export const DomainSuffixIcon = ({ className }: IconProps) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
-    className={cn("w-4 h-4", className)}
+    className={cn('w-4 h-4', className)}
   >
     <circle cx="12" cy="12" r="10" />
     <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
@@ -41,14 +41,14 @@ export const DomainSuffixIcon = ({ className }: IconProps) => (
 
 // 域名关键词图标 - DOMAIN-KEYWORD
 export const DomainKeywordIcon = ({ className }: IconProps) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
-    className={cn("w-4 h-4", className)}
+    className={cn('w-4 h-4', className)}
   >
     <circle cx="12" cy="12" r="10" />
     <path d="M9 9h6M9 12h4M9 15h5" />
@@ -57,14 +57,14 @@ export const DomainKeywordIcon = ({ className }: IconProps) => (
 
 // 地理IP图标 - GEOIP
 export const GeoIPIcon = ({ className }: IconProps) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
-    className={cn("w-4 h-4", className)}
+    className={cn('w-4 h-4', className)}
   >
     <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
     <circle cx="12" cy="9" r="2.5" />
@@ -73,14 +73,14 @@ export const GeoIPIcon = ({ className }: IconProps) => (
 
 // 地理站点图标 - GEOSITE
 export const GeoSiteIcon = ({ className }: IconProps) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
-    className={cn("w-4 h-4", className)}
+    className={cn('w-4 h-4', className)}
   >
     <circle cx="12" cy="10" r="3" />
     <path d="M12 2C8.13 2 5 5.13 5 9c0 4.17 4.42 9.92 6.24 12.11a1.01 1.01 0 0 0 1.52 0C14.58 18.92 19 13.17 19 9c0-3.87-3.13-7-7-7z" />
@@ -90,14 +90,14 @@ export const GeoSiteIcon = ({ className }: IconProps) => (
 
 // IP-CIDR 图标
 export const IPCIDRIcon = ({ className }: IconProps) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
-    className={cn("w-4 h-4", className)}
+    className={cn('w-4 h-4', className)}
   >
     <rect x="3" y="3" width="7" height="7" rx="1" />
     <rect x="14" y="3" width="7" height="7" rx="1" />
@@ -112,32 +112,34 @@ export const IPCIDRIcon = ({ className }: IconProps) => (
 
 // IP-CIDR6 图标 (IPv6)
 export const IPCIDR6Icon = ({ className }: IconProps) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
-    className={cn("w-4 h-4", className)}
+    className={cn('w-4 h-4', className)}
   >
     <path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4z" />
     <path d="M4 10h4v4H4zM10 10h4v4h-4zM16 10h4v4h-4z" />
     <path d="M7 16h10v4H7z" />
-    <text x="12" y="19.5" fontSize="5" fill="currentColor" textAnchor="middle" fontWeight="bold">6</text>
+    <text x="12" y="19.5" fontSize="5" fill="currentColor" textAnchor="middle" fontWeight="bold">
+      6
+    </text>
   </svg>
 );
 
 // 源IP图标 - SRC-IP-CIDR
 export const SrcIPIcon = ({ className }: IconProps) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
-    className={cn("w-4 h-4", className)}
+    className={cn('w-4 h-4', className)}
   >
     <rect x="3" y="6" width="8" height="12" rx="2" />
     <path d="M7 10v4" />
@@ -149,14 +151,14 @@ export const SrcIPIcon = ({ className }: IconProps) => (
 
 // 源端口图标 - SRC-PORT
 export const SrcPortIcon = ({ className }: IconProps) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
-    className={cn("w-4 h-4", className)}
+    className={cn('w-4 h-4', className)}
   >
     <rect x="2" y="6" width="8" height="12" rx="2" />
     <path d="M6 10v4" />
@@ -168,14 +170,14 @@ export const SrcPortIcon = ({ className }: IconProps) => (
 
 // 目标端口图标 - DST-PORT
 export const DstPortIcon = ({ className }: IconProps) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
-    className={cn("w-4 h-4", className)}
+    className={cn('w-4 h-4', className)}
   >
     <path d="M2 12h9" />
     <path d="M7 9l-3 3 3 3" />
@@ -187,14 +189,14 @@ export const DstPortIcon = ({ className }: IconProps) => (
 
 // 进程名图标 - PROCESS-NAME
 export const ProcessNameIcon = ({ className }: IconProps) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
-    className={cn("w-4 h-4", className)}
+    className={cn('w-4 h-4', className)}
   >
     <rect x="4" y="4" width="16" height="16" rx="2" />
     <path d="M9 9h6v6H9z" />
@@ -204,14 +206,14 @@ export const ProcessNameIcon = ({ className }: IconProps) => (
 
 // 进程路径图标 - PROCESS-PATH
 export const ProcessPathIcon = ({ className }: IconProps) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
-    className={cn("w-4 h-4", className)}
+    className={cn('w-4 h-4', className)}
   >
     <path d="M3 6h18M3 6v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6M3 6l3-4h12l3 4" />
     <path d="M8 10h8M8 14h5" />
@@ -220,14 +222,14 @@ export const ProcessPathIcon = ({ className }: IconProps) => (
 
 // 规则集图标 - RULE-SET
 export const RuleSetIcon = ({ className }: IconProps) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
-    className={cn("w-4 h-4", className)}
+    className={cn('w-4 h-4', className)}
   >
     <path d="M4 4h16a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
     <path d="M4 14h16a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2z" />
@@ -239,14 +241,14 @@ export const RuleSetIcon = ({ className }: IconProps) => (
 
 // 匹配所有图标 - MATCH
 export const MatchIcon = ({ className }: IconProps) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
-    className={cn("w-4 h-4", className)}
+    className={cn('w-4 h-4', className)}
   >
     <circle cx="12" cy="12" r="10" />
     <path d="M8 12l3 3 5-6" strokeWidth="2.5" />
@@ -255,14 +257,14 @@ export const MatchIcon = ({ className }: IconProps) => (
 
 // 默认/未知规则图标
 export const DefaultRuleIcon = ({ className }: IconProps) => (
-  <svg 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
     strokeLinejoin="round"
-    className={cn("w-4 h-4", className)}
+    className={cn('w-4 h-4', className)}
   >
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
   </svg>
@@ -274,7 +276,7 @@ export const DefaultRuleIcon = ({ className }: IconProps) => (
 export const getRuleIconComponent = (type: string) => {
   // 统一转换为大写进行比较
   const normalizedType = type.toUpperCase().replace(/-/g, '');
-  
+
   switch (normalizedType) {
     case 'DOMAIN':
       return DomainIcon;
@@ -308,4 +310,3 @@ export const getRuleIconComponent = (type: string) => {
       return DefaultRuleIcon;
   }
 };
-
