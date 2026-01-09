@@ -626,12 +626,17 @@ jobs:
           FIX_COUNT=$(echo "$COMMITS" | grep -c "^fix" || echo "0")
           PERF_COMMITS=$(echo "$COMMITS" | grep "^perf\|^refactor\|^ci" | sed 's/^\(perf\|refactor\|ci\)[:(] *//; s/)$//' | sort -u || true)
 
-          # 如果有智谱 API Key，使用 AI 生成描述
-          if [ -n "$ZHIPU_API_KEY" ] && [ -n "$FEAT_COMMITS" ]; then
+          # 合并所有需要 AI 处理的内容
+          ALL_COMMITS=""
+          [ -n "$FEAT_COMMITS" ] && ALL_COMMITS="${ALL_COMMITS}[新功能] ${FEAT_COMMITS}"$'\n'
+          [ -n "$PERF_COMMITS" ] && ALL_COMMITS="${ALL_COMMITS}[优化] ${PERF_COMMITS}"
+
+          # 如果有智谱 API Key 且有内容，使用 AI 生成描述
+          if [ -n "$ZHIPU_API_KEY" ] && [ -n "$ALL_COMMITS" ]; then
             echo "🤖 Using Zhipu AI to generate release notes..."
 
-            # 构建 AI 请求 - 去重并限制数量
-            FEAT_LIST=$(echo "$FEAT_COMMITS" | sort -u | head -10 | tr '\n' '|' | sed 's/|$//')
+            # 转换为单行，用 | 分隔
+            COMMIT_LIST=$(echo "$ALL_COMMITS" | tr '\n' '|' | sed 's/|$//')
 
             AI_RESPONSE=$(curl -s -X POST "https://open.bigmodel.cn/api/paas/v4/chat/completions" \
               -H "Authorization: Bearer $ZHIPU_API_KEY" \
@@ -641,20 +646,20 @@ jobs:
                 \"messages\": [
                   {
                     \"role\": \"system\",
-                    \"content\": \"将 git commit 转为简洁的中文更新说明。规则：1) 合并相似功能为一条 2) 用大白话描述，让普通用户能看懂 3) 每条加 emoji 4) 只输出列表，无需标题\"
+                    \"content\": \"你是版本发布说明生成器。将 git commit 转为用户友好的中文更新说明。\\n\\n严格规则：\\n1. 相同功能的多个 commit 必须合并为一条（如 release notes 相关的都合并）\\n2. 用大白话描述，让普通用户能看懂功能价值\\n3. 每条前加合适的 emoji\\n4. 按 [新功能] 和 [优化] 分类输出\\n5. 每个分类最多 3 条，必须去重合并\\n\\n输出格式：\\n## ✨ 新功能\\n- emoji 描述\\n\\n## 🚀 优化改进\\n- emoji 描述\"
                   },
                   {
                     \"role\": \"user\",
-                    \"content\": \"${FEAT_LIST}\"
+                    \"content\": \"${COMMIT_LIST}\"
                   }
                 ],
-                \"temperature\": 0.5,
-                \"max_tokens\": 400
+                \"temperature\": 0.3,
+                \"max_tokens\": 500
               }" 2>/dev/null || echo "")
 
             # 提取 AI 响应内容
             if [ -n "$AI_RESPONSE" ]; then
-              AI_FEATURES=$(echo "$AI_RESPONSE" | python3 -c "import sys,json; data=json.load(sys.stdin); print(data.get('choices',[{}])[0].get('message',{}).get('content',''))" 2>/dev/null || echo "")
+              AI_CONTENT=$(echo "$AI_RESPONSE" | python3 -c "import sys,json; data=json.load(sys.stdin); print(data.get('choices',[{}])[0].get('message',{}).get('content',''))" 2>/dev/null || echo "")
             fi
           fi
 
@@ -664,32 +669,32 @@ jobs:
 
             HAS_CONTENT=false
 
-            # 新功能（仅在有内容时显示）
-            if [ -n "$AI_FEATURES" ]; then
-              echo "## ✨ 新功能"
-              echo ""
-              echo "$AI_FEATURES"
+            # 如果 AI 生成了内容，直接使用
+            if [ -n "$AI_CONTENT" ]; then
+              echo "$AI_CONTENT"
               echo ""
               HAS_CONTENT=true
-            elif [ -n "$FEAT_COMMITS" ]; then
-              echo "## ✨ 新功能"
-              echo ""
-              echo "$FEAT_COMMITS" | head -8 | while read -r line; do
-                [ -n "$line" ] && echo "- $line"
-              done
-              echo ""
-              HAS_CONTENT=true
-            fi
+            else
+              # 回退到原始逻辑
+              if [ -n "$FEAT_COMMITS" ]; then
+                echo "## ✨ 新功能"
+                echo ""
+                echo "$FEAT_COMMITS" | head -5 | while read -r line; do
+                  [ -n "$line" ] && echo "- $line"
+                done
+                echo ""
+                HAS_CONTENT=true
+              fi
 
-            # 优化改进（仅在有内容时显示）
-            if [ -n "$PERF_COMMITS" ]; then
-              echo "## 🚀 优化改进"
-              echo ""
-              echo "$PERF_COMMITS" | head -5 | while read -r line; do
-                [ -n "$line" ] && echo "- $line"
-              done
-              echo ""
-              HAS_CONTENT=true
+              if [ -n "$PERF_COMMITS" ]; then
+                echo "## 🚀 优化改进"
+                echo ""
+                echo "$PERF_COMMITS" | head -3 | while read -r line; do
+                  [ -n "$line" ] && echo "- $line"
+                done
+                echo ""
+                HAS_CONTENT=true
+              fi
             fi
 
             # Bug 修复（仅在有修复时显示）
