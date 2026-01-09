@@ -1,4 +1,4 @@
-use crate::commands::get_app_state;
+use crate::commands::get_app_state_or_err;
 use crate::models::{AppSettings, MihomoConfig};
 
 #[derive(serde::Deserialize)]
@@ -17,7 +17,7 @@ struct GithubAsset {
 /// 获取 MiHomo 配置
 #[tauri::command]
 pub async fn get_config() -> Result<MihomoConfig, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     state
         .config_manager
@@ -38,7 +38,7 @@ pub struct ProxyServerInfo {
 /// 获取配置文件中的代理服务器列表
 #[tauri::command]
 pub async fn get_config_proxies() -> Result<Vec<ProxyServerInfo>, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
     let config = state
         .config_manager
         .load_mihomo_config()
@@ -65,7 +65,7 @@ pub async fn get_config_proxies() -> Result<Vec<ProxyServerInfo>, String> {
 pub async fn save_config(config: MihomoConfig) -> Result<(), String> {
     use crate::commands::reload::{reload_config, ConfigBackup, ReloadOptions};
 
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     // 验证配置
     state
@@ -154,7 +154,7 @@ pub async fn save_config(config: MihomoConfig) -> Result<(), String> {
 /// 获取应用设置
 #[tauri::command]
 pub async fn get_app_settings() -> Result<AppSettings, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     state
         .config_manager
@@ -165,7 +165,7 @@ pub async fn get_app_settings() -> Result<AppSettings, String> {
 /// 保存应用设置
 #[tauri::command]
 pub async fn save_app_settings(settings: AppSettings) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     state
         .config_manager
@@ -392,7 +392,7 @@ pub async fn download_resource(
     );
 
     // 如果 mihomo 正在运行，立即重新加载 GEO 数据库
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
     if state.mihomo_manager.is_running().await {
         // 判断是否是 GEO 相关文件
         let is_geo_file = file_name.contains("geoip")
@@ -449,7 +449,7 @@ pub async fn download_resource(
 pub async fn reload_geo_database() -> Result<(), String> {
     log::info!("Reloading GEO database...");
 
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("Mihomo is not running".to_string());
@@ -714,7 +714,7 @@ pub async fn check_resource_files(
 /// 获取规则列表
 #[tauri::command]
 pub async fn get_rules() -> Result<Vec<String>, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     let config = state
         .config_manager
@@ -754,7 +754,7 @@ pub async fn apply_subscription(
     path: String,
     sub_type: String,
 ) -> Result<ApplySubscriptionResult, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     log::info!("Applying subscription from: {} (type: {})", path, sub_type);
 

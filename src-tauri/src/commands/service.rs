@@ -3,7 +3,7 @@
 //! 仅在 Windows 平台上可用
 
 #[cfg(target_os = "windows")]
-use crate::commands::get_app_state;
+use crate::commands::get_app_state_or_err;
 
 /// 获取服务状态
 #[cfg(target_os = "windows")]
@@ -60,7 +60,7 @@ pub async fn uninstall_service(app: tauri::AppHandle) -> Result<(), String> {
         return Err("服务未安装".to_string());
     }
 
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     // 1. 检查 TUN 模式是否启用，如果启用需要先禁用
     let config = state
@@ -141,7 +141,7 @@ pub async fn start_service(app: tauri::AppHandle) -> Result<(), String> {
     use crate::commands::reload::sync_proxy_status;
     use crate::system::WinServiceManager;
 
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     // 1. 先停止当前运行的 mihomo（如果有）
     log::info!("Stopping current mihomo before starting service...");
@@ -204,7 +204,7 @@ pub async fn stop_service(app: tauri::AppHandle) -> Result<(), String> {
     use crate::commands::reload::sync_proxy_status;
     use crate::system::WinServiceManager;
 
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     // 1. 检查 TUN 模式是否启用，如果启用需要先禁用
     let config = state

@@ -61,7 +61,38 @@ export default function AppLayout() {
       }
     };
 
-    init();
+    // 监听后端准备就绪事件
+    let backendReadyUnlisten: (() => void) | null = null;
+    let initFailedUnlisten: (() => void) | null = null;
+
+    const setupListeners = async () => {
+      // 先尝试直接初始化（可能后端已经准备好了）
+      try {
+        await fetchStatus();
+        logger.log('AppLayout: Backend already ready, starting init...');
+        init();
+        return;
+      } catch {
+        // 后端未就绪，等待事件
+        logger.log('AppLayout: Waiting for backend-ready event...');
+      }
+
+      backendReadyUnlisten = await listen('backend-ready', () => {
+        logger.log('AppLayout: Received backend-ready event');
+        init();
+      });
+
+      initFailedUnlisten = await listen<string>('backend-init-failed', (event) => {
+        logger.error('AppLayout: Backend init failed:', event.payload);
+      });
+    };
+
+    setupListeners();
+
+    return () => {
+      if (backendReadyUnlisten) backendReadyUnlisten();
+      if (initFailedUnlisten) initFailedUnlisten();
+    };
   }, [fetchSettings, fetchStatus, start, checkRuleDatabaseUpdates]);
 
   useEffect(() => {

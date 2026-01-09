@@ -1,4 +1,4 @@
-use crate::commands::get_app_state;
+use crate::commands::get_app_state_or_err;
 use crate::system::SystemProxy;
 use crate::tray_menu::TrayMenuState;
 use tauri::{AppHandle, Emitter, Manager};
@@ -6,7 +6,7 @@ use tauri::{AppHandle, Emitter, Manager};
 /// 设置系统代理
 #[tauri::command]
 pub async fn set_system_proxy(app: AppHandle) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     crate::commands::require_active_subscription_with_proxies()?;
 
@@ -41,7 +41,7 @@ pub async fn set_system_proxy(app: AppHandle) -> Result<(), String> {
 /// 清除系统代理
 #[tauri::command]
 pub async fn clear_system_proxy(app: AppHandle) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     SystemProxy::clear_proxy().map_err(|e| e.to_string())?;
 
@@ -64,7 +64,7 @@ pub async fn clear_system_proxy(app: AppHandle) -> Result<(), String> {
 /// 获取系统代理状态
 #[tauri::command]
 pub async fn get_system_proxy_status() -> Result<bool, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
     let enabled = *state.system_proxy_enabled.lock().await;
     Ok(enabled)
 }
@@ -92,7 +92,7 @@ pub async fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<(), 
     }
 
     // 2. 同步保存到 settings.json
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
     let mut settings = state
         .config_manager
         .load_app_settings()

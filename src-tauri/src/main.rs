@@ -553,10 +553,17 @@ fn main() {
                                 .state::<TrayMenuState>()
                                 .sync_from_status(&status);
                         }
+
+                        // 通知前端后端已准备就绪
+                        log::info!("Backend initialized, emitting backend-ready event");
+                        let _ = app_handle.emit("backend-ready", ());
+
                         run_tray_traffic_loop(app_handle).await;
                     }
                     Err(e) => {
                         log::error!("Failed to initialize app state: {}", e);
+                        // 即使失败也通知前端，让前端可以显示错误
+                        let _ = app_handle.emit("backend-init-failed", e.to_string());
                     }
                 }
             });

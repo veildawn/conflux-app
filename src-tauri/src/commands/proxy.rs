@@ -1,4 +1,4 @@
-use crate::commands::get_app_state;
+use crate::commands::get_app_state_or_err;
 use crate::models::{
     ConnectionsResponse, ProxyGroup, ProxyStatus, RuleItem, TrafficData, VersionInfo,
 };
@@ -9,7 +9,7 @@ use tauri::{AppHandle, Emitter, Manager};
 /// 检查 TUN 配置是否一致
 #[tauri::command]
 pub async fn check_tun_consistency() -> Result<serde_json::Value, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("Proxy is not running".to_string());
@@ -41,7 +41,7 @@ pub async fn check_tun_consistency() -> Result<serde_json::Value, String> {
 /// 启动代理
 #[tauri::command]
 pub async fn start_proxy(app: AppHandle) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     state
         .mihomo_manager
@@ -62,7 +62,7 @@ pub async fn start_proxy(app: AppHandle) -> Result<(), String> {
 /// 停止代理
 #[tauri::command]
 pub async fn stop_proxy(app: AppHandle) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     // 如果系统代理已启用，先清除
     let mut system_proxy = state.system_proxy_enabled.lock().await;
@@ -96,7 +96,7 @@ pub async fn stop_proxy(app: AppHandle) -> Result<(), String> {
 /// 重启代理
 #[tauri::command]
 pub async fn restart_proxy(app: AppHandle) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     state
         .mihomo_manager
@@ -117,7 +117,7 @@ pub async fn restart_proxy(app: AppHandle) -> Result<(), String> {
 /// 获取代理状态
 #[tauri::command]
 pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     let running = state.mihomo_manager.is_running().await;
     let system_proxy = *state.system_proxy_enabled.lock().await;
@@ -225,7 +225,7 @@ pub async fn set_sniffing(app: AppHandle, enabled: bool) -> Result<(), String> {
 /// 切换代理模式
 #[tauri::command]
 pub async fn switch_mode(app: AppHandle, mode: String) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     // 验证模式
     let valid_modes = ["rule", "global", "direct"];
@@ -266,7 +266,7 @@ pub async fn switch_mode(app: AppHandle, mode: String) -> Result<(), String> {
 /// - 不传或其他值: 返回所有策略组
 #[tauri::command]
 pub async fn get_proxies(mode: Option<String>) -> Result<Vec<ProxyGroup>, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("Proxy is not running".to_string());
@@ -325,7 +325,7 @@ pub async fn get_proxies(mode: Option<String>) -> Result<Vec<ProxyGroup>, String
 /// 选择代理节点
 #[tauri::command]
 pub async fn select_proxy(group: String, name: String) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("Proxy is not running".to_string());
@@ -344,7 +344,7 @@ pub async fn select_proxy(group: String, name: String) -> Result<(), String> {
 /// 测试代理延迟
 #[tauri::command]
 pub async fn test_proxy_delay(name: String) -> Result<u32, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("Proxy is not running".to_string());
@@ -362,7 +362,7 @@ pub async fn test_proxy_delay(name: String) -> Result<u32, String> {
 /// 获取流量数据
 #[tauri::command]
 pub async fn get_traffic() -> Result<TrafficData, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Ok(TrafficData::default());
@@ -380,7 +380,7 @@ pub async fn get_traffic() -> Result<TrafficData, String> {
 /// 获取连接列表
 #[tauri::command]
 pub async fn get_connections() -> Result<ConnectionsResponse, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Ok(ConnectionsResponse {
@@ -411,7 +411,7 @@ pub async fn get_connections() -> Result<ConnectionsResponse, String> {
 /// 关闭单个连接
 #[tauri::command]
 pub async fn close_connection(id: String) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("Proxy is not running".to_string());
@@ -429,7 +429,7 @@ pub async fn close_connection(id: String) -> Result<(), String> {
 /// 关闭所有连接
 #[tauri::command]
 pub async fn close_all_connections() -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("Proxy is not running".to_string());
@@ -461,7 +461,7 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
         reload_config, safe_restart_proxy, sync_proxy_status, ConfigBackup, ReloadOptions,
     };
 
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("代理核心未运行".to_string());
@@ -676,7 +676,7 @@ pub async fn setup_tun_permission() -> Result<(), String> {
 /// 从 API 获取运行时规则
 #[tauri::command]
 pub async fn get_rules_from_api() -> Result<Vec<RuleItem>, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("Proxy is not running".to_string());
@@ -694,7 +694,7 @@ pub async fn get_rules_from_api() -> Result<Vec<RuleItem>, String> {
 /// 获取核心版本信息
 #[tauri::command]
 pub async fn get_core_version() -> Result<VersionInfo, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("Proxy is not running".to_string());
@@ -765,7 +765,7 @@ pub struct RuleProviderFrontend {
 /// 获取代理 Provider 列表
 #[tauri::command]
 pub async fn get_proxy_providers() -> Result<Vec<ProxyProviderFrontend>, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("Proxy is not running".to_string());
@@ -813,7 +813,7 @@ pub async fn get_proxy_providers() -> Result<Vec<ProxyProviderFrontend>, String>
 /// 更新代理 Provider
 #[tauri::command]
 pub async fn update_proxy_provider(name: String) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("Proxy is not running".to_string());
@@ -832,7 +832,7 @@ pub async fn update_proxy_provider(name: String) -> Result<(), String> {
 /// 代理 Provider 健康检查
 #[tauri::command]
 pub async fn health_check_proxy_provider(name: String) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("Proxy is not running".to_string());
@@ -851,7 +851,7 @@ pub async fn health_check_proxy_provider(name: String) -> Result<(), String> {
 /// 获取规则 Provider 列表
 #[tauri::command]
 pub async fn get_rule_providers() -> Result<Vec<RuleProviderFrontend>, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("Proxy is not running".to_string());
@@ -884,7 +884,7 @@ pub async fn get_rule_providers() -> Result<Vec<RuleProviderFrontend>, String> {
 /// 更新规则 Provider
 #[tauri::command]
 pub async fn update_rule_provider(name: String) -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("Proxy is not running".to_string());
@@ -946,7 +946,7 @@ pub async fn get_app_version() -> Result<String, String> {
 /// 清除 FakeIP 缓存
 #[tauri::command]
 pub async fn flush_fakeip_cache() -> Result<(), String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Err("Proxy is not running".to_string());
@@ -977,7 +977,7 @@ pub async fn test_url_delay(
     url: String,
     timeout_ms: Option<u32>,
 ) -> Result<UrlDelayResult, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Ok(UrlDelayResult {
@@ -1045,7 +1045,7 @@ pub async fn test_urls_delay(
     urls: Vec<String>,
     timeout_ms: Option<u32>,
 ) -> Result<Vec<UrlDelayResult>, String> {
-    let state = get_app_state();
+    let state = get_app_state_or_err()?;
 
     if !state.mihomo_manager.is_running().await {
         return Ok(urls
