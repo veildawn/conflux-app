@@ -9,6 +9,7 @@ mod substore;
 mod system;
 mod tray_menu;
 mod utils;
+mod webdav;
 
 #[cfg(not(target_os = "windows"))]
 use std::time::Duration;
@@ -681,6 +682,15 @@ fn main() {
             // URL 延迟测试命令
             commands::proxy::test_url_delay,
             commands::proxy::test_urls_delay,
+            // WebDAV 同步命令
+            commands::webdav::test_webdav_connection,
+            commands::webdav::get_webdav_config,
+            commands::webdav::save_webdav_config,
+            commands::webdav::webdav_upload,
+            commands::webdav::webdav_download,
+            commands::webdav::get_sync_status,
+            commands::webdav::check_webdav_conflict,
+            commands::webdav::resolve_webdav_conflict,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

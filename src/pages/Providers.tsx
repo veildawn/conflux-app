@@ -822,14 +822,14 @@ export default function Providers() {
                 <TabsList className="bg-transparent h-full p-0 gap-1">
                   <TabsTrigger
                     value="proxy"
-                    className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 text-xs h-full font-medium transition-all"
+                    className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 text-xs h-full font-medium"
                   >
                     <Server className="w-3.5 h-3.5" />
                     代理源
                   </TabsTrigger>
                   <TabsTrigger
                     value="rule"
-                    className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 text-xs h-full font-medium transition-all"
+                    className="rounded-full gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 text-xs h-full font-medium"
                   >
                     <FileText className="w-3.5 h-3.5" />
                     规则源

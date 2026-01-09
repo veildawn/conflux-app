@@ -250,7 +250,7 @@ export default function Proxy() {
               onClick={() => handlePolicySelect(group, policyName)}
               aria-disabled={!manualSelectable}
               className={cn(
-                'w-full flex items-center justify-between px-4 py-3 text-left border-b border-gray-100 dark:border-zinc-800 transition-colors',
+                'w-full flex items-center justify-between px-4 py-3 text-left border-b border-gray-100 dark:border-zinc-800',
                 'last:border-b-0',
                 isSelected
                   ? 'bg-blue-50/70 dark:bg-blue-900/20'
@@ -312,8 +312,8 @@ export default function Proxy() {
         key={group.name}
         onClick={() => setActiveGroup(group)}
         className={cn(
-          'rounded-2xl border border-gray-200 dark:border-zinc-800 px-5 py-4 text-left transition-all',
-          'hover:border-gray-300 dark:hover:border-zinc-700 hover:shadow-sm',
+          'rounded-2xl border border-gray-200 dark:border-zinc-800 px-5 py-4 text-left',
+          'hover:border-gray-300 dark:hover:border-zinc-700',
           backgroundClass
         )}
       >
@@ -413,21 +413,21 @@ export default function Proxy() {
               <TabsList className="bg-transparent h-8 p-0 gap-1">
                 <TabsTrigger
                   value="rule"
-                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 rounded-full transition-all text-xs h-full"
+                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 rounded-full text-xs h-full"
                 >
                   <Shield className="w-3.5 h-3.5 mr-1.5" />
                   规则
                 </TabsTrigger>
                 <TabsTrigger
                   value="global"
-                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 rounded-full transition-all text-xs h-full"
+                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 rounded-full text-xs h-full"
                 >
                   <Globe className="w-3.5 h-3.5 mr-1.5" />
                   全局
                 </TabsTrigger>
                 <TabsTrigger
                   value="direct"
-                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 rounded-full transition-all text-xs h-full"
+                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:shadow-sm px-4 rounded-full text-xs h-full"
                 >
                   <Activity className="w-3.5 h-3.5 mr-1.5" />
                   直连

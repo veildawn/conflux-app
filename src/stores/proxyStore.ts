@@ -55,11 +55,12 @@ const initialStatus: ProxyStatus = {
   mode: 'rule',
   port: 7890,
   socks_port: 7891,
+  mixed_port: 7892,
   system_proxy: false,
-  enhanced_mode: false,
-  allow_lan: false,
+  enhanced_mode: true,
+  allow_lan: true,
   ipv6: false,
-  tcp_concurrent: false,
+  tcp_concurrent: true,
 };
 
 const initialConnectionStats: ConnectionStats = {

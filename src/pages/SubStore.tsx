@@ -101,7 +101,7 @@ export default function SubStore() {
     <div className="-m-3 min-[960px]:-m-4 h-[calc(100vh-44px)] min-[960px]:h-[calc(100vh-48px)] bg-transparent">
       {/* Loading Indicator */}
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm z-10">
+        <div className="absolute inset-0 flex items-center justify-center bg-white/95 dark:bg-zinc-900/95 z-10">
           <div className="flex flex-col items-center gap-3">
             <div className="w-12 h-12 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin" />
             <p className="text-sm text-gray-600 dark:text-gray-400">加载 Sub-Store 中...</p>

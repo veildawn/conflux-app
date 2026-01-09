@@ -247,6 +247,26 @@ pub async fn get_proxy_status(state: State<'_, AppState>) -> Result<ProxyStatus,
 }
 ```
 
+### ⚠️ Tauri 2 参数命名规则
+
+**重要**：Tauri 2 在前后端通信时会自动转换参数名大小写格式：
+
+| 后端 Rust (snake_case) | 前端 JS (camelCase) |
+| ---------------------- | ------------------- |
+| `socks_port`           | `socksPort`         |
+| `allow_lan`            | `allowLan`          |
+| `tcp_concurrent`       | `tcpConcurrent`     |
+
+```typescript
+// ❌ 错误：使用 snake_case
+invoke('set_ports', { port, socks_port: 7891 });
+
+// ✅ 正确：使用 camelCase
+invoke('set_ports', { port, socksPort: 7891 });
+```
+
+前端调用 `invoke` 时，参数对象的 key 必须使用 **camelCase**，Tauri 会自动映射到后端的 snake_case 参数。
+
 ### 事件监听
 
 ```typescript

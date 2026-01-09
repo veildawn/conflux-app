@@ -8,7 +8,7 @@ pub struct ProxyStatus {
     pub mode: String,
     pub port: u16,
     pub socks_port: u16,
-    pub mixed_port: Option<u16>,
+    pub mixed_port: u16,
     pub system_proxy: bool,
     pub enhanced_mode: bool,
     pub allow_lan: bool,
@@ -23,12 +23,12 @@ impl Default for ProxyStatus {
             mode: "rule".to_string(),
             port: 7890,
             socks_port: 7891,
-            mixed_port: None,
+            mixed_port: 7892,
             system_proxy: false,
-            enhanced_mode: false,
-            allow_lan: false,
+            enhanced_mode: true,
+            allow_lan: true,
             ipv6: false,
-            tcp_concurrent: false,
+            tcp_concurrent: true,
         }
     }
 }

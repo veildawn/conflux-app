@@ -20,6 +20,10 @@ import type {
   ProxyProvider,
   RuleProvider,
   ProxyGroupConfig,
+  WebDavConfig,
+  SyncState,
+  SyncResult,
+  ConflictInfo,
 } from '@/types/config';
 
 /**
@@ -154,7 +158,7 @@ export const ipc = {
    * 设置 HTTP/SOCKS 端口
    */
   async setPorts(port: number, socksPort: number): Promise<void> {
-    return invoke('set_ports', { port, socks_port: socksPort });
+    return invoke('set_ports', { port, socksPort });
   },
 
   /**
@@ -889,6 +893,66 @@ export const ipc = {
    */
   async hasAdminPrivileges(): Promise<boolean> {
     return invoke('has_admin_privileges');
+  },
+
+  // ============= WebDAV 同步命令 =============
+
+  /**
+   * 测试 WebDAV 连接
+   */
+  async testWebDavConnection(config: WebDavConfig): Promise<boolean> {
+    return invoke('test_webdav_connection', { config });
+  },
+
+  /**
+   * 获取 WebDAV 配置
+   */
+  async getWebDavConfig(): Promise<WebDavConfig> {
+    return invoke('get_webdav_config');
+  },
+
+  /**
+   * 保存 WebDAV 配置
+   */
+  async saveWebDavConfig(config: WebDavConfig): Promise<void> {
+    return invoke('save_webdav_config', { config });
+  },
+
+  /**
+   * 上传配置到 WebDAV
+   */
+  async webDavUpload(): Promise<SyncResult> {
+    return invoke('webdav_upload');
+  },
+
+  /**
+   * 从 WebDAV 下载配置
+   * @param force 是否强制下载（忽略冲突）
+   */
+  async webDavDownload(force: boolean = false): Promise<SyncResult> {
+    return invoke('webdav_download', { force });
+  },
+
+  /**
+   * 获取同步状态
+   */
+  async getSyncStatus(): Promise<SyncState> {
+    return invoke('get_sync_status');
+  },
+
+  /**
+   * 检查是否有冲突
+   */
+  async checkWebDavConflict(): Promise<ConflictInfo | null> {
+    return invoke('check_webdav_conflict');
+  },
+
+  /**
+   * 解决冲突
+   * @param choice 'local' 保留本地，'remote' 使用远端
+   */
+  async resolveWebDavConflict(choice: 'local' | 'remote'): Promise<SyncResult> {
+    return invoke('resolve_webdav_conflict', { choice });
   },
 };
 

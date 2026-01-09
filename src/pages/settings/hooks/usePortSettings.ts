@@ -34,9 +34,19 @@ export function usePortSettings({ status, setPorts }: UsePortSettingsOptions) {
       toast({ title: '端口无效', description: portError, variant: 'destructive' });
       return;
     }
+
+    const newPort = Number(httpPort);
+    const newSocksPort = Number(socksPort);
+
+    // 检查值是否真正变化
+    if (newPort === status.port && newSocksPort === status.socks_port) {
+      setPortsDirty(false);
+      return;
+    }
+
     try {
       setSavingPorts(true);
-      await setPorts(Number(httpPort), Number(socksPort));
+      await setPorts(newPort, newSocksPort);
       setPortsDirty(false);
       toast({ title: '端口已保存' });
     } catch (error) {

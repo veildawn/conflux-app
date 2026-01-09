@@ -183,7 +183,7 @@ export default function Header() {
     <div className="flex flex-col w-full shrink-0 z-50">
       <header
         data-tauri-drag-region
-        className="h-11 min-[960px]:h-12 flex items-center justify-between px-3 min-[960px]:px-4 bg-transparent drag-region select-none transition-all duration-300"
+        className="h-11 min-[960px]:h-12 flex items-center justify-between px-3 min-[960px]:px-4 bg-transparent drag-region select-none"
       >
         {/* 左侧：窗口控制 */}
         <div className="flex items-center gap-12">
@@ -193,7 +193,7 @@ export default function Header() {
               type="button"
               onClick={() => setLogOpen((open) => !open)}
               className={cn(
-                'flex items-center gap-2 rounded-full px-3 py-1 text-left shadow-sm transition-all duration-300',
+                'flex items-center gap-2 rounded-full px-3 py-1 text-left shadow-sm transition-shadow duration-200',
                 'my-1.5',
                 'w-[240px] min-[960px]:w-[320px]',
                 latestVariantStyle.pill,
@@ -304,10 +304,8 @@ export default function Header() {
             onClick={handleSystemProxyToggle}
             disabled={loading || !status.running}
             className={cn(
-              'flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-300',
-              loading || !status.running
-                ? 'opacity-50 cursor-not-allowed'
-                : 'cursor-pointer hover:scale-105 active:scale-95',
+              'flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors duration-200',
+              loading || !status.running ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
               status.system_proxy
                 ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-md shadow-blue-500/20 ring-1 ring-blue-600'
                 : 'bg-white hover:bg-gray-50 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-200 ring-1 ring-gray-200 dark:ring-zinc-700'
@@ -333,10 +331,8 @@ export default function Header() {
             onClick={handleEnhancedModeToggle}
             disabled={loading || !status.running}
             className={cn(
-              'flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-300',
-              loading || !status.running
-                ? 'opacity-50 cursor-not-allowed'
-                : 'cursor-pointer hover:scale-105 active:scale-95',
+              'flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors duration-200',
+              loading || !status.running ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
               status.enhanced_mode
                 ? 'bg-purple-500 hover:bg-purple-600 text-white shadow-md shadow-purple-500/20 ring-1 ring-purple-600'
                 : 'bg-white hover:bg-gray-50 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-200 ring-1 ring-gray-200 dark:ring-zinc-700'

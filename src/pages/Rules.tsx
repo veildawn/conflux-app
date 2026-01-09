@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, createElement } from 'react';
+import { useState, useEffect, useMemo, useCallback, createElement, memo } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import {
   DndContext,
@@ -621,7 +621,7 @@ export default function Rules() {
 // Sub-components
 // -----------------------------------------------------------------------------
 
-function SortableRuleRow({
+const SortableRuleRow = memo(function SortableRuleRow({
   id,
   index,
   type,
@@ -647,9 +647,10 @@ function SortableRuleRow({
     disabled: disabled || dragDisabled,
   });
 
+  // 只在拖拽时应用 transform，不使用 transition 以提升性能
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: isDragging ? undefined : transition,
   };
 
   const Icon = getRuleIcon(type);
@@ -661,7 +662,7 @@ function SortableRuleRow({
       style={style}
       onClick={onEdit}
       className={cn(
-        'group grid grid-cols-[32px_48px_110px_1fr_100px_70px] gap-3 px-4 h-[52px] items-center transition-colors border-l-2 border-transparent text-sm cursor-pointer hover:bg-blue-50/30 dark:hover:bg-blue-900/10 hover:border-blue-500 bg-white dark:bg-zinc-900',
+        'group grid grid-cols-[32px_48px_110px_1fr_100px_70px] gap-3 px-4 h-[52px] items-center border-l-2 border-transparent text-sm cursor-pointer hover:bg-blue-50/30 dark:hover:bg-blue-900/10 hover:border-blue-500 bg-white dark:bg-zinc-900',
         isDragging && 'opacity-50 shadow-lg z-50 bg-blue-50 dark:bg-blue-900/20'
       )}
     >
@@ -741,7 +742,7 @@ function SortableRuleRow({
 
       {/* Actions */}
       <div className="flex justify-center">
-        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center opacity-0 group-hover:opacity-100">
           <div className="flex items-center gap-1">
             <Button
               size="icon"
@@ -770,7 +771,7 @@ function SortableRuleRow({
       </div>
     </div>
   );
-}
+});
 
 function EmptyState({ searchQuery }: { searchQuery: string }) {
   return (

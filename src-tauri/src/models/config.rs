@@ -10,8 +10,8 @@ pub struct MihomoConfig {
     #[serde(rename = "socks-port", default = "default_socks_port")]
     pub socks_port: u16,
 
-    #[serde(rename = "mixed-port")]
-    pub mixed_port: Option<u16>,
+    #[serde(rename = "mixed-port", default = "default_mixed_port")]
+    pub mixed_port: u16,
 
     #[serde(rename = "allow-lan", default)]
     pub allow_lan: bool,
@@ -114,7 +114,11 @@ pub struct SnifferConfig {
     pub sniff: Option<SniffProtocols>,
 
     /// 强制嗅探的域名（支持通配符）
-    #[serde(rename = "force-domain", default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        rename = "force-domain",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub force_domain: Vec<String>,
 
     /// 跳过嗅探的域名（支持通配符）
@@ -303,7 +307,7 @@ impl Default for DnsConfig {
             enable: true,
             listen: Some("0.0.0.0:1053".to_string()),
             enhanced_mode: Some("fake-ip".to_string()),
-            fake_ip_range: Some("198.18.0.1/16".to_string()),
+            fake_ip_range: Some("198.10.0.1/1".to_string()),
             fake_ip_filter_mode: Some("blacklist".to_string()),
             fake_ip_filter: vec![
                 "+.lan".to_string(),
@@ -383,12 +387,12 @@ pub struct TunConfig {
 impl Default for TunConfig {
     fn default() -> Self {
         Self {
-            enable: false,
-            stack: None,
-            auto_route: None,
-            auto_detect_interface: None,
+            enable: true,
+            stack: Some("system".to_string()),
+            auto_route: Some(true),
+            auto_detect_interface: Some(true),
             strict_route: Some(false),
-            dns_hijack: vec![],
+            dns_hijack: vec!["any:53".to_string(), "tcp://any:53".to_string()],
             inet4_route_exclude_address: default_inet4_route_exclude_address(),
         }
     }
@@ -415,6 +419,9 @@ fn default_port() -> u16 {
 }
 fn default_socks_port() -> u16 {
     7891
+}
+fn default_mixed_port() -> u16 {
+    7892
 }
 fn default_mode() -> String {
     "rule".to_string()
@@ -444,7 +451,7 @@ impl Default for MihomoConfig {
         Self {
             port: default_port(),
             socks_port: default_socks_port(),
-            mixed_port: None,
+            mixed_port: default_mixed_port(),
             allow_lan: false,
             mode: default_mode(),
             log_level: default_log_level(),
@@ -677,6 +684,92 @@ pub struct RuleDatabaseItem {
     pub remote_modified: Option<String>,
 }
 
+/// WebDAV 同步配置
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WebDavConfig {
+    /// 是否启用
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// WebDAV 服务器地址
+    #[serde(default)]
+    pub url: String,
+
+    /// 用户名
+    #[serde(default)]
+    pub username: String,
+
+    /// 密码
+    #[serde(default)]
+    pub password: String,
+
+    /// 配置变更后自动上传
+    #[serde(default)]
+    pub auto_upload: bool,
+
+    /// 上次同步时间
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_sync_time: Option<String>,
+}
+
+/// MiHomo 用户设置（存储在 settings.json 中，用于生成运行时 config.yaml）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MihomoSettings {
+    /// HTTP 代理端口
+    #[serde(default = "default_port")]
+    pub port: u16,
+
+    /// SOCKS5 代理端口
+    #[serde(default = "default_socks_port")]
+    pub socks_port: u16,
+
+    /// 混合代理端口
+    #[serde(default = "default_mixed_port")]
+    pub mixed_port: u16,
+
+    /// 允许局域网连接
+    #[serde(default)]
+    pub allow_lan: bool,
+
+    /// 启用 IPv6
+    #[serde(default)]
+    pub ipv6: bool,
+
+    /// TCP 并发
+    #[serde(default)]
+    pub tcp_concurrent: bool,
+
+    /// 进程查找模式
+    #[serde(default = "default_find_process_mode")]
+    pub find_process_mode: String,
+
+    /// TUN 模式配置
+    #[serde(default)]
+    pub tun: TunConfig,
+
+    /// DNS 配置
+    #[serde(default)]
+    pub dns: DnsConfig,
+}
+
+impl Default for MihomoSettings {
+    fn default() -> Self {
+        Self {
+            port: default_port(),
+            socks_port: default_socks_port(),
+            mixed_port: default_mixed_port(),
+            allow_lan: true,
+            ipv6: false,
+            tcp_concurrent: true,
+            find_process_mode: default_find_process_mode(),
+            tun: TunConfig::default(),
+            dns: DnsConfig::default(),
+        }
+    }
+}
+
 /// 应用设置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
@@ -694,6 +787,14 @@ pub struct AppSettings {
 
     #[serde(rename = "ruleDatabases", default)]
     pub rule_databases: Vec<RuleDatabaseItem>,
+
+    /// WebDAV 同步配置
+    #[serde(default)]
+    pub webdav: WebDavConfig,
+
+    /// MiHomo 用户设置（端口、DNS、TUN 等）
+    #[serde(default)]
+    pub mihomo: MihomoSettings,
 }
 
 fn default_language() -> String {
@@ -711,6 +812,8 @@ impl Default for AppSettings {
             system_proxy: false,
             close_to_tray: default_close_to_tray(),
             rule_databases: vec![],
+            webdav: WebDavConfig::default(),
+            mihomo: MihomoSettings::default(),
         }
     }
 }

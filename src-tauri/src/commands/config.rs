@@ -125,6 +125,31 @@ pub async fn save_config(config: MihomoConfig) -> Result<(), String> {
     }
 
     backup.cleanup();
+
+    // 同步 DNS 和其他设置到 settings.json
+    if let Ok(mut app_settings) = state.config_manager.load_app_settings() {
+        // 同步 DNS 配置
+        if let Some(dns) = &config_to_save.dns {
+            app_settings.mihomo.dns = dns.clone();
+        }
+        // 同步 TUN 配置
+        if let Some(tun) = &config_to_save.tun {
+            app_settings.mihomo.tun = tun.clone();
+        }
+        // 同步其他设置
+        app_settings.mihomo.port = config_to_save.port;
+        app_settings.mihomo.socks_port = config_to_save.socks_port;
+        app_settings.mihomo.mixed_port = config_to_save.mixed_port;
+        app_settings.mihomo.allow_lan = config_to_save.allow_lan;
+        app_settings.mihomo.ipv6 = config_to_save.ipv6;
+        app_settings.mihomo.tcp_concurrent = config_to_save.tcp_concurrent;
+        app_settings.mihomo.find_process_mode = config_to_save.find_process_mode.clone();
+
+        if let Err(e) = state.config_manager.save_app_settings(&app_settings) {
+            log::warn!("Failed to sync settings to settings.json: {}", e);
+        }
+    }
+
     log::info!("Config saved and reloaded");
     Ok(())
 }

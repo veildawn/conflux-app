@@ -789,7 +789,7 @@ export default function RuleEditWindow() {
 
   if (loading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-white/20 backdrop-blur-xl">
+      <div className="h-screen w-screen flex items-center justify-center bg-white/90">
         <Activity className="w-8 h-8 animate-spin text-blue-500" />
       </div>
     );
@@ -800,14 +800,9 @@ export default function RuleEditWindow() {
       className="relative h-screen w-screen overflow-hidden rounded-xl border border-black/8 bg-[radial-gradient(circle_at_10%_20%,rgba(200,255,200,0.4)_0%,transparent_40%),radial-gradient(circle_at_90%_80%,rgba(180,220,255,0.6)_0%,transparent_40%),radial-gradient(circle_at_50%_50%,#f8f8fb_0%,#eef0f7_100%)] text-neutral-900"
       onMouseDown={handleMouseDown}
     >
-      <div className="absolute inset-0 pointer-events-none rounded-xl overflow-hidden">
-        <div className="absolute left-0 top-32 h-64 w-64 rounded-full bg-emerald-100/30 blur-3xl" />
-        <div className="absolute right-10 top-1/2 h-72 w-72 -translate-y-1/2 rounded-full bg-blue-100/30 blur-3xl" />
-      </div>
-
       <div className="relative h-full w-full grid grid-cols-[240px_1fr]">
         {/* Sidebar */}
-        <div className="flex flex-col bg-white/40 px-6 pt-10 pb-6 border-r border-black/5 backdrop-blur-3xl">
+        <div className="flex flex-col bg-white/90 px-6 pt-10 pb-6 border-r border-black/5">
           <div className="flex flex-col gap-2">
             {[1, 2].map((s) => {
               const meta = STEP_METADATA[s as keyof typeof STEP_METADATA];
@@ -871,7 +866,7 @@ export default function RuleEditWindow() {
         </div>
 
         {/* Content */}
-        <div className="relative flex flex-col overflow-hidden bg-white/20 backdrop-blur-2xl">
+        <div className="relative flex flex-col overflow-hidden bg-white/80">
           {/* Header */}
           <div className="px-10 pt-10 pb-6 shrink-0">
             <div className="flex items-center gap-3 mb-2">
@@ -1200,7 +1195,7 @@ export default function RuleEditWindow() {
                         ) : (
                           filteredPolicyOptions.map((section) => (
                             <div key={section.type}>
-                              <div className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400 px-2 mb-1.5 sticky top-0 bg-white/50 backdrop-blur-sm z-10 py-1 rounded-md">
+                              <div className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400 px-2 mb-1.5 sticky top-0 bg-white/95 z-10 py-1 rounded-md">
                                 {section.label}
                               </div>
                               <div className="space-y-1">

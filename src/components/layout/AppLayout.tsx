@@ -124,17 +124,17 @@ export default function AppLayout() {
     let connectionsInterval: NodeJS.Timeout | null = null;
 
     if (status.running) {
-      // 流量数据每秒刷新
+      // 流量数据每 1.5 秒刷新（降低频率以提升性能）
       fetchTraffic();
       trafficInterval = setInterval(() => {
         fetchTraffic();
-      }, 1000);
+      }, 1500);
 
-      // 连接数据每2秒刷新
+      // 连接数据每 3 秒刷新
       fetchConnections();
       connectionsInterval = setInterval(() => {
         fetchConnections();
-      }, 2000);
+      }, 3000);
     }
 
     return () => {
@@ -165,7 +165,6 @@ export default function AppLayout() {
   return (
     <div
       className="flex flex-col h-screen app-bg-gradient overflow-hidden rounded-xl border border-gray-200 dark:border-zinc-800 shadow-2xl"
-      style={{ willChange: 'transform' }}
       onMouseDown={handleMouseDown}
     >
       <div className="app-bg-gradient-extra" />

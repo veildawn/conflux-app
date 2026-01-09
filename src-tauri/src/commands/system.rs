@@ -82,12 +82,27 @@ pub async fn get_autostart_enabled(app: AppHandle) -> Result<bool, String> {
 #[tauri::command]
 pub async fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
     use tauri_plugin_autostart::ManagerExt;
+
+    // 1. 设置系统自启动
     let autolaunch = app.autolaunch();
     if enabled {
         autolaunch.enable().map_err(|e| e.to_string())?;
     } else {
         autolaunch.disable().map_err(|e| e.to_string())?;
     }
+
+    // 2. 同步保存到 settings.json
+    let state = get_app_state();
+    let mut settings = state
+        .config_manager
+        .load_app_settings()
+        .map_err(|e| e.to_string())?;
+    settings.auto_start = enabled;
+    state
+        .config_manager
+        .save_app_settings(&settings)
+        .map_err(|e| e.to_string())?;
+
     log::info!("Autostart set to: {}", enabled);
     Ok(())
 }

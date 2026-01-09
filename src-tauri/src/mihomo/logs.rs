@@ -165,7 +165,7 @@ impl LogStreamer {
                                             // 如果解析失败，作为普通文本发送
                                             let entry = LogEntry {
                                                 log_type: "info".to_string(),
-                                                payload: text,
+                                                payload: text.to_string(),
                                             };
                                             let _ = app.emit("log-entry", entry);
                                         }

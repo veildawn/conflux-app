@@ -7,3 +7,4 @@ pub mod substore;
 pub mod system;
 pub mod tray_menu;
 pub mod utils;
+pub mod webdav;
