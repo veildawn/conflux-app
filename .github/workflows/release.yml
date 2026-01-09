@@ -748,6 +748,93 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Update Homebrew Tap
+        if: success()
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "⚠️ HOMEBREW_TAP_TOKEN not set, skipping Homebrew tap update"
+            exit 0
+          fi
+
+          VERSION="${RELEASE_TAG#v}"
+          echo "📦 Updating Homebrew tap for version $VERSION..."
+
+          # Calculate SHA256 for DMG files
+          ARM64_DMG="release-assets/Conflux_${VERSION}_aarch64.dmg"
+          X64_DMG="release-assets/Conflux_${VERSION}_x64.dmg"
+
+          if [ -f "$ARM64_DMG" ] && [ -f "$X64_DMG" ]; then
+            ARM64_SHA=$(shasum -a 256 "$ARM64_DMG" | cut -d' ' -f1)
+            X64_SHA=$(shasum -a 256 "$X64_DMG" | cut -d' ' -f1)
+
+            echo "  ARM64 SHA256: $ARM64_SHA"
+            echo "  x64 SHA256: $X64_SHA"
+
+            # Clone homebrew tap repo
+            git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/Ashbaer/homebrew-conflux.git" homebrew-tap
+            cd homebrew-tap
+
+            # Update Cask file
+            mkdir -p Casks
+            cat > Casks/conflux.rb << CASK
+# typed: false
+# frozen_string_literal: true
+
+cask "conflux" do
+  version "$VERSION"
+
+  on_intel do
+    sha256 "$X64_SHA"
+    url "https://github.com/Ashbaer/conflux-app/releases/download/v#{version}/Conflux_#{version}_x64.dmg",
+        verified: "github.com/Ashbaer/conflux-app/"
+  end
+
+  on_arm do
+    sha256 "$ARM64_SHA"
+    url "https://github.com/Ashbaer/conflux-app/releases/download/v#{version}/Conflux_#{version}_aarch64.dmg",
+        verified: "github.com/Ashbaer/conflux-app/"
+  end
+
+  name "Conflux"
+  desc "Modern proxy management app based on MiHomo"
+  homepage "https://github.com/Ashbaer/conflux-app"
+
+  livecheck do
+    url :url
+    strategy :github_latest
+  end
+
+  app "Conflux.app"
+
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-rd", "com.apple.quarantine", "#{appdir}/Conflux.app"],
+                   sudo: false
+  end
+
+  zap trash: [
+    "~/Library/Application Support/com.conflux.desktop",
+    "~/Library/Caches/com.conflux.desktop",
+    "~/Library/Preferences/com.conflux.desktop.plist",
+    "~/Library/Saved Application State/com.conflux.desktop.savedState",
+  ]
+end
+CASK
+
+            # Commit and push
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add Casks/conflux.rb
+            git commit -m "Update conflux to $VERSION" || echo "No changes to commit"
+            git push
+
+            echo "✅ Homebrew tap updated!"
+          else
+            echo "⚠️ DMG files not found, skipping Homebrew tap update"
+          fi
+
       - name: Release Summary
         run: |
           echo "✅ All platform builds completed successfully!"
