@@ -221,15 +221,3 @@ pub struct RuleProviderInfo {
 pub struct RuleProvidersResponse {
     pub providers: std::collections::HashMap<String, RuleProviderInfo>,
 }
-
-
-
-
-
-
-
-
-
-
-
-

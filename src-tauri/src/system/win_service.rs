@@ -161,7 +161,7 @@ impl WinServiceManager {
         if !Self::is_installed()? {
             return Err(anyhow!("Service installation failed"));
         }
-        
+
         log::info!("Service installed successfully, starting service...");
 
         // 安装成功后立即启动服务（在同一次提权会话中）
@@ -218,25 +218,36 @@ impl WinServiceManager {
 
         // 检查退出码：5 = Access Denied
         let exit_code = output.status.code().unwrap_or(-1);
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
             let combined = format!("{} {}", stdout, stderr);
-            
+
             log::debug!("sc start exit code: {}, output: {}", exit_code, combined);
-            
+
             // Already running is OK (error 1056)
             if combined.contains("1056") {
                 log::info!("Service already running");
                 return Ok(());
             }
             // Access denied (exit code 5 or error message)
-            if exit_code == 5 || combined.contains("5") || combined.to_lowercase().contains("access") || combined.contains("拒绝") {
-                log::info!("Access denied (code {}), trying with elevation...", exit_code);
+            if exit_code == 5
+                || combined.contains("5")
+                || combined.to_lowercase().contains("access")
+                || combined.contains("拒绝")
+            {
+                log::info!(
+                    "Access denied (code {}), trying with elevation...",
+                    exit_code
+                );
                 return Self::run_sc_command_elevated("start");
             }
-            return Err(anyhow!("Failed to start service (code {}): {}", exit_code, combined));
+            return Err(anyhow!(
+                "Failed to start service (code {}): {}",
+                exit_code,
+                combined
+            ));
         }
 
         // Wait for service to start
@@ -272,20 +283,31 @@ impl WinServiceManager {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
             let combined = format!("{} {}", stdout, stderr);
-            
+
             log::debug!("sc stop exit code: {}, output: {}", exit_code, combined);
-            
+
             // Not running is OK (error 1062 or 1060)
             if combined.contains("1062") || combined.contains("1060") {
                 log::info!("Service not running");
                 return Ok(());
             }
             // Access denied (exit code 5 or error message)
-            if exit_code == 5 || combined.contains("5") || combined.to_lowercase().contains("access") || combined.contains("拒绝") {
-                log::info!("Access denied (code {}), trying with elevation...", exit_code);
+            if exit_code == 5
+                || combined.contains("5")
+                || combined.to_lowercase().contains("access")
+                || combined.contains("拒绝")
+            {
+                log::info!(
+                    "Access denied (code {}), trying with elevation...",
+                    exit_code
+                );
                 return Self::run_sc_command_elevated("stop");
             }
-            return Err(anyhow!("Failed to stop service (code {}): {}", exit_code, combined));
+            return Err(anyhow!(
+                "Failed to stop service (code {}): {}",
+                exit_code,
+                combined
+            ));
         }
 
         // Wait for service to actually stop
@@ -310,7 +332,11 @@ impl WinServiceManager {
     }
 
     /// Start mihomo via service
-    pub async fn start_mihomo(mihomo_path: &str, config_dir: &str, config_path: &str) -> Result<u32> {
+    pub async fn start_mihomo(
+        mihomo_path: &str,
+        config_dir: &str,
+        config_path: &str,
+    ) -> Result<u32> {
         log::info!("Starting mihomo via service...");
 
         let client = reqwest::Client::builder()
@@ -413,7 +439,9 @@ impl WinServiceManager {
         }
 
         log::error!("Service executable not found in any location");
-        Err(anyhow!("Service executable not found. Please run: pnpm run fetch:mihomo"))
+        Err(anyhow!(
+            "Service executable not found. Please run: pnpm run fetch:mihomo"
+        ))
     }
 
     /// Run service command with elevation
@@ -431,7 +459,13 @@ impl WinServiceManager {
         );
 
         let output = Command::new("powershell")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_command])
+            .args([
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                &ps_command,
+            ])
             .creation_flags(CREATE_NO_WINDOW)
             .output()
             .map_err(|e| anyhow!("Failed to run elevated command: {}", e))?;
@@ -455,10 +489,20 @@ impl WinServiceManager {
             action, SERVICE_NAME
         );
 
-        log::info!("Running elevated sc command: sc {} {}", action, SERVICE_NAME);
+        log::info!(
+            "Running elevated sc command: sc {} {}",
+            action,
+            SERVICE_NAME
+        );
 
         let output = Command::new("powershell")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_command])
+            .args([
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                &ps_command,
+            ])
             .creation_flags(CREATE_NO_WINDOW)
             .output()
             .map_err(|e| anyhow!("Failed to run elevated sc command: {}", e))?;
@@ -492,14 +536,21 @@ impl WinServiceManager {
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
-            Err(anyhow!("Elevated sc command failed (code {}): {} {}", exit_code, stdout, stderr))
+            Err(anyhow!(
+                "Elevated sc command failed (code {}): {} {}",
+                exit_code,
+                stdout,
+                stderr
+            ))
         }
     }
 
     /// Check if current process has admin privileges
     pub fn has_admin_privileges() -> bool {
         use windows_sys::Win32::Foundation::HANDLE;
-        use windows_sys::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
+        use windows_sys::Win32::Security::{
+            GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
+        };
         use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
         unsafe {

@@ -90,7 +90,8 @@ fn check_substore_resources() {
         eprintln!("========================================\n");
 
         // 在 CI 环境或 release 构建时,缺少资源应该报错
-        if std::env::var("CI").is_ok() || std::env::var("PROFILE").unwrap_or_default() == "release" {
+        if std::env::var("CI").is_ok() || std::env::var("PROFILE").unwrap_or_default() == "release"
+        {
             panic!("Missing required Sub-Store resources. Please run fetch scripts first.");
         } else {
             eprintln!("⚠️  Warning: Building without Sub-Store support\n");

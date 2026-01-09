@@ -1,6 +1,6 @@
-use tauri::{AppHandle, State};
 use crate::commands::AppState;
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, State};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SubStoreSub {
@@ -61,7 +61,7 @@ pub async fn get_substore_status(state: State<'_, AppState>) -> Result<serde_jso
 #[tauri::command]
 pub async fn get_substore_subs(
     app_handle: AppHandle,
-    state: State<'_, AppState>
+    state: State<'_, AppState>,
 ) -> Result<Vec<SubStoreSub>, String> {
     let manager = state.substore_manager.lock().await;
 
@@ -71,16 +71,18 @@ pub async fn get_substore_subs(
     }
 
     // 读取 Sub-Store 数据文件
-    let data_file = manager.get_data_file_path(&app_handle)
+    let data_file = manager
+        .get_data_file_path(&app_handle)
         .map_err(|e| format!("获取数据文件路径失败: {}", e))?;
 
-    let content = std::fs::read_to_string(&data_file)
-        .map_err(|e| format!("读取数据文件失败: {}", e))?;
+    let content =
+        std::fs::read_to_string(&data_file).map_err(|e| format!("读取数据文件失败: {}", e))?;
 
-    let data: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("解析数据文件失败: {}", e))?;
+    let data: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("解析数据文件失败: {}", e))?;
 
-    let subs_array = data.get("subs")
+    let subs_array = data
+        .get("subs")
         .and_then(|v| v.as_array())
         .ok_or("未找到 subs 数据")?;
 
@@ -89,8 +91,14 @@ pub async fn get_substore_subs(
         if let Some(name) = sub.get("name").and_then(|v| v.as_str()) {
             subs.push(SubStoreSub {
                 name: name.to_string(),
-                display_name: sub.get("displayName").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                icon: sub.get("icon").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                display_name: sub
+                    .get("displayName")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                icon: sub
+                    .get("icon")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
                 url: None,
             });
         }
@@ -100,7 +108,9 @@ pub async fn get_substore_subs(
 }
 
 #[tauri::command]
-pub async fn get_substore_collections(state: State<'_, AppState>) -> Result<Vec<SubStoreCollection>, String> {
+pub async fn get_substore_collections(
+    state: State<'_, AppState>,
+) -> Result<Vec<SubStoreCollection>, String> {
     let manager = state.substore_manager.lock().await;
 
     // 检查 Sub-Store 是否运行

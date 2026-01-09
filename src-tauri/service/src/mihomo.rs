@@ -1,15 +1,20 @@
 //! Mihomo process management
 
+use anyhow::{anyhow, Result};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
-use anyhow::{anyhow, Result};
 
 /// Global mihomo process handle
 static MIHOMO_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
 
 /// Start mihomo process
 pub fn start_mihomo(mihomo_path: &str, config_dir: &str, config_path: &str) -> Result<u32> {
-    log::info!("Starting mihomo: {} -d {} -f {}", mihomo_path, config_dir, config_path);
+    log::info!(
+        "Starting mihomo: {} -d {} -f {}",
+        mihomo_path,
+        config_dir,
+        config_path
+    );
 
     // Kill any existing mihomo processes first
     stop_mihomo();
@@ -55,7 +60,7 @@ pub fn stop_mihomo() {
 
 /// Kill mihomo by process name
 fn kill_mihomo_by_name() {
-    use sysinfo::{System, Signal};
+    use sysinfo::{Signal, System};
 
     let mut sys = System::new();
     sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
@@ -102,7 +107,3 @@ pub fn get_mihomo_pid() -> Option<u32> {
 
     None
 }
-
-
-
-

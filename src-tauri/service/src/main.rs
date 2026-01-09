@@ -40,9 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Run as a regular process (for debugging)
                 println!("Running in standalone mode...");
                 let rt = tokio::runtime::Runtime::new()?;
-                rt.block_on(async {
-                    ipc::start_ipc_server().await
-                })?;
+                rt.block_on(async { ipc::start_ipc_server().await })?;
                 return Ok(());
             }
             _ => {
@@ -63,7 +61,3 @@ fn main() {
     eprintln!("This service is only supported on Windows");
     std::process::exit(1);
 }
-
-
-
-

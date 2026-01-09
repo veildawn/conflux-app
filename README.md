@@ -1,5 +1,10 @@
 # Conflux 汇流
 
+[![CI](https://github.com/Ashbaer/conflux-app/actions/workflows/ci.yml/badge.svg)](https://github.com/Ashbaer/conflux-app/actions/workflows/ci.yml)
+[![Release](https://github.com/Ashbaer/conflux-app/actions/workflows/release.yml/badge.svg)](https://github.com/Ashbaer/conflux-app/actions/workflows/release.yml)
+[![GitHub release](https://img.shields.io/github/v/release/Ashbaer/conflux-app?include_prereleases)](https://github.com/Ashbaer/conflux-app/releases)
+[![License](https://img.shields.io/github/license/Ashbaer/conflux-app)](LICENSE)
+
 基于 Tauri 2 + MiHomo 的现代化跨平台代理管理桌面应用。
 
 <p align="center">

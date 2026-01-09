@@ -16,16 +16,16 @@ fn is_tun_enabled() -> bool {
         Ok(p) => p,
         Err(_) => return false,
     };
-    
+
     if !config_path.exists() {
         return false;
     }
-    
+
     let content = match fs::read_to_string(&config_path) {
         Ok(c) => c,
         Err(_) => return false,
     };
-    
+
     // 简单解析 YAML 检查 tun.enable
     if let Ok(config) = serde_yaml::from_str::<serde_yaml::Value>(&content) {
         if let Some(tun) = config.get("tun") {
@@ -34,7 +34,7 @@ fn is_tun_enabled() -> bool {
             }
         }
     }
-    
+
     false
 }
 
@@ -42,7 +42,7 @@ fn is_tun_enabled() -> bool {
 #[cfg(target_os = "windows")]
 fn is_service_available() -> bool {
     use crate::system::WinServiceManager;
-    
+
     // 检查服务是否已安装并运行
     if let Ok(installed) = WinServiceManager::is_installed() {
         if installed {
@@ -62,9 +62,9 @@ fn is_service_available() -> bool {
 fn is_service_ipc_ready() -> bool {
     use std::net::TcpStream;
     use std::time::Duration;
-    
+
     const SERVICE_PORT: u16 = 33211;
-    
+
     // 尝试连接 IPC 端口
     match TcpStream::connect_timeout(
         &format!("127.0.0.1:{}", SERVICE_PORT).parse().unwrap(),
@@ -202,10 +202,8 @@ impl MihomoManager {
                     bInheritHandle: i32,
                     dwProcessId: u32,
                 ) -> *mut std::ffi::c_void;
-                fn GetExitCodeProcess(
-                    hProcess: *mut std::ffi::c_void,
-                    lpExitCode: *mut u32,
-                ) -> i32;
+                fn GetExitCodeProcess(hProcess: *mut std::ffi::c_void, lpExitCode: *mut u32)
+                    -> i32;
                 fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
             }
 
@@ -223,48 +221,48 @@ impl MihomoManager {
     }
 
     /// 检查启用 TUN 模式时是否需要 UAC 权限提升
-    /// 
+    ///
     /// 返回 true 如果：
     /// - 服务未运行（或未安装）
     /// - 且当前应用没有管理员权限
     #[cfg(windows)]
     pub fn is_tun_elevation_required() -> bool {
         use crate::system::WinServiceManager;
-        
+
         // 如果服务正在运行，不需要 UAC（通过服务启动）
         let service_running = WinServiceManager::is_running().unwrap_or(false);
         if service_running {
             log::debug!("Service is running, no UAC required for TUN mode");
             return false;
         }
-        
+
         // 如果已经是管理员权限，不需要 UAC
         if Self::is_running_as_admin() {
             log::debug!("Already running as admin, no UAC required for TUN mode");
             return false;
         }
-        
+
         log::debug!("UAC elevation required for TUN mode (service not running, not admin)");
         true
     }
-    
+
     /// 预先请求 UAC 权限确认（不启动 mihomo）
-    /// 
+    ///
     /// 这个方法用于在停止当前 mihomo 之前确认用户同意 UAC 权限提升
     /// 成功返回 Ok(())，用户取消返回错误
     #[cfg(windows)]
     pub fn request_elevation_confirmation() -> Result<()> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
-        
+
         // 如果已经是管理员权限，直接返回成功
         if Self::is_running_as_admin() {
             log::info!("Already running as admin, no confirmation needed");
             return Ok(());
         }
-        
+
         log::info!("Requesting UAC elevation confirmation...");
-        
+
         // 使用一个简单的命令来触发 UAC 并立即退出
         // 这样用户确认后，我们知道后续的 UAC 请求也会成功（或用户已做好心理准备）
         // 使用 cmd /c exit 0 作为占位命令
@@ -283,19 +281,25 @@ impl MihomoManager {
                 exit 1
             }
         "#;
-        
+
         let output = Command::new("powershell")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_command])
+            .args([
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                ps_command,
+            ])
             .creation_flags(CREATE_NO_WINDOW)
             .output()
             .map_err(|e| anyhow::anyhow!("执行权限确认命令失败: {}", e))?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             log::warn!("UAC confirmation failed or was cancelled: {}", stderr);
             return Err(anyhow::anyhow!("用户取消了管理员权限请求"));
         }
-        
+
         log::info!("UAC elevation confirmed by user");
         Ok(())
     }
@@ -304,7 +308,7 @@ impl MihomoManager {
     #[cfg(windows)]
     fn is_running_as_admin() -> bool {
         use std::ptr::null_mut;
-        
+
         #[link(name = "advapi32")]
         extern "system" {
             fn OpenProcessToken(
@@ -338,12 +342,14 @@ impl MihomoManager {
         unsafe {
             let process = GetCurrentProcess();
             let mut token: *mut std::ffi::c_void = null_mut();
-            
+
             if OpenProcessToken(process, TOKEN_QUERY, &mut token) == 0 {
                 return false;
             }
 
-            let mut elevation = TokenElevation { token_is_elevated: 0 };
+            let mut elevation = TokenElevation {
+                token_is_elevated: 0,
+            };
             let mut size: u32 = 0;
 
             let result = GetTokenInformation(
@@ -365,18 +371,14 @@ impl MihomoManager {
     /// 如果应用已经以管理员权限运行，直接启动
     /// 否则使用 PowerShell Start-Process -Verb RunAs 触发 UAC
     #[cfg(windows)]
-    fn start_elevated(
-        mihomo_path: &PathBuf,
-        config_dir: &str,
-        config_path: &str,
-    ) -> Result<Child> {
+    fn start_elevated(mihomo_path: &PathBuf, config_dir: &str, config_path: &str) -> Result<Child> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
 
         // 检查当前进程是否已经有管理员权限
         if Self::is_running_as_admin() {
             log::info!("Already running as admin, starting mihomo directly...");
-            
+
             // 直接启动 mihomo，无需 UAC
             let child = Command::new(mihomo_path)
                 .current_dir(std::path::Path::new(config_dir))
@@ -386,8 +388,11 @@ impl MihomoManager {
                 .stderr(Stdio::null())
                 .spawn()
                 .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?;
-            
-            log::info!("MiHomo started directly with admin privileges, PID: {}", child.id());
+
+            log::info!(
+                "MiHomo started directly with admin privileges, PID: {}",
+                child.id()
+            );
             return Ok(child);
         }
 
@@ -419,7 +424,13 @@ impl MihomoManager {
 
         // 同步执行 PowerShell，等待 UAC 结果
         let output = Command::new("powershell")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_command])
+            .args([
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                &ps_command,
+            ])
             .creation_flags(CREATE_NO_WINDOW)
             .output()
             .map_err(|e| anyhow::anyhow!("执行提权命令失败: {}", e))?;
@@ -427,15 +438,18 @@ impl MihomoManager {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             log::warn!("UAC elevation failed or was cancelled: {}", stderr);
-            
+
             // 检查是否是用户取消
-            if stderr.contains("canceled") || stderr.contains("cancelled") 
-                || stderr.contains("拒绝") || stderr.contains("denied")
+            if stderr.contains("canceled")
+                || stderr.contains("cancelled")
+                || stderr.contains("拒绝")
+                || stderr.contains("denied")
                 || stderr.contains("The operation was canceled")
-                || output.status.code() == Some(1) {
+                || output.status.code() == Some(1)
+            {
                 return Err(anyhow::anyhow!("用户取消了管理员权限请求"));
             }
-            
+
             return Err(anyhow::anyhow!("管理员权限请求失败: {}", stderr.trim()));
         }
 
@@ -500,7 +514,10 @@ impl MihomoManager {
 
             match self.check_health().await {
                 Ok(_) => {
-                    log::info!("MiHomo started successfully via service after {} attempts", attempt);
+                    log::info!(
+                        "MiHomo started successfully via service after {} attempts",
+                        attempt
+                    );
                     return Ok(());
                 }
                 Err(e) => {
@@ -592,33 +609,39 @@ impl MihomoManager {
         // mihomo 的日志已经通过 WebSocket API (/logs) 获取，无需从 stdout/stderr 读取
         #[cfg(windows)]
         let child = {
-            use std::os::windows::process::CommandExt;
             use crate::system::WinServiceManager;
+            use std::os::windows::process::CommandExt;
             const CREATE_NO_WINDOW: u32 = 0x08000000;
-            
+
             let tun_enabled = is_tun_enabled();
             let service_installed = WinServiceManager::is_installed().unwrap_or(false);
             let service_running = WinServiceManager::is_running().unwrap_or(false);
-            
-            log::info!("Start check: tun_enabled={}, service_installed={}, service_running={}", 
-                       tun_enabled, service_installed, service_running);
-            
+
+            log::info!(
+                "Start check: tun_enabled={}, service_installed={}, service_running={}",
+                tun_enabled,
+                service_installed,
+                service_running
+            );
+
             // 优先级 1：如果服务正在运行，通过服务启动（无论 TUN 是否启用）
             if service_installed && service_running {
                 log::info!("Service is running, starting mihomo via service...");
                 log::info!("  mihomo_path: {:?}", mihomo_path);
                 log::info!("  config_dir: {}", config_dir_str);
                 log::info!("  config_path: {}", config_path_str);
-                
+
                 // 等待 IPC 就绪
                 for i in 0..10 {
                     if is_service_ipc_ready() {
                         log::info!("Service IPC ready after {} attempts", i + 1);
-                        return self.start_via_service(&mihomo_path, &config_dir_str, &config_path_str).await;
+                        return self
+                            .start_via_service(&mihomo_path, &config_dir_str, &config_path_str)
+                            .await;
                     }
                     sleep(Duration::from_millis(500)).await;
                 }
-                
+
                 log::warn!("Service IPC not ready after 5 seconds");
                 // 如果 TUN 启用但服务 IPC 不可用，回退到 UAC
                 if tun_enabled {
@@ -795,9 +818,7 @@ impl MihomoManager {
                         .build();
                     if let Ok(rt) = rt {
                         use crate::system::WinServiceManager;
-                        let _ = rt.block_on(async {
-                            WinServiceManager::stop_mihomo().await
-                        });
+                        let _ = rt.block_on(async { WinServiceManager::stop_mihomo().await });
                     }
                     // 也尝试通过进程名清理确保完全停止
                     Self::kill_all_mihomo_processes();

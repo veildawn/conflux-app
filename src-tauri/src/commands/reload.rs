@@ -432,7 +432,7 @@ pub fn apply_settings_to_config(
 }
 
 /// 从 MihomoSettings 构建基础配置
-/// 
+///
 /// 用于激活 profile 时，从 settings.json 中的设置构建 base_config，
 /// 然后再合并 profile 内容（proxies/rules 等）生成完整的运行时配置。
 pub fn build_base_config_from_settings(settings: &crate::models::MihomoSettings) -> MihomoConfig {

@@ -90,10 +90,7 @@ pub async fn save_config(config: MihomoConfig) -> Result<(), String> {
             if let Some(tun) = &mut config_to_save.tun {
                 if tun.enable && tun.dns_hijack.is_empty() {
                     log::info!("DNS is enabled and TUN is enabled, restoring default dns-hijack");
-                    tun.dns_hijack = vec![
-                        "any:53".to_string(),
-                        "tcp://any:53".to_string(),
-                    ];
+                    tun.dns_hijack = vec!["any:53".to_string(), "tcp://any:53".to_string()];
                 }
             }
         }
@@ -732,14 +729,11 @@ pub async fn get_rules() -> Result<Vec<String>, String> {
 pub async fn save_rules(rules: Vec<String>) -> Result<(), String> {
     use crate::commands::reload::{apply_config_change, ReloadOptions};
 
-    apply_config_change(
-        None,
-        &ReloadOptions::safe(),
-        |config| {
-            config.rules = rules.clone();
-            Ok(())
-        },
-    ).await?;
+    apply_config_change(None, &ReloadOptions::safe(), |config| {
+        config.rules = rules.clone();
+        Ok(())
+    })
+    .await?;
 
     log::info!("Rules saved and reloaded");
     Ok(())
@@ -1004,9 +998,3 @@ pub async fn apply_subscription(
         rules_count,
     })
 }
-
-
-
-
-
-

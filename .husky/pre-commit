@@ -1,1 +1,31 @@
+#!/bin/sh
+
+# Run frontend lint-staged (ESLint + Prettier)
 pnpm lint-staged
+
+# Run Rust formatting check
+echo "🦀 Checking Rust formatting..."
+cd src-tauri
+
+# Check if any Rust files are staged
+if git diff --cached --name-only | grep -q '\.rs$'; then
+  # Format the code
+  cargo fmt --all
+
+  # Add any formatted files back to staging
+  git diff --name-only | grep '\.rs$' | xargs -r git add
+
+  echo "✅ Rust formatting complete"
+fi
+
+# Format service code if it exists and has changes
+if [ -d "service" ]; then
+  cd service
+  if git diff --cached --name-only | grep -q 'service/.*\.rs$'; then
+    cargo fmt --all 2>/dev/null || true
+    git diff --name-only | grep '\.rs$' | xargs -r git add
+  fi
+  cd ..
+fi
+
+cd ..
