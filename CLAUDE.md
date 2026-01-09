@@ -472,6 +472,18 @@ WS   /logs             # 日志 WebSocket
 - 后端：`println!` 或 `log` crate
 - IPC：检查 `invoke` 返回的错误信息
 
+### 6. 修改版本号
+
+修改版本号时，需要同时更新以下三个文件：
+
+| 文件                        | 字段      | 说明          |
+| --------------------------- | --------- | ------------- |
+| `src-tauri/tauri.conf.json` | `version` | Tauri 主配置  |
+| `src-tauri/Cargo.toml`      | `version` | Rust 项目版本 |
+| `package.json`              | `version` | 前端项目版本  |
+
+**注意**：`Cargo.lock` 会在修改 `Cargo.toml` 后自动更新，无需手动修改。
+
 ## 环境要求
 
 - **Node.js** >= 18.0.0
