@@ -301,7 +301,6 @@ impl MihomoApi {
         let url = format!("{}/cache/fakeip/flush", self.base_url);
         let request = self.client.post(&url).json(&serde_json::json!({}));
         let response = self.auth_header(request).send().await?;
-
         if response.status().is_success() {
             Ok(())
         } else {

@@ -919,18 +919,27 @@ export const ipc = {
   },
 
   /**
-   * 上传配置到 WebDAV
+   * 上传配置到 WebDAV（强制全量上传）
    */
   async webDavUpload(): Promise<SyncResult> {
     return invoke('webdav_upload');
   },
 
   /**
-   * 从 WebDAV 下载配置
+   * 从 WebDAV 下载配置（强制全量下载）
    * @param force 是否强制下载（忽略冲突）
    */
   async webDavDownload(force: boolean = false): Promise<SyncResult> {
     return invoke('webdav_download', { force });
+  },
+
+  /**
+   * 增量同步
+   * 自动检测本地和远端的变化，执行双向增量同步。
+   * 只同步有变化的文件，提高效率。
+   */
+  async webDavSync(): Promise<SyncResult> {
+    return invoke('webdav_sync');
   },
 
   /**
@@ -941,6 +950,13 @@ export const ipc = {
   },
 
   /**
+   * 清除同步状态（重置为初始状态）
+   */
+  async clearSyncStatus(): Promise<void> {
+    return invoke('clear_sync_status');
+  },
+
+  /**
    * 检查是否有冲突
    */
   async checkWebDavConflict(): Promise<ConflictInfo | null> {
@@ -948,11 +964,20 @@ export const ipc = {
   },
 
   /**
-   * 解决冲突
+   * 解决所有冲突
    * @param choice 'local' 保留本地，'remote' 使用远端
    */
   async resolveWebDavConflict(choice: 'local' | 'remote'): Promise<SyncResult> {
     return invoke('resolve_webdav_conflict', { choice });
+  },
+
+  /**
+   * 解决单个文件的冲突
+   * @param path 文件路径
+   * @param choice 'local' 保留本地，'remote' 使用远端
+   */
+  async resolveFileConflict(path: string, choice: 'local' | 'remote'): Promise<void> {
+    return invoke('resolve_file_conflict', { path, choice });
   },
 };
 

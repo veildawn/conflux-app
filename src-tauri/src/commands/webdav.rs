@@ -132,6 +132,12 @@ pub async fn get_sync_status() -> Result<SyncState, String> {
     SyncManager::get_sync_status().map_err(|e| e.to_string())
 }
 
+/// 清除同步状态（重置为初始状态）
+#[tauri::command]
+pub async fn clear_sync_status() -> Result<(), String> {
+    SyncManager::clear_sync_state().map_err(|e| e.to_string())
+}
+
 /// 检查是否有冲突
 #[tauri::command]
 pub async fn check_webdav_conflict(
@@ -153,7 +159,62 @@ pub async fn check_webdav_conflict(
         .map_err(|e| e.to_string())
 }
 
-/// 解决冲突
+/// 增量同步
+///
+/// 自动检测本地和远端的变化，执行双向增量同步。
+/// 只同步有变化的文件，提高效率。
+#[tauri::command]
+pub async fn webdav_sync(app: AppHandle, state: State<'_, AppState>) -> Result<SyncResult, String> {
+    let settings = state
+        .config_manager
+        .load_app_settings()
+        .map_err(|e| e.to_string())?;
+
+    if !settings.webdav.enabled {
+        return Err("WebDAV 同步未启用".to_string());
+    }
+
+    let sync_manager = SyncManager::new(settings.webdav);
+    let result = sync_manager.sync().await.map_err(|e| e.to_string())?;
+
+    // 同步成功后，应用系统级设置
+    if result.success && !result.downloaded_files.is_empty() {
+        let new_settings = state
+            .config_manager
+            .load_app_settings()
+            .map_err(|e| e.to_string())?;
+
+        apply_autostart_to_system(&app, new_settings.auto_start);
+        log::info!("WebDAV sync completed. User needs to activate a profile to apply changes.");
+    }
+
+    Ok(result)
+}
+
+/// 解决单个文件的冲突
+#[tauri::command]
+pub async fn resolve_file_conflict(
+    state: State<'_, AppState>,
+    path: String,
+    choice: String,
+) -> Result<(), String> {
+    let settings = state
+        .config_manager
+        .load_app_settings()
+        .map_err(|e| e.to_string())?;
+
+    if !settings.webdav.enabled {
+        return Err("WebDAV 同步未启用".to_string());
+    }
+
+    let sync_manager = SyncManager::new(settings.webdav);
+    sync_manager
+        .resolve_file_conflict(&path, &choice)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 解决所有冲突
 /// choice: "local" 保留本地，"remote" 使用远端
 #[tauri::command]
 pub async fn resolve_webdav_conflict(
@@ -172,35 +233,21 @@ pub async fn resolve_webdav_conflict(
 
     let sync_manager = SyncManager::new(settings.webdav);
 
-    match choice.as_str() {
-        "local" => {
-            // 保留本地，强制上传覆盖远端
-            sync_manager.upload_all().await.map_err(|e| e.to_string())
-        }
-        "remote" => {
-            // 使用远端，强制下载覆盖本地
-            let result = sync_manager
-                .download_all(true)
-                .await
-                .map_err(|e| e.to_string())?;
+    let result = sync_manager
+        .resolve_all_conflicts(&choice)
+        .await
+        .map_err(|e| e.to_string())?;
 
-            // 下载成功后，只应用系统级设置
-            if result.success {
-                let new_settings = state
-                    .config_manager
-                    .load_app_settings()
-                    .map_err(|e| e.to_string())?;
+    // 同步成功后，应用系统级设置
+    if result.success && !result.downloaded_files.is_empty() {
+        let new_settings = state
+            .config_manager
+            .load_app_settings()
+            .map_err(|e| e.to_string())?;
 
-                // 应用开机自启动到系统
-                apply_autostart_to_system(&app, new_settings.auto_start);
-
-                // 注意：不自动重载 MiHomo
-                // 用户需要手动激活 profile 才会从 settings.json + profile 生成完整运行时配置
-                log::info!("Conflict resolved with remote. User needs to activate a profile to apply changes.");
-            }
-
-            Ok(result)
-        }
-        _ => Err("无效的选择，请使用 'local' 或 'remote'".to_string()),
+        apply_autostart_to_system(&app, new_settings.auto_start);
+        log::info!("Conflict resolved. User needs to activate a profile to apply changes.");
     }
+
+    Ok(result)
 }
