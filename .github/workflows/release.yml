@@ -1,5 +1,6 @@
 name: Release
 
+# Build and publish release artifacts for all platforms
 on:
   push:
     tags:
