@@ -4,6 +4,7 @@ use reqwest::{header, Client, StatusCode};
 use serde::{Deserialize, Serialize};
 
 /// WebDAV 文件信息
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebDavFileInfo {
     pub path: String,
@@ -178,6 +179,7 @@ impl WebDavClient {
     }
 
     /// 获取文件信息（Last-Modified, ETag 等）
+    #[allow(dead_code)]
     pub async fn get_file_info(&self, remote_path: &str) -> Result<Option<WebDavFileInfo>> {
         let url = format!("{}{}", self.base_url, remote_path);
 
@@ -376,6 +378,7 @@ impl WebDavClient {
     }
 
     /// 简单的 XML 值提取（避免引入重量级 XML 库）
+    #[allow(dead_code)]
     fn extract_xml_value(xml: &str, tag: &str) -> Option<String> {
         // 尝试多种命名空间前缀
         let patterns = [
