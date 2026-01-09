@@ -786,12 +786,12 @@ jobs:
             # frozen_string_literal: true
 
             cask "conflux" do
-            CASK
+          CASK
             echo "  version \"$VERSION\"" >> Casks/conflux.rb
             cat >> Casks/conflux.rb << 'CASK'
 
               on_intel do
-            CASK
+          CASK
             echo "    sha256 \"$X64_SHA\"" >> Casks/conflux.rb
             cat >> Casks/conflux.rb << 'CASK'
                 url "https://github.com/Ashbaer/conflux-app/releases/download/v#{version}/Conflux_#{version}_x64.dmg",
@@ -799,7 +799,7 @@ jobs:
               end
 
               on_arm do
-            CASK
+          CASK
             echo "    sha256 \"$ARM64_SHA\"" >> Casks/conflux.rb
             cat >> Casks/conflux.rb << 'CASK'
                 url "https://github.com/Ashbaer/conflux-app/releases/download/v#{version}/Conflux_#{version}_aarch64.dmg",
@@ -830,7 +830,7 @@ jobs:
                 "~/Library/Saved Application State/com.conflux.desktop.savedState",
               ]
             end
-            CASK
+          CASK
 
             # Commit and push
             git config user.name "github-actions[bot]"
