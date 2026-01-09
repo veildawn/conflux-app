@@ -13,6 +13,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  SUBSTORE_VERSION: "2.18.5"
   RELEASE_TAG: ${{ github.event.inputs.tag_name || github.ref_name }}
   RELEASE_NAME: Conflux ${{ github.event.inputs.tag_name || github.ref_name }}
   RELEASE_BODY: |
@@ -64,7 +65,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          shared-key: macos-rust
+          shared-key: macos-arm64-rust
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -98,16 +99,12 @@ jobs:
         run: |
           echo "Checking MiHomo binaries..."
           ls -lh src-tauri/binaries/
-
-          # Check if file exists
           if [ ! -f "src-tauri/binaries/mihomo-aarch64-apple-darwin" ]; then
             echo "ERROR: mihomo-aarch64-apple-darwin not found!"
             exit 1
           fi
-
-          # Check file size (should be > 10MB)
           FILE_SIZE=$(stat -f%z "src-tauri/binaries/mihomo-aarch64-apple-darwin" 2>/dev/null || stat -c%s "src-tauri/binaries/mihomo-aarch64-apple-darwin")
-          MIN_SIZE=10000000  # 10MB
+          MIN_SIZE=10000000
           if [ "$FILE_SIZE" -lt "$MIN_SIZE" ]; then
             echo "ERROR: mihomo-aarch64-apple-darwin is too small ($FILE_SIZE bytes). Expected > 10MB"
             exit 1
@@ -135,7 +132,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src-tauri/resources/sub-store
-          key: substore-${{ hashFiles('scripts/fetch-substore.sh') }}-v2
+          key: substore-v${{ env.SUBSTORE_VERSION }}
 
       - name: Fetch Sub-Store
         if: steps.cache-substore.outputs.cache-hit != 'true'
@@ -149,7 +146,6 @@ jobs:
       - name: Verify Sub-Store frontend
         id: verify-frontend
         run: |
-          # Check if frontend directory exists and has content
           if [ ! -d "src-tauri/resources/sub-store/frontend" ] || [ -z "$(ls -A src-tauri/resources/sub-store/frontend 2>/dev/null)" ]; then
             echo "frontend_missing=true" >> $GITHUB_OUTPUT
             echo "⚠️ Sub-Store frontend directory is missing or empty"
@@ -172,45 +168,22 @@ jobs:
       - name: Verify all resources
         run: |
           echo "=== Verifying all required resources ==="
-
-          # Check Node.js
           if [ ! -f "src-tauri/binaries/node-aarch64-apple-darwin" ]; then
-            echo "ERROR: Node.js binary not found!"
-            exit 1
+            echo "ERROR: Node.js binary not found!"; exit 1
           fi
           echo "✅ Node.js binary present"
-
-          # Check Sub-Store bundle
           if [ ! -f "src-tauri/resources/sub-store/sub-store.bundle.js" ]; then
-            echo "ERROR: Sub-Store bundle not found!"
-            exit 1
+            echo "ERROR: Sub-Store bundle not found!"; exit 1
           fi
           echo "✅ Sub-Store bundle present"
-
-          if [ ! -f "src-tauri/resources/sub-store/run-substore.js" ]; then
-            echo "ERROR: Sub-Store run script not found!"
-            exit 1
-          fi
-          echo "✅ Sub-Store run script present"
-
-          # Check Sub-Store frontend
-          if [ ! -d "src-tauri/resources/sub-store/frontend" ]; then
-            echo "ERROR: Sub-Store frontend directory not found!"
-            exit 1
-          fi
           if [ ! -f "src-tauri/resources/sub-store/frontend/index.html" ]; then
-            echo "ERROR: Sub-Store frontend index.html not found!"
-            exit 1
+            echo "ERROR: Sub-Store frontend index.html not found!"; exit 1
           fi
           echo "✅ Sub-Store frontend present"
-
           echo ""
           echo "=== All resources verified ==="
           ls -lh src-tauri/binaries/
-          ls -lh src-tauri/resources/
           ls -lh src-tauri/resources/sub-store/
-          echo "Frontend files:"
-          ls -lh src-tauri/resources/sub-store/frontend/ | head -10
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -219,13 +192,6 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          # Apple code signing (optional, configure secrets if needed)
-          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           args: --target aarch64-apple-darwin -c src-tauri/tauri.macos.conf.json
 
@@ -238,16 +204,14 @@ jobs:
             echo "Conflux.app size: ${APP_SIZE}MB"
             if [ "$APP_SIZE" -lt 50 ]; then
               echo "⚠️ WARNING: .app is smaller than expected (${APP_SIZE}MB < 50MB)"
-              echo "Checking resources..."
-              ls -lh "$APP_PATH/Contents/Resources/resources/" || echo "No resources found!"
             else
               echo "✅ .app size verified: ${APP_SIZE}MB"
             fi
           fi
-
           echo ""
           echo "=== DMG files ==="
           find src-tauri/target -name "*.dmg" -exec ls -lh {} \; 2>/dev/null || echo "No DMG found"
+
       - name: Upload macOS ARM64 artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -258,7 +222,7 @@ jobs:
   # Build for macOS x86_64 (Intel)
   build-macos-x86:
     name: Build macOS x86_64
-    runs-on: macos-15-intel
+    runs-on: macos-13
     permissions:
       contents: write
     steps:
@@ -284,7 +248,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          shared-key: macos-rust
+          shared-key: macos-x86-rust
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -318,16 +282,12 @@ jobs:
         run: |
           echo "Checking MiHomo binaries..."
           ls -lh src-tauri/binaries/
-
-          # Check if file exists
           if [ ! -f "src-tauri/binaries/mihomo-x86_64-apple-darwin" ]; then
             echo "ERROR: mihomo-x86_64-apple-darwin not found!"
             exit 1
           fi
-
-          # Check file size (should be > 10MB)
           FILE_SIZE=$(stat -f%z "src-tauri/binaries/mihomo-x86_64-apple-darwin" 2>/dev/null || stat -c%s "src-tauri/binaries/mihomo-x86_64-apple-darwin")
-          MIN_SIZE=10000000  # 10MB
+          MIN_SIZE=10000000
           if [ "$FILE_SIZE" -lt "$MIN_SIZE" ]; then
             echo "ERROR: mihomo-x86_64-apple-darwin is too small ($FILE_SIZE bytes). Expected > 10MB"
             exit 1
@@ -355,7 +315,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src-tauri/resources/sub-store
-          key: substore-${{ hashFiles('scripts/fetch-substore.sh') }}-v2
+          key: substore-v${{ env.SUBSTORE_VERSION }}
 
       - name: Fetch Sub-Store
         if: steps.cache-substore.outputs.cache-hit != 'true'
@@ -369,7 +329,6 @@ jobs:
       - name: Verify Sub-Store frontend
         id: verify-frontend
         run: |
-          # Check if frontend directory exists and has content
           if [ ! -d "src-tauri/resources/sub-store/frontend" ] || [ -z "$(ls -A src-tauri/resources/sub-store/frontend 2>/dev/null)" ]; then
             echo "frontend_missing=true" >> $GITHUB_OUTPUT
             echo "⚠️ Sub-Store frontend directory is missing or empty"
@@ -392,44 +351,22 @@ jobs:
       - name: Verify all resources
         run: |
           echo "=== Verifying all required resources ==="
-
-          # Check Node.js
           if [ ! -f "src-tauri/binaries/node-x86_64-apple-darwin" ]; then
-            echo "ERROR: Node.js binary not found!"
-            exit 1
+            echo "ERROR: Node.js binary not found!"; exit 1
           fi
           echo "✅ Node.js binary present"
-
-          # Check Sub-Store bundle
           if [ ! -f "src-tauri/resources/sub-store/sub-store.bundle.js" ]; then
-            echo "ERROR: Sub-Store bundle not found!"
-            exit 1
+            echo "ERROR: Sub-Store bundle not found!"; exit 1
           fi
           echo "✅ Sub-Store bundle present"
-
-          if [ ! -f "src-tauri/resources/sub-store/run-substore.js" ]; then
-            echo "ERROR: Sub-Store run script not found!"
-            exit 1
-          fi
-          echo "✅ Sub-Store run script present"
-
-          # Check Sub-Store frontend
-          if [ ! -d "src-tauri/resources/sub-store/frontend" ]; then
-            echo "ERROR: Sub-Store frontend directory not found!"
-            exit 1
-          fi
           if [ ! -f "src-tauri/resources/sub-store/frontend/index.html" ]; then
-            echo "ERROR: Sub-Store frontend index.html not found!"
-            exit 1
+            echo "ERROR: Sub-Store frontend index.html not found!"; exit 1
           fi
           echo "✅ Sub-Store frontend present"
-
           echo ""
           echo "=== All resources verified ==="
           ls -lh src-tauri/binaries/
           ls -lh src-tauri/resources/sub-store/
-          echo "Frontend files:"
-          ls -lh src-tauri/resources/sub-store/frontend/ | head -10
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -438,13 +375,6 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          # Apple code signing (optional)
-          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           args: --target x86_64-apple-darwin -c src-tauri/tauri.macos.conf.json
 
@@ -457,16 +387,14 @@ jobs:
             echo "Conflux.app size: ${APP_SIZE}MB"
             if [ "$APP_SIZE" -lt 50 ]; then
               echo "⚠️ WARNING: .app is smaller than expected (${APP_SIZE}MB < 50MB)"
-              echo "Checking resources..."
-              ls -lh "$APP_PATH/Contents/Resources/resources/" || echo "No resources found!"
             else
               echo "✅ .app size verified: ${APP_SIZE}MB"
             fi
           fi
-
           echo ""
           echo "=== DMG files ==="
           find src-tauri/target -name "*.dmg" -exec ls -lh {} \; 2>/dev/null || echo "No DMG found"
+
       - name: Upload macOS x86_64 artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -557,16 +485,12 @@ jobs:
         run: |
           echo "Checking MiHomo binaries..."
           ls -lh src-tauri/binaries/
-
-          # Check if file exists
           if [ ! -f "src-tauri/binaries/mihomo-x86_64-pc-windows-msvc.exe" ]; then
             echo "ERROR: mihomo-x86_64-pc-windows-msvc.exe not found!"
             exit 1
           fi
-
-          # Check file size (should be > 10MB)
           FILE_SIZE=$(stat -c%s "src-tauri/binaries/mihomo-x86_64-pc-windows-msvc.exe" 2>/dev/null || wc -c < "src-tauri/binaries/mihomo-x86_64-pc-windows-msvc.exe")
-          MIN_SIZE=10000000  # 10MB
+          MIN_SIZE=10000000
           if [ "$FILE_SIZE" -lt "$MIN_SIZE" ]; then
             echo "ERROR: mihomo-x86_64-pc-windows-msvc.exe is too small ($FILE_SIZE bytes). Expected > 10MB"
             exit 1
@@ -594,7 +518,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src-tauri/resources/sub-store
-          key: substore-${{ hashFiles('scripts/fetch-substore.sh') }}-v2
+          key: substore-v${{ env.SUBSTORE_VERSION }}
 
       - name: Fetch Sub-Store
         if: steps.cache-substore.outputs.cache-hit != 'true'
@@ -609,7 +533,6 @@ jobs:
         id: verify-frontend
         shell: bash
         run: |
-          # Check if frontend directory exists and has content
           if [ ! -d "src-tauri/resources/sub-store/frontend" ] || [ -z "$(ls -A src-tauri/resources/sub-store/frontend 2>/dev/null)" ]; then
             echo "frontend_missing=true" >> $GITHUB_OUTPUT
             echo "⚠️ Sub-Store frontend directory is missing or empty"
@@ -633,44 +556,22 @@ jobs:
         shell: bash
         run: |
           echo "=== Verifying all required resources ==="
-
-          # Check Node.js
           if [ ! -f "src-tauri/binaries/node-x86_64-pc-windows-msvc.exe" ]; then
-            echo "ERROR: Node.js binary not found!"
-            exit 1
+            echo "ERROR: Node.js binary not found!"; exit 1
           fi
           echo "✅ Node.js binary present"
-
-          # Check Sub-Store bundle
           if [ ! -f "src-tauri/resources/sub-store/sub-store.bundle.js" ]; then
-            echo "ERROR: Sub-Store bundle not found!"
-            exit 1
+            echo "ERROR: Sub-Store bundle not found!"; exit 1
           fi
           echo "✅ Sub-Store bundle present"
-
-          if [ ! -f "src-tauri/resources/sub-store/run-substore.js" ]; then
-            echo "ERROR: Sub-Store run script not found!"
-            exit 1
-          fi
-          echo "✅ Sub-Store run script present"
-
-          # Check Sub-Store frontend
-          if [ ! -d "src-tauri/resources/sub-store/frontend" ]; then
-            echo "ERROR: Sub-Store frontend directory not found!"
-            exit 1
-          fi
           if [ ! -f "src-tauri/resources/sub-store/frontend/index.html" ]; then
-            echo "ERROR: Sub-Store frontend index.html not found!"
-            exit 1
+            echo "ERROR: Sub-Store frontend index.html not found!"; exit 1
           fi
           echo "✅ Sub-Store frontend present"
-
           echo ""
           echo "=== All resources verified ==="
           ls -lh src-tauri/binaries/
           ls -lh src-tauri/resources/sub-store/
-          echo "Frontend files:"
-          ls -lh src-tauri/resources/sub-store/frontend/ | head -10
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -679,9 +580,6 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          # Windows code signing (optional)
-          # TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          # TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: --target x86_64-pc-windows-msvc -c src-tauri/tauri.windows.conf.json
 
@@ -691,6 +589,7 @@ jobs:
           echo "=== Checking build artifacts ==="
           echo "NSIS installers:"
           find src-tauri/target -name "*-setup.exe" -exec ls -lh {} \; 2>/dev/null || echo "No NSIS installer found"
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -698,7 +597,7 @@ jobs:
           path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
 
-  # Optional: Create a combined release after all builds complete
+  # Create a combined release after all builds complete
   finalize-release:
     name: Finalize Release
     needs: [build-macos-arm64, build-macos-x86, build-windows-x86]
@@ -711,6 +610,7 @@ jobs:
         with:
           path: release-assets
           merge-multiple: true
+
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
@@ -723,6 +623,7 @@ jobs:
           files: release-assets/**/*
         env:
           GITHUB_TOKEN: ${{ github.token }}
+
       - name: Release Summary
         run: |
           echo "✅ All platform builds completed successfully!"

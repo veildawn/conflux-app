@@ -8,18 +8,96 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  SUBSTORE_VERSION: "2.18.5"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  # Frontend checks (lint, type-check, build)
-  frontend-check:
-    name: Frontend Check
+  # 代码格式化和自动修复 (仅在 push 到 main/develop 时自动提交修复)
+  format:
+    name: Format & Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Run ESLint fix
+        run: pnpm lint:fix || true
+
+      - name: Run Prettier
+        run: pnpm format || true
+
+      - name: Run cargo fmt
+        working-directory: src-tauri
+        run: cargo fmt --all
+
+      - name: Format service code (if exists)
+        working-directory: src-tauri/service
+        run: cargo fmt --all 2>/dev/null || true
+
+      - name: Check for changes
+        id: changes
+        run: |
+          git diff --quiet || echo "has_changes=true" >> $GITHUB_OUTPUT
+
+      - name: Commit formatting changes
+        if: steps.changes.outputs.has_changes == 'true' && github.event_name == 'push'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add -A
+          git commit -m "style: auto-format code [skip ci]" || exit 0
+          git push
+
+      - name: Fail if changes detected in PR
+        if: steps.changes.outputs.has_changes == 'true' && github.event_name == 'pull_request'
+        run: |
+          echo "::error::Code formatting issues detected. Please run 'pnpm format' and 'cargo fmt --all' locally."
+          exit 1
+
+  # Frontend checks (lint, type-check, build)
+  frontend-check:
+    name: Frontend Check
+    needs: format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -54,9 +132,10 @@ jobs:
       - name: Build Frontend
         run: pnpm build
 
-  # Rust checks (clippy, fmt, build) for each platform
+  # Rust checks (clippy, build) for each platform
   rust-check:
     name: Rust Check (${{ matrix.platform }})
+    needs: format
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -69,7 +148,7 @@ jobs:
             node_binary: node-aarch64-apple-darwin
             mihomo_platform: darwin-arm64
           - platform: macOS-x86_64
-            os: macos-15-intel
+            os: macos-13
             target: x86_64-apple-darwin
             node_platform: darwin-x64
             node_binary: node-x86_64-apple-darwin
@@ -83,6 +162,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -99,15 +180,17 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: ${{ matrix.platform }}-rust
 
-      - name: Cache Node.js binaries
-        id: cache-node
+      - name: Cache MiHomo binaries
+        id: cache-mihomo
         uses: actions/cache@v4
         with:
-          path: src-tauri/binaries/${{ matrix.node_binary }}
-          key: node-${{ matrix.node_platform }}-v20.18.2
+          path: src-tauri/binaries/mihomo-*
+          key: mihomo-${{ matrix.mihomo_platform }}-v1
 
       - name: Fetch MiHomo binaries
+        if: steps.cache-mihomo.outputs.cache-hit != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -128,6 +211,13 @@ jobs:
           }
           Write-Host "✅ Windows service built successfully"
 
+      - name: Cache Node.js binaries
+        id: cache-node
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/binaries/${{ matrix.node_binary }}
+          key: node-${{ matrix.node_platform }}-v20.18.2
+
       - name: Fetch Node.js binaries
         if: steps.cache-node.outputs.cache-hit != 'true'
         shell: bash
@@ -142,7 +232,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src-tauri/resources/sub-store
-          key: substore-latest-v1
+          key: substore-v${{ env.SUBSTORE_VERSION }}
 
       - name: Fetch Sub-Store
         if: steps.cache-substore.outputs.cache-hit != 'true'
@@ -152,10 +242,6 @@ jobs:
         run: |
           chmod +x scripts/fetch-substore.sh
           ./scripts/fetch-substore.sh
-
-      - name: Check formatting
-        working-directory: src-tauri
-        run: cargo fmt --all -- --check
 
       - name: Clippy
         working-directory: src-tauri
@@ -168,11 +254,13 @@ jobs:
   # Integration test (optional, runs on ubuntu for speed)
   test:
     name: Tests
-    runs-on: ubuntu-latest
     needs: [frontend-check]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

@@ -1,13 +1,13 @@
-use anyhow::Result;
 #[cfg(not(target_os = "windows"))]
 use anyhow::anyhow;
+use anyhow::Result;
 #[cfg(not(target_os = "windows"))]
 use std::process::Command;
 
-#[cfg(not(target_os = "windows"))]
-use crate::utils::get_mihomo_binary_path;
 #[cfg(target_os = "macos")]
 use crate::utils::ensure_mihomo_in_data_dir;
+#[cfg(not(target_os = "windows"))]
+use crate::utils::get_mihomo_binary_path;
 
 /// TUN 权限管理器
 pub struct TunPermission;
@@ -45,7 +45,8 @@ impl TunPermission {
         let is_root_owned = owner == "root";
 
         // 检查是否设置了 setuid bit (权限字符串的第4个字符是 's' 或 'S')
-        let has_setuid = permissions.len() >= 4 && (permissions.chars().nth(3) == Some('s') || permissions.chars().nth(3) == Some('S'));
+        let has_setuid = permissions.len() >= 4
+            && (permissions.chars().nth(3) == Some('s') || permissions.chars().nth(3) == Some('S'));
 
         log::info!(
             "TUN permission check: owner={}, has_setuid={}, permissions={}",
@@ -72,14 +73,13 @@ impl TunPermission {
                 mihomo_path = data_path;
             }
             Err(err) => {
-                return Err(anyhow!(
-                    "Failed to prepare MiHomo in data dir: {}",
-                    err
-                ));
+                return Err(anyhow!("Failed to prepare MiHomo in data dir: {}", err));
             }
         }
 
-        let path_str = mihomo_path.to_str().ok_or_else(|| anyhow!("Invalid path"))?;
+        let path_str = mihomo_path
+            .to_str()
+            .ok_or_else(|| anyhow!("Invalid path"))?;
 
         // 使用 osascript 请求管理员权限来设置 mihomo 的 suid
         // 命令: sudo chown root:wheel <path> && sudo chmod u+s <path>
@@ -90,10 +90,7 @@ impl TunPermission {
 
         log::info!("Requesting admin privileges to setup TUN permission");
 
-        let output = Command::new("osascript")
-            .arg("-e")
-            .arg(&script)
-            .output()?;
+        let output = Command::new("osascript").arg("-e").arg(&script).output()?;
 
         if output.status.success() {
             log::info!("TUN permission setup successfully");

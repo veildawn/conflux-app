@@ -5,9 +5,8 @@ use std::time::Duration;
 use windows_service::{
     define_windows_service,
     service::{
-        ServiceAccess, ServiceControl, ServiceControlAccept, ServiceErrorControl,
-        ServiceExitCode, ServiceInfo, ServiceStartType, ServiceState, ServiceStatus,
-        ServiceType,
+        ServiceAccess, ServiceControl, ServiceControlAccept, ServiceErrorControl, ServiceExitCode,
+        ServiceInfo, ServiceStartType, ServiceState, ServiceStatus, ServiceType,
     },
     service_control_handler::{self, ServiceControlHandlerResult},
     service_dispatcher,
@@ -22,16 +21,15 @@ define_windows_service!(ffi_service_main, service_main);
 
 /// Install the Windows service
 pub fn install_service() -> windows_service::Result<()> {
-    let manager = ServiceManager::local_computer(
-        None::<&str>,
-        ServiceManagerAccess::CREATE_SERVICE,
-    )?;
+    let manager =
+        ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CREATE_SERVICE)?;
 
-    let service_binary_path = std::env::current_exe()
-        .map_err(|e| windows_service::Error::Winapi(std::io::Error::new(
+    let service_binary_path = std::env::current_exe().map_err(|e| {
+        windows_service::Error::Winapi(std::io::Error::new(
             std::io::ErrorKind::Other,
             e.to_string(),
-        )))?;
+        ))
+    })?;
 
     let service_info = ServiceInfo {
         name: OsString::from(SERVICE_NAME),
@@ -65,7 +63,7 @@ pub fn install_service() -> windows_service::Result<()> {
 /// 设置服务权限，允许普通用户控制服务
 fn set_service_permissions() -> windows_service::Result<()> {
     use std::process::Command;
-    
+
     // SDDL 权限字符串：
     // D: = DACL
     // A = Allow
@@ -82,15 +80,17 @@ fn set_service_permissions() -> windows_service::Result<()> {
     // WD = WRITE_DAC
     // WO = WRITE_OWNER
     let sddl = "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWRPWPDTLOCRRC;;;IU)(A;;CCLCSWRPWPDTLOCRRC;;;SU)";
-    
+
     let output = Command::new("sc")
         .args(["sdset", SERVICE_NAME, sddl])
         .output()
-        .map_err(|e| windows_service::Error::Winapi(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to set service permissions: {}", e),
-        )))?;
-    
+        .map_err(|e| {
+            windows_service::Error::Winapi(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to set service permissions: {}", e),
+            ))
+        })?;
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         log::warn!("Failed to set service permissions: {}", stderr);
@@ -98,21 +98,16 @@ fn set_service_permissions() -> windows_service::Result<()> {
     } else {
         log::info!("Service permissions set successfully - users can now start/stop without UAC");
     }
-    
+
     Ok(())
 }
 
 /// Uninstall the Windows service
 pub fn uninstall_service() -> windows_service::Result<()> {
-    let manager = ServiceManager::local_computer(
-        None::<&str>,
-        ServiceManagerAccess::CONNECT,
-    )?;
+    let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)?;
 
-    let service = manager.open_service(
-        SERVICE_NAME,
-        ServiceAccess::DELETE | ServiceAccess::STOP,
-    )?;
+    let service =
+        manager.open_service(SERVICE_NAME, ServiceAccess::DELETE | ServiceAccess::STOP)?;
 
     // Stop the service if running
     let _ = service.stop();
@@ -202,5 +197,3 @@ fn run_service_main() -> windows_service::Result<()> {
 
     Ok(())
 }
-
-

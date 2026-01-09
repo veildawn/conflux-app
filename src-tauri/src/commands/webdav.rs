@@ -30,8 +30,8 @@ fn apply_autostart_to_system(_app: &AppHandle, _enabled: bool) {
 /// 测试 WebDAV 连接
 #[tauri::command]
 pub async fn test_webdav_connection(config: WebDavConfig) -> Result<bool, String> {
-    let client =
-        WebDavClient::new(&config.url, &config.username, &config.password).map_err(|e| e.to_string())?;
+    let client = WebDavClient::new(&config.url, &config.username, &config.password)
+        .map_err(|e| e.to_string())?;
 
     client.test_connection().await.map_err(|e| e.to_string())
 }
@@ -83,7 +83,7 @@ pub async fn webdav_upload(state: State<'_, AppState>) -> Result<SyncResult, Str
 }
 
 /// 从 WebDAV 下载配置
-/// 
+///
 /// 下载后只应用系统级设置（autostart），不自动重载 MiHomo。
 /// 用户需要手动激活 profile 才会生成运行时配置。
 #[tauri::command]
@@ -134,7 +134,9 @@ pub async fn get_sync_status() -> Result<SyncState, String> {
 
 /// 检查是否有冲突
 #[tauri::command]
-pub async fn check_webdav_conflict(state: State<'_, AppState>) -> Result<Option<ConflictInfo>, String> {
+pub async fn check_webdav_conflict(
+    state: State<'_, AppState>,
+) -> Result<Option<ConflictInfo>, String> {
     let settings = state
         .config_manager
         .load_app_settings()
@@ -145,7 +147,10 @@ pub async fn check_webdav_conflict(state: State<'_, AppState>) -> Result<Option<
     }
 
     let sync_manager = SyncManager::new(settings.webdav);
-    sync_manager.check_conflict().await.map_err(|e| e.to_string())
+    sync_manager
+        .check_conflict()
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 解决冲突

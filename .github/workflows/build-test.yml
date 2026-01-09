@@ -16,6 +16,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  SUBSTORE_VERSION: "2.18.5"
 
 permissions:
   contents: read
@@ -48,18 +49,20 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: macos-arm64-rust
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
-      - name: Cache Node.js binaries
-        id: cache-node
+      - name: Cache MiHomo binaries
+        id: cache-mihomo
         uses: actions/cache@v4
         with:
-          path: src-tauri/binaries/node-aarch64-apple-darwin
-          key: node-darwin-arm64-v20.18.2
+          path: src-tauri/binaries/mihomo-aarch64-apple-darwin
+          key: mihomo-darwin-arm64-v1
 
       - name: Fetch MiHomo binaries
+        if: steps.cache-mihomo.outputs.cache-hit != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -67,6 +70,13 @@ jobs:
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
+
+      - name: Cache Node.js binaries
+        id: cache-node
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/binaries/node-aarch64-apple-darwin
+          key: node-darwin-arm64-v20.18.2
 
       - name: Fetch Node.js binaries
         if: steps.cache-node.outputs.cache-hit != 'true'
@@ -82,7 +92,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src-tauri/resources/sub-store
-          key: substore-${{ hashFiles('scripts/fetch-substore.sh') }}-v2
+          key: substore-v${{ env.SUBSTORE_VERSION }}
 
       - name: Fetch Sub-Store
         if: steps.cache-substore.outputs.cache-hit != 'true'
@@ -122,9 +132,6 @@ jobs:
             echo "ERROR: Sub-Store bundle not found!"; exit 1
           fi
           echo "✅ Sub-Store bundle present"
-          if [ ! -d "src-tauri/resources/sub-store/frontend" ]; then
-            echo "ERROR: Sub-Store frontend directory not found!"; exit 1
-          fi
           if [ ! -f "src-tauri/resources/sub-store/frontend/index.html" ]; then
             echo "ERROR: Sub-Store frontend index.html not found!"; exit 1
           fi
@@ -149,7 +156,7 @@ jobs:
   build-macos-x86:
     name: Build macOS x86_64
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'macos-x86' }}
-    runs-on: macos-15-intel
+    runs-on: macos-13
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -173,18 +180,20 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: macos-x86-rust
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
-      - name: Cache Node.js binaries
-        id: cache-node
+      - name: Cache MiHomo binaries
+        id: cache-mihomo
         uses: actions/cache@v4
         with:
-          path: src-tauri/binaries/node-x86_64-apple-darwin
-          key: node-darwin-x64-v20.18.2
+          path: src-tauri/binaries/mihomo-x86_64-apple-darwin
+          key: mihomo-darwin-amd64-v1
 
       - name: Fetch MiHomo binaries
+        if: steps.cache-mihomo.outputs.cache-hit != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -192,6 +201,13 @@ jobs:
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
+
+      - name: Cache Node.js binaries
+        id: cache-node
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/binaries/node-x86_64-apple-darwin
+          key: node-darwin-x64-v20.18.2
 
       - name: Fetch Node.js binaries
         if: steps.cache-node.outputs.cache-hit != 'true'
@@ -207,7 +223,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src-tauri/resources/sub-store
-          key: substore-${{ hashFiles('scripts/fetch-substore.sh') }}-v2
+          key: substore-v${{ env.SUBSTORE_VERSION }}
 
       - name: Fetch Sub-Store
         if: steps.cache-substore.outputs.cache-hit != 'true'
@@ -247,9 +263,6 @@ jobs:
             echo "ERROR: Sub-Store bundle not found!"; exit 1
           fi
           echo "✅ Sub-Store bundle present"
-          if [ ! -d "src-tauri/resources/sub-store/frontend" ]; then
-            echo "ERROR: Sub-Store frontend directory not found!"; exit 1
-          fi
           if [ ! -f "src-tauri/resources/sub-store/frontend/index.html" ]; then
             echo "ERROR: Sub-Store frontend index.html not found!"; exit 1
           fi
@@ -298,18 +311,20 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: windows-rust
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
-      - name: Cache Node.js binaries
-        id: cache-node
+      - name: Cache MiHomo binaries
+        id: cache-mihomo
         uses: actions/cache@v4
         with:
-          path: src-tauri/binaries/node-x86_64-pc-windows-msvc.exe
-          key: node-win-x64-v20.18.2
+          path: src-tauri/binaries/mihomo-x86_64-pc-windows-msvc.exe
+          key: mihomo-windows-amd64-v1
 
       - name: Fetch MiHomo binaries
+        if: steps.cache-mihomo.outputs.cache-hit != 'true'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -329,6 +344,13 @@ jobs:
           }
           Write-Host "✅ Windows service built successfully"
 
+      - name: Cache Node.js binaries
+        id: cache-node
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/binaries/node-x86_64-pc-windows-msvc.exe
+          key: node-win-x64-v20.18.2
+
       - name: Fetch Node.js binaries
         if: steps.cache-node.outputs.cache-hit != 'true'
         shell: bash
@@ -343,7 +365,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src-tauri/resources/sub-store
-          key: substore-${{ hashFiles('scripts/fetch-substore.sh') }}-v2
+          key: substore-v${{ env.SUBSTORE_VERSION }}
 
       - name: Fetch Sub-Store
         if: steps.cache-substore.outputs.cache-hit != 'true'
@@ -385,9 +407,6 @@ jobs:
             echo "ERROR: Sub-Store bundle not found!"; exit 1
           fi
           echo "✅ Sub-Store bundle present"
-          if [ ! -d "src-tauri/resources/sub-store/frontend" ]; then
-            echo "ERROR: Sub-Store frontend directory not found!"; exit 1
-          fi
           if [ ! -f "src-tauri/resources/sub-store/frontend/index.html" ]; then
             echo "ERROR: Sub-Store frontend index.html not found!"; exit 1
           fi

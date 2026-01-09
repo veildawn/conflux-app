@@ -44,7 +44,7 @@ impl WebDavClient {
     /// 测试连接
     pub async fn test_connection(&self) -> Result<bool> {
         let url = format!("{}/", self.base_url);
-        
+
         let response = self
             .client
             .request(reqwest::Method::from_bytes(b"PROPFIND").unwrap(), &url)
@@ -91,8 +91,8 @@ impl WebDavClient {
                     .send()
                     .await?;
 
-                if !mkcol_response.status().is_success() 
-                    && mkcol_response.status() != StatusCode::METHOD_NOT_ALLOWED 
+                if !mkcol_response.status().is_success()
+                    && mkcol_response.status() != StatusCode::METHOD_NOT_ALLOWED
                 {
                     return Err(anyhow!(
                         "创建目录失败 '{}': HTTP {}",
@@ -118,7 +118,7 @@ impl WebDavClient {
         }
 
         let url = format!("{}{}", self.base_url, remote_path);
-        
+
         let response = self
             .client
             .put(&url)
@@ -138,7 +138,7 @@ impl WebDavClient {
     /// 下载文件
     pub async fn download_file(&self, remote_path: &str) -> Result<Vec<u8>> {
         let url = format!("{}{}", self.base_url, remote_path);
-        
+
         let response = self
             .client
             .get(&url)
@@ -157,7 +157,7 @@ impl WebDavClient {
     /// 获取文件信息（Last-Modified, ETag 等）
     pub async fn get_file_info(&self, remote_path: &str) -> Result<Option<WebDavFileInfo>> {
         let url = format!("{}{}", self.base_url, remote_path);
-        
+
         let response = self
             .client
             .request(reqwest::Method::from_bytes(b"PROPFIND").unwrap(), &url)
@@ -172,8 +172,8 @@ impl WebDavClient {
                 // 简单解析 XML 响应获取基本信息
                 let last_modified = Self::extract_xml_value(&body, "getlastmodified");
                 let etag = Self::extract_xml_value(&body, "getetag");
-                let size = Self::extract_xml_value(&body, "getcontentlength")
-                    .and_then(|s| s.parse().ok());
+                let size =
+                    Self::extract_xml_value(&body, "getcontentlength").and_then(|s| s.parse().ok());
                 let is_dir = body.contains("<D:collection") || body.contains("<d:collection");
 
                 Ok(Some(WebDavFileInfo {
@@ -246,7 +246,7 @@ impl WebDavClient {
         // 遍历所有目录，收集文件和子目录
         while let Some(current_dir) = dirs_to_process.pop() {
             let entries = self.list_dir(&current_dir).await?;
-            
+
             for (entry_path, is_dir) in entries {
                 if is_dir {
                     dirs_to_process.push(entry_path.clone());
@@ -278,9 +278,13 @@ impl WebDavClient {
 
         // 简单解析：查找所有 <d:href> 或 <D:href>
         for pattern in &["<d:href>", "<D:href>"] {
-            let end_pattern = if *pattern == "<d:href>" { "</d:href>" } else { "</D:href>" };
+            let end_pattern = if *pattern == "<d:href>" {
+                "</d:href>"
+            } else {
+                "</D:href>"
+            };
             let mut search_start = 0;
-            
+
             while let Some(start_idx) = xml[search_start..].find(pattern) {
                 let abs_start = search_start + start_idx + pattern.len();
                 if let Some(end_idx) = xml[abs_start..].find(end_pattern) {
@@ -289,23 +293,28 @@ impl WebDavClient {
                     if let Some(path_start) = href.find("/dav/") {
                         let path = &href[path_start + 4..]; // 去掉 "/dav"
                         let path_normalized = path.trim_matches('/');
-                        
+
                         // 跳过父目录本身
-                        if path_normalized != parent_normalized && path_normalized.starts_with(parent_normalized) {
+                        if path_normalized != parent_normalized
+                            && path_normalized.starts_with(parent_normalized)
+                        {
                             // 检查是否是目录（以 / 结尾或包含 collection）
                             let is_dir = path.ends_with('/') || {
                                 // 查找该条目对应的 response 块是否包含 collection
-                                let response_start = xml[..abs_start].rfind("<d:response>")
+                                let response_start = xml[..abs_start]
+                                    .rfind("<d:response>")
                                     .or_else(|| xml[..abs_start].rfind("<D:response>"))
                                     .unwrap_or(0);
-                                let response_end = xml[abs_start..].find("</d:response>")
+                                let response_end = xml[abs_start..]
+                                    .find("</d:response>")
                                     .or_else(|| xml[abs_start..].find("</D:response>"))
                                     .map(|i| abs_start + i)
                                     .unwrap_or(xml.len());
                                 let response_block = &xml[response_start..response_end];
-                                response_block.contains("<d:collection") || response_block.contains("<D:collection")
+                                response_block.contains("<d:collection")
+                                    || response_block.contains("<D:collection")
                             };
-                            
+
                             let clean_path = format!("/{}", path_normalized);
                             if !entries.iter().any(|(p, _)| p == &clean_path) {
                                 entries.push((clean_path, is_dir));
@@ -332,7 +341,7 @@ impl WebDavClient {
             format!("<lp1:{}>", tag),
             format!("<lp2:{}>", tag),
         ];
-        
+
         let end_patterns = [
             format!("</D:{}>", tag),
             format!("</d:{}>", tag),
@@ -352,7 +361,7 @@ impl WebDavClient {
                 }
             }
         }
-        
+
         None
     }
 }

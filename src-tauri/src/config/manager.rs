@@ -263,12 +263,9 @@ impl ConfigManager {
             }
             // TUN 模式下必须设置 dns-hijack，否则 DNS 请求无法被正确处理
             if tun.dns_hijack.is_empty() {
-                tun.dns_hijack = vec![
-                    "any:53".to_string(),
-                    "tcp://any:53".to_string(),
-                ];
+                tun.dns_hijack = vec!["any:53".to_string(), "tcp://any:53".to_string()];
             }
-            
+
             // TUN + fake-ip 模式下必须启用 sniffer（域名嗅探）
             // 否则无法从 fake-ip 流量中提取真实域名
             let mut sniffer = config.sniffer.unwrap_or_default();

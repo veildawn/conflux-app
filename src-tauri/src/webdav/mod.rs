@@ -2,4 +2,4 @@ mod client;
 mod sync;
 
 pub use client::WebDavClient;
-pub use sync::{SyncManager, SyncState, ConflictInfo, SyncResult};
+pub use sync::{ConflictInfo, SyncManager, SyncResult, SyncState};

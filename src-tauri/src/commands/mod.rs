@@ -42,9 +42,7 @@ pub fn get_app_state() -> &'static AppState {
 /// 需要有激活的远程订阅，并且订阅配置中存在代理节点
 pub fn require_active_subscription_with_proxies() -> Result<(), String> {
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
-    let active = workspace
-        .get_active_profile()
-        .map_err(|e| e.to_string())?;
+    let active = workspace.get_active_profile().map_err(|e| e.to_string())?;
 
     let Some((_metadata, config)) = active else {
         return Err("需要先激活订阅才能开启该功能。".to_string());
@@ -83,18 +81,18 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     #[cfg(target_os = "windows")]
     {
         use crate::system::WinServiceManager;
-        
+
         if let Ok(service_status) = WinServiceManager::get_status().await {
             log::info!(
-                "Windows service status: installed={}, running={}, mihomo_running={}", 
-                service_status.installed, 
-                service_status.running, 
+                "Windows service status: installed={}, running={}, mihomo_running={}",
+                service_status.installed,
+                service_status.running,
                 service_status.mihomo_running
             );
-            
+
             if service_status.running && !service_status.mihomo_running {
                 log::info!("Service is running but mihomo is not, starting mihomo via service...");
-                
+
                 // 通过服务启动 mihomo
                 if let Err(e) = mihomo_manager.start().await {
                     log::error!("Failed to start mihomo via service: {}", e);
@@ -123,7 +121,8 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
 
     // 初始化 Sub-Store 管理器
     let substore_manager = Arc::new(Mutex::new(
-        SubStoreManager::new(Some(39001)).map_err(|e| anyhow::anyhow!("Failed to create SubStore manager: {}", e))?
+        SubStoreManager::new(Some(39001))
+            .map_err(|e| anyhow::anyhow!("Failed to create SubStore manager: {}", e))?,
     ));
 
     // 自动启动 Sub-Store 服务
@@ -131,7 +130,12 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     let app_handle_clone = app.clone();
     let substore_manager_clone = substore_manager.clone();
     tokio::spawn(async move {
-        match substore_manager_clone.lock().await.start(app_handle_clone).await {
+        match substore_manager_clone
+            .lock()
+            .await
+            .start(app_handle_clone)
+            .await
+        {
             Ok(_) => {
                 log::info!("Sub-Store service started successfully");
             }
@@ -157,4 +161,3 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     log::info!("App state initialized");
     Ok(state)
 }
-

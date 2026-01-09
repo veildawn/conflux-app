@@ -209,5 +209,4 @@ impl LogStreamer {
         let mut current = self.current_level.lock().await;
         *current = level;
     }
-
 }
