@@ -13,7 +13,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  SUBSTORE_VERSION: "2.18.5"
+  SUBSTORE_VERSION: '2.18.5'
   RELEASE_TAG: ${{ github.event.inputs.tag_name || github.ref_name }}
   RELEASE_NAME: Conflux ${{ github.event.inputs.tag_name || github.ref_name }}
 
@@ -604,6 +604,8 @@ jobs:
 
       - name: Generate changelog from commits
         id: changelog
+        env:
+          ZHIPU_API_KEY: ${{ secrets.ZHIPU_API_KEY }}
         run: |
           # 获取上一个 tag
           PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
@@ -612,48 +614,83 @@ jobs:
           echo "Previous tag: $PREVIOUS_TAG"
           echo "Current tag: $CURRENT_TAG"
 
+          # 收集 commits
+          if [ -n "$PREVIOUS_TAG" ]; then
+            COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%s" 2>/dev/null || true)
+          else
+            COMMITS=$(git log --pretty=format:"%s" 2>/dev/null | head -30 || true)
+          fi
+
+          # 分类统计
+          FEAT_COMMITS=$(echo "$COMMITS" | grep "^feat" | sed 's/^feat[:(] *//; s/)$//' || true)
+          FIX_COUNT=$(echo "$COMMITS" | grep -c "^fix" || echo "0")
+          PERF_COMMITS=$(echo "$COMMITS" | grep "^perf\|^refactor\|^ci" | sed 's/^\(perf\|refactor\|ci\)[:(] *//; s/)$//' || true)
+
+          # 如果有智谱 API Key，使用 AI 生成描述
+          if [ -n "$ZHIPU_API_KEY" ] && [ -n "$FEAT_COMMITS" ]; then
+            echo "🤖 Using Zhipu AI to generate release notes..."
+
+            # 构建 AI 请求
+            FEAT_LIST=$(echo "$FEAT_COMMITS" | head -10 | tr '\n' '|' | sed 's/|$//')
+
+            AI_RESPONSE=$(curl -s -X POST "https://open.bigmodel.cn/api/paas/v4/chat/completions" \
+              -H "Authorization: Bearer $ZHIPU_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"model\": \"glm-4.5-flash\",
+                \"messages\": [
+                  {
+                    \"role\": \"system\",
+                    \"content\": \"你是一个专业的软件发布说明撰写者。请将 git commit 信息转换为用户友好的中文更新说明。要求：1. 每条功能用一句话描述，突出对用户的价值 2. 使用简洁易懂的语言 3. 每条前面加上合适的 emoji 4. 直接输出列表，不要加标题\"
+                  },
+                  {
+                    \"role\": \"user\",
+                    \"content\": \"请将以下功能更新转换为用户友好的说明：${FEAT_LIST}\"
+                  }
+                ],
+                \"temperature\": 0.7,
+                \"max_tokens\": 500
+              }" 2>/dev/null || echo "")
+
+            # 提取 AI 响应内容
+            if [ -n "$AI_RESPONSE" ]; then
+              AI_FEATURES=$(echo "$AI_RESPONSE" | python3 -c "import sys,json; data=json.load(sys.stdin); print(data.get('choices',[{}])[0].get('message',{}).get('content',''))" 2>/dev/null || echo "")
+            fi
+          fi
+
           # 生成 changelog
           {
             echo "CHANGELOG<<EOF"
 
-            # 新功能 (feat)
+            # 新功能
             echo "## ✨ 新功能"
             echo ""
-            if [ -n "$PREVIOUS_TAG" ]; then
-              FEATS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" --grep="^feat" 2>/dev/null | sed 's/^- feat[:(]/- /; s/)$//' || true)
-            else
-              FEATS=$(git log --pretty=format:"- %s" --grep="^feat" 2>/dev/null | head -20 | sed 's/^- feat[:(]/- /; s/)$//' || true)
-            fi
-            if [ -n "$FEATS" ]; then
-              echo "$FEATS"
+            if [ -n "$AI_FEATURES" ]; then
+              echo "$AI_FEATURES"
+            elif [ -n "$FEAT_COMMITS" ]; then
+              echo "$FEAT_COMMITS" | while read -r line; do
+                [ -n "$line" ] && echo "- $line"
+              done
             else
               echo "_本版本无新功能_"
             fi
             echo ""
 
-            # 优化改进 (refactor, perf, ci, chore 中的优化)
+            # 优化改进
             echo "## 🚀 优化改进"
             echo ""
-            if [ -n "$PREVIOUS_TAG" ]; then
-              IMPROVEMENTS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" --grep="^refactor\|^perf\|^ci" 2>/dev/null | sed 's/^- \(refactor\|perf\|ci\)[:(]/- /; s/)$//' | head -10 || true)
-            else
-              IMPROVEMENTS=$(git log --pretty=format:"- %s" --grep="^refactor\|^perf\|^ci" 2>/dev/null | head -10 | sed 's/^- \(refactor\|perf\|ci\)[:(]/- /; s/)$//' || true)
-            fi
-            if [ -n "$IMPROVEMENTS" ]; then
-              echo "$IMPROVEMENTS"
+            if [ -n "$PERF_COMMITS" ]; then
+              echo "$PERF_COMMITS" | head -5 | while read -r line; do
+                [ -n "$line" ] && echo "- $line"
+              done
             else
               echo "_本版本无优化改进_"
             fi
             echo ""
 
-            # Bug 修复 - 只列出数量，不详细描述
+            # Bug 修复 - 只显示数量
             echo "## 🐛 Bug 修复"
             echo ""
-            if [ -n "$PREVIOUS_TAG" ]; then
-              FIX_COUNT=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%s" --grep="^fix" 2>/dev/null | wc -l | tr -d ' ')
-            else
-              FIX_COUNT=$(git log --pretty=format:"%s" --grep="^fix" 2>/dev/null | head -50 | wc -l | tr -d ' ')
-            fi
             if [ "$FIX_COUNT" -gt 0 ]; then
               echo "修复了 **${FIX_COUNT}** 个问题"
             else
