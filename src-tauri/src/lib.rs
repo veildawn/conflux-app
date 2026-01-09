@@ -1,4 +1,5 @@
 // Library entry point for Tauri 2
+
 pub mod commands;
 pub mod config;
 pub mod mihomo;

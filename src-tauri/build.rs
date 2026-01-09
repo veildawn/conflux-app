@@ -24,7 +24,7 @@ fn main() {
     // 在构建时检查必要的资源文件
     check_substore_resources();
 
-    tauri_build::build()
+    tauri_build::build();
 }
 
 /// 检查 Sub-Store 相关资源是否存在
@@ -75,12 +75,14 @@ fn check_substore_resources() {
     }
 
     // 如果有缺失的文件,提供有用的错误信息
-    if !missing_files.is_empty() {
+    if missing_files.is_empty() {
+        println!("✅ All Sub-Store resources are present");
+    } else {
         eprintln!("\n========================================");
         eprintln!("⚠️  Missing Sub-Store resources:");
         eprintln!("========================================");
         for file in &missing_files {
-            eprintln!("  - {}", file);
+            eprintln!("  - {file}");
         }
         eprintln!("\n📦 To download required resources, run:");
         eprintln!("  pnpm run fetch:substore   # Download Sub-Store");
@@ -96,7 +98,5 @@ fn check_substore_resources() {
         } else {
             eprintln!("⚠️  Warning: Building without Sub-Store support\n");
         }
-    } else {
-        println!("✅ All Sub-Store resources are present");
     }
 }
