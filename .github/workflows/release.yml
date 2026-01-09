@@ -625,6 +625,7 @@ jobs:
 
           # 分类统计并去重
           FEAT_COMMITS=$(echo "$COMMITS" | grep "^feat" | sed 's/^feat[:(] *//; s/)$//' | sort -u || true)
+          FIX_COMMITS=$(echo "$COMMITS" | grep "^fix" | sed 's/^fix[:(] *//; s/)$//' | sort -u || true)
           FIX_COUNT=$(echo "$COMMITS" | grep -c "^fix" || echo "0")
           PERF_COMMITS=$(echo "$COMMITS" | grep "^perf\|^refactor\|^ci" | sed 's/^\(perf\|refactor\|ci\)[:(] *//; s/)$//' | sort -u || true)
 
@@ -703,7 +704,17 @@ jobs:
             if [ "$FIX_COUNT" -gt 0 ]; then
               echo "## 🐛 Bug 修复"
               echo ""
-              echo "修复了 **${FIX_COUNT}** 个问题"
+              if [ -n "$FIX_COMMITS" ]; then
+                echo "$FIX_COMMITS" | head -5 | while read -r line; do
+                  [ -n "$line" ] && echo "- $line"
+                done
+                REMAINING=$((FIX_COUNT - 5))
+                if [ "$REMAINING" -gt 0 ]; then
+                  echo "- 以及其他 $REMAINING 个小问题修复"
+                fi
+              else
+                echo "修复了 **${FIX_COUNT}** 个问题"
+              fi
               echo ""
               HAS_CONTENT=true
             fi
