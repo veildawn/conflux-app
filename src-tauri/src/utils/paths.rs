@@ -95,7 +95,7 @@ pub fn get_mihomo_binary_name() -> &'static str {
 /// 1. 用户数据目录 - 支持用户手动更新 mihomo
 /// 2. Sidecar 路径 - Tauri externalBin 打包后的位置
 /// 3. 开发环境路径 - 支持 `cargo run` 和 `pnpm tauri dev`
-#[allow(dead_code)]
+#[cfg(not(target_os = "windows"))]
 pub fn get_mihomo_binary_path() -> Result<PathBuf> {
     let binary_name = get_mihomo_binary_name();
     log::debug!("Looking for MiHomo binary: {}", binary_name);
@@ -331,7 +331,7 @@ fn hash_file(path: &PathBuf) -> Result<u64> {
 }
 
 /// 记录所有尝试过的路径（用于调试）
-#[allow(dead_code)]
+#[cfg(not(target_os = "windows"))]
 fn log_search_paths(binary_name: &str) -> Result<()> {
     let data_dir = get_app_data_dir()?;
     let current_exe = std::env::current_exe()?;

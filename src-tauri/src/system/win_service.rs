@@ -37,8 +37,9 @@ struct ServiceResponse {
 struct StatusResponse {
     running: bool,
     pid: Option<u32>,
-    #[allow(dead_code)]
-    version: String,
+    /// 服务返回的版本号，反序列化需要但代码不使用
+    #[serde(rename = "version")]
+    _version: String,
 }
 
 /// Windows Service Manager
@@ -76,27 +77,6 @@ impl WinServiceManager {
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         Ok(stdout.contains("RUNNING"))
-    }
-
-    /// Check if service IPC is responding
-    #[allow(dead_code)]
-    pub async fn is_service_healthy() -> bool {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(2))
-            .build()
-            .ok();
-
-        if let Some(client) = client {
-            if let Ok(resp) = client
-                .get(format!("http://127.0.0.1:{}/health", SERVICE_PORT))
-                .send()
-                .await
-            {
-                return resp.status().is_success();
-            }
-        }
-
-        false
     }
 
     /// Get full service status
