@@ -142,7 +142,7 @@ function ProxyProviderDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  onSubmit: (name: string, provider: ProxyProvider) => Promise<void>;
+  onSubmit: (name: string, provider: ProxyProvider, oldName?: string) => Promise<void>;
   editData?: ProxyProvider;
   editName?: string;
 }) {
@@ -200,7 +200,7 @@ function ProxyProviderDialog({
           interval: formData.healthCheckInterval,
         },
       };
-      await onSubmit(formData.name.trim(), provider);
+      await onSubmit(formData.name.trim(), provider, editName);
       onClose();
     } finally {
       setSubmitting(false);
@@ -220,7 +220,6 @@ function ProxyProviderDialog({
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="my-proxy-provider"
-              disabled={!!editName}
             />
           </div>
           <div className="space-y-2">
@@ -316,7 +315,7 @@ function RuleProviderDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  onSubmit: (name: string, provider: RuleProvider) => Promise<void>;
+  onSubmit: (name: string, provider: RuleProvider, oldName?: string) => Promise<void>;
   editData?: RuleProvider;
   editName?: string;
 }) {
@@ -391,7 +390,7 @@ function RuleProviderDialog({
         path: formData.type === 'file' ? formData.path || undefined : undefined,
         interval: formData.interval,
       };
-      await onSubmit(formData.name.trim(), provider);
+      await onSubmit(formData.name.trim(), provider, editName);
       onClose();
     } finally {
       setSubmitting(false);
@@ -411,7 +410,6 @@ function RuleProviderDialog({
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="my-rule-provider"
-              disabled={!!editName}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -551,6 +549,9 @@ export default function Providers() {
   } | null>(null);
   const [deleteValidation, setDeleteValidation] = useState<DeleteValidationResult | null>(null);
 
+  // 正在更新的 Provider 名称
+  const [updatingProviders, setUpdatingProviders] = useState<Set<string>>(new Set());
+
   // 加载活跃 Profile 配置
   const loadActiveProfile = useCallback(async () => {
     setLoading(true);
@@ -585,7 +586,11 @@ export default function Providers() {
   const ruleProviderList = Object.entries(ruleProviders);
 
   // CRUD 操作
-  const handleAddProxyProvider = async (name: string, provider: ProxyProvider) => {
+  const handleAddProxyProvider = async (
+    name: string,
+    provider: ProxyProvider,
+    _oldName?: string
+  ) => {
     if (!activeProfileId) return;
     try {
       await ipc.addProxyProviderToProfile(activeProfileId, name, provider);
@@ -597,12 +602,23 @@ export default function Providers() {
     }
   };
 
-  const handleUpdateProxyProvider = async (name: string, provider: ProxyProvider) => {
+  const handleUpdateProxyProvider = async (
+    name: string,
+    provider: ProxyProvider,
+    oldName?: string
+  ) => {
     if (!activeProfileId) return;
     try {
-      await ipc.updateProxyProviderInProfile(activeProfileId, name, provider);
-      await loadActiveProfile();
-      toast({ title: '更新成功', description: `代理源 "${name}" 已更新` });
+      // 如果有旧名称且名称变化，使用重命名 API
+      if (oldName && oldName !== name) {
+        await ipc.renameProxyProviderInProfile(activeProfileId, oldName, name, provider);
+        await loadActiveProfile();
+        toast({ title: '重命名成功', description: `代理源 "${oldName}" 已重命名为 "${name}"` });
+      } else {
+        await ipc.updateProxyProviderInProfile(activeProfileId, name, provider);
+        await loadActiveProfile();
+        toast({ title: '更新成功', description: `代理源 "${name}" 已更新` });
+      }
     } catch (error) {
       toast({ title: '更新失败', description: String(error), variant: 'destructive' });
       throw error;
@@ -651,7 +667,7 @@ export default function Providers() {
     setDeleteValidation(null);
   };
 
-  const handleAddRuleProvider = async (name: string, provider: RuleProvider) => {
+  const handleAddRuleProvider = async (name: string, provider: RuleProvider, _oldName?: string) => {
     if (!activeProfileId) return;
     try {
       await ipc.addRuleProviderToProfile(activeProfileId, name, provider);
@@ -663,12 +679,23 @@ export default function Providers() {
     }
   };
 
-  const handleUpdateRuleProvider = async (name: string, provider: RuleProvider) => {
+  const handleUpdateRuleProvider = async (
+    name: string,
+    provider: RuleProvider,
+    oldName?: string
+  ) => {
     if (!activeProfileId) return;
     try {
-      await ipc.updateRuleProviderInProfile(activeProfileId, name, provider);
-      await loadActiveProfile();
-      toast({ title: '更新成功', description: `规则源 "${name}" 已更新` });
+      // 如果有旧名称且名称变化，使用重命名 API
+      if (oldName && oldName !== name) {
+        await ipc.renameRuleProviderInProfile(activeProfileId, oldName, name, provider);
+        await loadActiveProfile();
+        toast({ title: '重命名成功', description: `规则源 "${oldName}" 已重命名为 "${name}"` });
+      } else {
+        await ipc.updateRuleProviderInProfile(activeProfileId, name, provider);
+        await loadActiveProfile();
+        toast({ title: '更新成功', description: `规则源 "${name}" 已更新` });
+      }
     } catch (error) {
       toast({ title: '更新失败', description: String(error), variant: 'destructive' });
       throw error;
@@ -715,6 +742,40 @@ export default function Providers() {
     }
     setDeleteConfirm(null);
     setDeleteValidation(null);
+  };
+
+  // 立即更新代理源
+  const handleRefreshProxyProvider = async (name: string) => {
+    setUpdatingProviders((prev) => new Set(prev).add(name));
+    try {
+      await ipc.updateProxyProvider(name);
+      toast({ title: '更新成功', description: `代理源 "${name}" 已更新` });
+    } catch (error) {
+      toast({ title: '更新失败', description: String(error), variant: 'destructive' });
+    } finally {
+      setUpdatingProviders((prev) => {
+        const next = new Set(prev);
+        next.delete(name);
+        return next;
+      });
+    }
+  };
+
+  // 立即更新规则源
+  const handleRefreshRuleProvider = async (name: string) => {
+    setUpdatingProviders((prev) => new Set(prev).add(name));
+    try {
+      await ipc.updateRuleProvider(name);
+      toast({ title: '更新成功', description: `规则源 "${name}" 已更新` });
+    } catch (error) {
+      toast({ title: '更新失败', description: String(error), variant: 'destructive' });
+    } finally {
+      setUpdatingProviders((prev) => {
+        const next = new Set(prev);
+        next.delete(name);
+        return next;
+      });
+    }
   };
 
   const currentList = activeTab === 'proxy' ? proxyProviderList : ruleProviderList;
@@ -814,6 +875,18 @@ export default function Providers() {
                   <Button
                     size="icon"
                     variant="ghost"
+                    className="h-7 w-7 text-gray-400 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg"
+                    title="立即更新"
+                    onClick={() => handleRefreshProxyProvider(name)}
+                    disabled={updatingProviders.has(name)}
+                  >
+                    <RefreshCw
+                      className={cn('w-3.5 h-3.5', updatingProviders.has(name) && 'animate-spin')}
+                    />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
                     className="h-7 w-7 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
                     title="编辑"
                     onClick={() => {
@@ -886,6 +959,18 @@ export default function Providers() {
               iconColor="text-purple-500"
               action={
                 <div className="flex gap-1">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-gray-400 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg"
+                    title="立即更新"
+                    onClick={() => handleRefreshRuleProvider(name)}
+                    disabled={updatingProviders.has(name)}
+                  >
+                    <RefreshCw
+                      className={cn('w-3.5 h-3.5', updatingProviders.has(name) && 'animate-spin')}
+                    />
+                  </Button>
                   <Button
                     size="icon"
                     variant="ghost"

@@ -155,14 +155,11 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
 pub async fn set_allow_lan(app: AppHandle, enabled: bool) -> Result<(), String> {
     use crate::commands::reload::{apply_config_change, ReloadOptions};
 
-    apply_config_change(
-        Some(&app),
-        &ReloadOptions::default(),
-        |config| {
-            config.allow_lan = enabled;
-            Ok(())
-        },
-    ).await
+    apply_config_change(Some(&app), &ReloadOptions::default(), |config| {
+        config.allow_lan = enabled;
+        Ok(())
+    })
+    .await
 }
 
 /// 设置 HTTP/SOCKS 端口
@@ -171,15 +168,12 @@ pub async fn set_ports(app: AppHandle, port: u16, socks_port: u16) -> Result<(),
     use crate::commands::reload::{apply_config_change, ReloadOptions};
 
     // 端口变更使用安全模式，因为可能影响系统代理设置
-    apply_config_change(
-        Some(&app),
-        &ReloadOptions::safe(),
-        |config| {
-            config.port = port;
-            config.socks_port = socks_port;
-            Ok(())
-        },
-    ).await
+    apply_config_change(Some(&app), &ReloadOptions::safe(), |config| {
+        config.port = port;
+        config.socks_port = socks_port;
+        Ok(())
+    })
+    .await
 }
 
 /// 设置 IPv6 开关
@@ -187,14 +181,11 @@ pub async fn set_ports(app: AppHandle, port: u16, socks_port: u16) -> Result<(),
 pub async fn set_ipv6(app: AppHandle, enabled: bool) -> Result<(), String> {
     use crate::commands::reload::{apply_config_change, ReloadOptions};
 
-    apply_config_change(
-        Some(&app),
-        &ReloadOptions::default(),
-        |config| {
-            config.ipv6 = enabled;
-            Ok(())
-        },
-    ).await
+    apply_config_change(Some(&app), &ReloadOptions::default(), |config| {
+        config.ipv6 = enabled;
+        Ok(())
+    })
+    .await
 }
 
 /// 设置 TCP 并发开关
@@ -202,14 +193,11 @@ pub async fn set_ipv6(app: AppHandle, enabled: bool) -> Result<(), String> {
 pub async fn set_tcp_concurrent(app: AppHandle, enabled: bool) -> Result<(), String> {
     use crate::commands::reload::{apply_config_change, ReloadOptions};
 
-    apply_config_change(
-        Some(&app),
-        &ReloadOptions::default(),
-        |config| {
-            config.tcp_concurrent = enabled;
-            Ok(())
-        },
-    ).await
+    apply_config_change(Some(&app), &ReloadOptions::default(), |config| {
+        config.tcp_concurrent = enabled;
+        Ok(())
+    })
+    .await
 }
 
 /// 设置域名嗅探开关
@@ -217,24 +205,21 @@ pub async fn set_tcp_concurrent(app: AppHandle, enabled: bool) -> Result<(), Str
 pub async fn set_sniffing(app: AppHandle, enabled: bool) -> Result<(), String> {
     use crate::commands::reload::{apply_config_change, ReloadOptions};
 
-    apply_config_change(
-        Some(&app),
-        &ReloadOptions::default(),
-        |config| {
-            if enabled {
-                // 启用 sniffer，使用默认配置
-                let mut sniffer = config.sniffer.clone().unwrap_or_default();
-                sniffer.enable = true;
-                config.sniffer = Some(sniffer);
-            } else {
-                // 禁用 sniffer
-                if let Some(ref mut sniffer) = config.sniffer {
-                    sniffer.enable = false;
-                }
+    apply_config_change(Some(&app), &ReloadOptions::default(), |config| {
+        if enabled {
+            // 启用 sniffer，使用默认配置
+            let mut sniffer = config.sniffer.clone().unwrap_or_default();
+            sniffer.enable = true;
+            config.sniffer = Some(sniffer);
+        } else {
+            // 禁用 sniffer
+            if let Some(ref mut sniffer) = config.sniffer {
+                sniffer.enable = false;
             }
-            Ok(())
-        },
-    ).await
+        }
+        Ok(())
+    })
+    .await
 }
 
 /// 切换代理模式
@@ -472,7 +457,9 @@ pub async fn close_all_connections() -> Result<(), String> {
 /// 8. 如果失败，回滚配置和状态
 #[tauri::command]
 pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
-    use crate::commands::reload::{reload_config, safe_restart_proxy, sync_proxy_status, ConfigBackup, ReloadOptions};
+    use crate::commands::reload::{
+        reload_config, safe_restart_proxy, sync_proxy_status, ConfigBackup, ReloadOptions,
+    };
 
     let state = get_app_state();
 
@@ -495,27 +482,27 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
         crate::commands::require_active_subscription_with_proxies()?;
 
         // 检查并设置权限
-        let has_permission = crate::system::TunPermission::check_permission()
-            .map_err(|e| e.to_string())?;
+        let has_permission =
+            crate::system::TunPermission::check_permission().map_err(|e| e.to_string())?;
 
         if !has_permission {
             log::info!("TUN permission not set, requesting setup...");
             crate::system::TunPermission::setup_permission()
                 .map_err(|e| format!("设置 TUN 权限失败: {}", e))?;
         }
-        
+
         // Windows: 检查是否需要 UAC 权限，如果需要则先请求用户确认
         // 这样可以避免在用户取消 UAC 后 mihomo 已经停止的问题
         #[cfg(target_os = "windows")]
         {
             use crate::mihomo::MihomoManager;
-            
+
             if MihomoManager::is_tun_elevation_required() {
                 log::info!("UAC elevation required for TUN mode, requesting confirmation before stopping mihomo...");
-                
+
                 MihomoManager::request_elevation_confirmation()
                     .map_err(|e| format!("需要管理员权限才能启用增强模式: {}", e))?;
-                
+
                 log::info!("UAC elevation confirmed, proceeding with TUN mode change...");
             }
         }
@@ -558,7 +545,9 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
             };
 
             if !api_healthy {
-                log::error!("MiHomo API not responding after TUN mode change, attempting recovery...");
+                log::error!(
+                    "MiHomo API not responding after TUN mode change, attempting recovery..."
+                );
 
                 // 回滚配置
                 if let Err(rollback_err) = backup.rollback() {
@@ -641,7 +630,8 @@ pub async fn set_tun_stack(app: AppHandle, stack: String) -> Result<(), String> 
             }
             Ok(())
         },
-    ).await?;
+    )
+    .await?;
 
     log::info!("TUN stack set to: {}", stack);
     Ok(())
@@ -653,20 +643,17 @@ pub async fn set_tun_stack(app: AppHandle, stack: String) -> Result<(), String> 
 pub async fn set_strict_route(app: AppHandle, enabled: bool) -> Result<(), String> {
     use crate::commands::reload::{apply_config_change, ReloadOptions};
 
-    apply_config_change(
-        Some(&app),
-        &ReloadOptions::safe(),
-        |config| {
-            if let Some(tun) = &mut config.tun {
-                tun.strict_route = Some(enabled);
-            } else {
-                let mut tun = crate::models::TunConfig::default();
-                tun.strict_route = Some(enabled);
-                config.tun = Some(tun);
-            }
-            Ok(())
-        },
-    ).await
+    apply_config_change(Some(&app), &ReloadOptions::safe(), |config| {
+        if let Some(tun) = &mut config.tun {
+            tun.strict_route = Some(enabled);
+        } else {
+            let mut tun = crate::models::TunConfig::default();
+            tun.strict_route = Some(enabled);
+            config.tun = Some(tun);
+        }
+        Ok(())
+    })
+    .await
 }
 
 /// 用于排除内网网段，即使在全局模式下这些 IP 也不经过代理
@@ -674,21 +661,18 @@ pub async fn set_strict_route(app: AppHandle, enabled: bool) -> Result<(), Strin
 pub async fn set_tun_route_exclude(app: AppHandle, addresses: Vec<String>) -> Result<(), String> {
     use crate::commands::reload::{apply_config_change, ReloadOptions};
 
-    apply_config_change(
-        Some(&app),
-        &ReloadOptions::safe(),
-        |config| {
-            if let Some(tun) = &mut config.tun {
-                tun.inet4_route_exclude_address = addresses.clone();
-            } else {
-                // If tun is None, create it (disabled by default)
-                let mut tun = crate::models::TunConfig::default();
-                tun.inet4_route_exclude_address = addresses.clone();
-                config.tun = Some(tun);
-            }
-            Ok(())
-        },
-    ).await?;
+    apply_config_change(Some(&app), &ReloadOptions::safe(), |config| {
+        if let Some(tun) = &mut config.tun {
+            tun.inet4_route_exclude_address = addresses.clone();
+        } else {
+            // If tun is None, create it (disabled by default)
+            let mut tun = crate::models::TunConfig::default();
+            tun.inet4_route_exclude_address = addresses.clone();
+            config.tun = Some(tun);
+        }
+        Ok(())
+    })
+    .await?;
 
     log::info!("TUN route exclude addresses set to: {:?}", addresses);
     Ok(())
@@ -934,14 +918,11 @@ pub async fn update_rule_provider(name: String) -> Result<(), String> {
 pub async fn set_mixed_port(app: AppHandle, port: Option<u16>) -> Result<(), String> {
     use crate::commands::reload::{apply_config_change, ReloadOptions};
 
-    apply_config_change(
-        Some(&app),
-        &ReloadOptions::default(),
-        |config| {
-            config.mixed_port = port;
-            Ok(())
-        },
-    ).await
+    apply_config_change(Some(&app), &ReloadOptions::default(), |config| {
+        config.mixed_port = port;
+        Ok(())
+    })
+    .await
 }
 
 /// 设置进程查找模式
@@ -955,14 +936,11 @@ pub async fn set_find_process_mode(app: AppHandle, mode: String) -> Result<(), S
         return Err(format!("无效的进程查找模式: {}", mode));
     }
 
-    apply_config_change(
-        Some(&app),
-        &ReloadOptions::default(),
-        |config| {
-            config.find_process_mode = mode.clone();
-            Ok(())
-        },
-    ).await?;
+    apply_config_change(Some(&app), &ReloadOptions::default(), |config| {
+        config.find_process_mode = mode.clone();
+        Ok(())
+    })
+    .await?;
 
     log::info!("Find process mode set to: {}", mode);
     Ok(())
@@ -991,4 +969,169 @@ pub async fn flush_fakeip_cache() -> Result<(), String> {
 
     log::info!("FakeIP cache flushed");
     Ok(())
+}
+
+/// URL 延迟测试结果
+#[derive(Debug, Clone, Serialize)]
+pub struct UrlDelayResult {
+    pub url: String,
+    pub delay: Option<u32>,
+    pub error: Option<String>,
+}
+
+/// 测试指定 URL 的延迟
+/// 通过本地代理发送 HTTP 请求，测量响应时间
+#[tauri::command]
+pub async fn test_url_delay(
+    url: String,
+    timeout_ms: Option<u32>,
+) -> Result<UrlDelayResult, String> {
+    let state = get_app_state();
+
+    if !state.mihomo_manager.is_running().await {
+        return Ok(UrlDelayResult {
+            url,
+            delay: None,
+            error: Some("代理未运行".to_string()),
+        });
+    }
+
+    let config = state
+        .config_manager
+        .load_mihomo_config()
+        .map_err(|e| e.to_string())?;
+
+    let proxy_port = config.mixed_port.unwrap_or(config.port);
+    let proxy_url = format!("http://127.0.0.1:{}", proxy_port);
+    let timeout = timeout_ms.unwrap_or(5000);
+
+    let client = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::all(&proxy_url).map_err(|e| e.to_string())?)
+        .timeout(std::time::Duration::from_millis(timeout as u64))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let start = std::time::Instant::now();
+    let result = client.head(&url).send().await;
+    let elapsed = start.elapsed().as_millis() as u32;
+
+    match result {
+        Ok(response) => {
+            if response.status().is_success() || response.status().is_redirection() {
+                Ok(UrlDelayResult {
+                    url,
+                    delay: Some(elapsed),
+                    error: None,
+                })
+            } else {
+                Ok(UrlDelayResult {
+                    url,
+                    delay: Some(elapsed),
+                    error: Some(format!("HTTP {}", response.status().as_u16())),
+                })
+            }
+        }
+        Err(e) => {
+            let error_msg = if e.is_timeout() {
+                "超时".to_string()
+            } else if e.is_connect() {
+                "连接失败".to_string()
+            } else {
+                e.to_string()
+            };
+            Ok(UrlDelayResult {
+                url,
+                delay: None,
+                error: Some(error_msg),
+            })
+        }
+    }
+}
+
+/// 批量测试多个 URL 的延迟
+#[tauri::command]
+pub async fn test_urls_delay(
+    urls: Vec<String>,
+    timeout_ms: Option<u32>,
+) -> Result<Vec<UrlDelayResult>, String> {
+    let state = get_app_state();
+
+    if !state.mihomo_manager.is_running().await {
+        return Ok(urls
+            .into_iter()
+            .map(|url| UrlDelayResult {
+                url,
+                delay: None,
+                error: Some("代理未运行".to_string()),
+            })
+            .collect());
+    }
+
+    let config = state
+        .config_manager
+        .load_mihomo_config()
+        .map_err(|e| e.to_string())?;
+
+    let proxy_port = config.mixed_port.unwrap_or(config.port);
+    let proxy_url = format!("http://127.0.0.1:{}", proxy_port);
+    let timeout = timeout_ms.unwrap_or(5000);
+
+    let client = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::all(&proxy_url).map_err(|e| e.to_string())?)
+        .timeout(std::time::Duration::from_millis(timeout as u64))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let mut results = Vec::new();
+
+    // 并发测试所有 URL
+    let futures: Vec<_> = urls
+        .iter()
+        .map(|url| {
+            let client = client.clone();
+            let url = url.clone();
+            async move {
+                let start = std::time::Instant::now();
+                let result = client.head(&url).send().await;
+                let elapsed = start.elapsed().as_millis() as u32;
+
+                match result {
+                    Ok(response) => {
+                        if response.status().is_success() || response.status().is_redirection() {
+                            UrlDelayResult {
+                                url,
+                                delay: Some(elapsed),
+                                error: None,
+                            }
+                        } else {
+                            UrlDelayResult {
+                                url,
+                                delay: Some(elapsed),
+                                error: Some(format!("HTTP {}", response.status().as_u16())),
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let error_msg = if e.is_timeout() {
+                            "超时".to_string()
+                        } else if e.is_connect() {
+                            "连接失败".to_string()
+                        } else {
+                            e.to_string()
+                        };
+                        UrlDelayResult {
+                            url,
+                            delay: None,
+                            error: Some(error_msg),
+                        }
+                    }
+                }
+            }
+        })
+        .collect();
+
+    let all_results = futures_util::future::join_all(futures).await;
+    results.extend(all_results);
+
+    Ok(results)
 }

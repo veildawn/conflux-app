@@ -669,11 +669,18 @@ fn main() {
             commands::profile::add_rule_provider_to_profile,
             commands::profile::delete_rule_provider_from_profile,
             commands::profile::update_rule_provider_in_profile,
+            commands::profile::rename_rule_provider_in_profile,
             commands::profile::update_profile_config,
             // Profile Proxy Provider 命令
             commands::profile::add_proxy_provider_to_profile,
             commands::profile::update_proxy_provider_in_profile,
+            commands::profile::rename_proxy_provider_in_profile,
             commands::profile::delete_proxy_provider_from_profile,
+            // Profile Proxy Group 命令
+            commands::profile::rename_proxy_group_in_profile,
+            // URL 延迟测试命令
+            commands::proxy::test_url_delay,
+            commands::proxy::test_urls_delay,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -708,9 +715,7 @@ fn main() {
                             }
 
                             // API 无响应，尝试重新加载配置
-                            log::warn!(
-                                "MiHomo health check failed, attempting config reload..."
-                            );
+                            log::warn!("MiHomo health check failed, attempting config reload...");
                             let config_path = app_state.config_manager.mihomo_config_path();
                             if let Some(path_str) = config_path.to_str() {
                                 if app_state
@@ -720,9 +725,7 @@ fn main() {
                                     .is_ok()
                                 {
                                     log::info!("Config reload successful after system resume");
-                                    if let Ok(status) =
-                                        commands::proxy::get_proxy_status().await
-                                    {
+                                    if let Ok(status) = commands::proxy::get_proxy_status().await {
                                         app.state::<TrayMenuState>().sync_from_status(&status);
                                         let _ = app.emit("proxy-status-changed", &status);
                                     }
@@ -735,12 +738,8 @@ fn main() {
                             log::warn!("Config reload failed, restarting MiHomo process...");
                             match app_state.mihomo_manager.restart().await {
                                 Ok(_) => {
-                                    log::info!(
-                                        "MiHomo restarted successfully after system resume"
-                                    );
-                                    if let Ok(status) =
-                                        commands::proxy::get_proxy_status().await
-                                    {
+                                    log::info!("MiHomo restarted successfully after system resume");
+                                    if let Ok(status) = commands::proxy::get_proxy_status().await {
                                         app.state::<TrayMenuState>().sync_from_status(&status);
                                         let _ = app.emit("proxy-status-changed", &status);
                                     }
@@ -797,7 +796,7 @@ fn main() {
                         log::info!("Stopping MiHomo service...");
                         app_state.mihomo_manager.stop_sync();
                         log::info!("MiHomo stopped via manager");
-                        
+
                         // 4. 额外清理：确保所有 mihomo 进程都被终止
                         // 包括通过 UAC 提权启动的和服务模式启动的
                         mihomo::MihomoManager::cleanup_stale_processes();
@@ -805,10 +804,10 @@ fn main() {
                     } else {
                         // 如果没有 app_state，直接使用 cleanup 方法清理所有进程
                         log::warn!("App state not available, using fallback cleanup");
-                        
+
                         // 保守地清理系统代理
                         let _ = system::SystemProxy::clear_proxy();
-                        
+
                         // 清理所有 mihomo 进程
                         mihomo::MihomoManager::cleanup_stale_processes();
                     }

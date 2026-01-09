@@ -605,6 +605,221 @@ pub async fn update_rule_provider_in_profile(
     Ok(())
 }
 
+/// 重命名 rule-provider（同时更新所有规则中的引用）
+#[tauri::command]
+pub async fn rename_rule_provider_in_profile(
+    profile_id: String,
+    old_name: String,
+    new_name: String,
+    provider: RuleProvider,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    // 如果名称没变，直接更新 provider
+    if old_name == new_name {
+        return update_rule_provider_in_profile(profile_id, new_name, provider, state).await;
+    }
+
+    let workspace = Workspace::new().map_err(|e| e.to_string())?;
+    let (metadata, mut config) = workspace
+        .get_profile(&profile_id)
+        .map_err(|e| e.to_string())?;
+
+    // 检查旧名称是否存在
+    if !config.rule_providers.contains_key(&old_name) {
+        return Err(format!("Rule provider not found: {}", old_name));
+    }
+
+    // 检查新名称是否已存在
+    if config.rule_providers.contains_key(&new_name) {
+        return Err(format!("Rule provider already exists: {}", new_name));
+    }
+
+    // 1. 删除旧的 provider，添加新的
+    config.rule_providers.remove(&old_name);
+    config.rule_providers.insert(new_name.clone(), provider);
+
+    // 2. 更新所有规则中的引用
+    // 规则格式: RULE-SET,provider-name,policy 或 RULE-SET,provider-name,policy,no-resolve
+    for rule in &mut config.rules {
+        if rule.starts_with("RULE-SET,") {
+            let parts: Vec<&str> = rule.splitn(3, ',').collect();
+            if parts.len() >= 2 && parts[1] == old_name {
+                // 替换 provider 名称
+                let rest = if parts.len() > 2 {
+                    format!(",{}", parts[2])
+                } else {
+                    String::new()
+                };
+                *rule = format!("RULE-SET,{}{}", new_name, rest);
+            }
+        }
+    }
+
+    workspace
+        .update_config(&profile_id, &config)
+        .map_err(|e| e.to_string())?;
+
+    if metadata.active {
+        reload_active_profile(&state).await?;
+    }
+
+    log::info!(
+        "Renamed rule provider '{}' to '{}' in profile '{}'",
+        old_name,
+        new_name,
+        profile_id
+    );
+    Ok(())
+}
+
+/// 重命名 proxy-provider（同时更新所有代理组中的引用）
+#[tauri::command]
+pub async fn rename_proxy_provider_in_profile(
+    profile_id: String,
+    old_name: String,
+    new_name: String,
+    provider: ProxyProvider,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    // 如果名称没变，直接更新 provider
+    if old_name == new_name {
+        return update_proxy_provider_in_profile(profile_id, new_name, provider, state).await;
+    }
+
+    let workspace = Workspace::new().map_err(|e| e.to_string())?;
+    let (metadata, mut config) = workspace
+        .get_profile(&profile_id)
+        .map_err(|e| e.to_string())?;
+
+    // 检查旧名称是否存在
+    if !config.proxy_providers.contains_key(&old_name) {
+        return Err(format!("Proxy provider not found: {}", old_name));
+    }
+
+    // 检查新名称是否已存在
+    if config.proxy_providers.contains_key(&new_name) {
+        return Err(format!("Proxy provider already exists: {}", new_name));
+    }
+
+    // 1. 删除旧的 provider，添加新的
+    config.proxy_providers.remove(&old_name);
+    config.proxy_providers.insert(new_name.clone(), provider);
+
+    // 2. 更新所有代理组中的 use 引用
+    for group in &mut config.proxy_groups {
+        for provider_name in group.use_providers.iter_mut() {
+            if provider_name == &old_name {
+                *provider_name = new_name.clone();
+            }
+        }
+    }
+
+    workspace
+        .update_config(&profile_id, &config)
+        .map_err(|e| e.to_string())?;
+
+    if metadata.active {
+        reload_active_profile(&state).await?;
+    }
+
+    log::info!(
+        "Renamed proxy provider '{}' to '{}' in profile '{}'",
+        old_name,
+        new_name,
+        profile_id
+    );
+    Ok(())
+}
+
+// ==================== Proxy Group CRUD ====================
+
+/// 重命名策略组（同时更新所有引用：其他策略组的 proxies 和规则中的 policy）
+#[tauri::command]
+pub async fn rename_proxy_group_in_profile(
+    profile_id: String,
+    old_name: String,
+    new_name: String,
+    group: crate::models::ProxyGroupConfig,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let workspace = Workspace::new().map_err(|e| e.to_string())?;
+    let (metadata, mut config) = workspace
+        .get_profile(&profile_id)
+        .map_err(|e| e.to_string())?;
+
+    // 检查旧名称是否存在
+    let group_index = config
+        .proxy_groups
+        .iter()
+        .position(|g| g.name == old_name)
+        .ok_or_else(|| format!("Proxy group not found: {}", old_name))?;
+
+    // 如果名称改变，检查新名称是否已存在
+    if old_name != new_name {
+        let name_taken = config.proxy_groups.iter().any(|g| g.name == new_name);
+        if name_taken {
+            return Err(format!("Proxy group name already exists: {}", new_name));
+        }
+    }
+
+    // 1. 更新策略组本身
+    config.proxy_groups[group_index] = group;
+
+    // 2. 如果名称改变，更新所有引用
+    if old_name != new_name {
+        // 2a. 更新其他策略组中的 proxies 引用
+        for g in &mut config.proxy_groups {
+            for proxy in g.proxies.iter_mut() {
+                if proxy == &old_name {
+                    *proxy = new_name.clone();
+                }
+            }
+        }
+
+        // 2b. 更新规则中的策略引用
+        // 规则格式: TYPE,payload,policy 或 MATCH,policy
+        for rule in &mut config.rules {
+            let parts: Vec<&str> = rule.split(',').collect();
+            if parts.is_empty() {
+                continue;
+            }
+
+            let rule_type = parts[0];
+
+            // MATCH 规则: MATCH,policy
+            if rule_type == "MATCH" && parts.len() >= 2 && parts[1] == old_name {
+                *rule = format!("MATCH,{}", new_name);
+                continue;
+            }
+
+            // 其他规则: TYPE,payload,policy[,extra...]
+            if parts.len() >= 3 && parts[2] == old_name {
+                let mut new_parts: Vec<&str> = parts.clone();
+                // 我们需要替换第三部分
+                let new_name_ref: &str = &new_name;
+                new_parts[2] = new_name_ref;
+                *rule = new_parts.join(",");
+            }
+        }
+    }
+
+    workspace
+        .update_config(&profile_id, &config)
+        .map_err(|e| e.to_string())?;
+
+    if metadata.active {
+        reload_active_profile(&state).await?;
+    }
+
+    log::info!(
+        "Renamed proxy group '{}' to '{}' in profile '{}'",
+        old_name,
+        new_name,
+        profile_id
+    );
+    Ok(())
+}
+
 // ==================== 辅助函数 ====================
 
 /// 重载活跃 Profile 的辅助函数

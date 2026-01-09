@@ -687,6 +687,18 @@ export const ipc = {
   },
 
   /**
+   * 重命名 Profile 中的 rule-provider（同时更新所有规则中的引用）
+   */
+  async renameRuleProviderInProfile(
+    profileId: string,
+    oldName: string,
+    newName: string,
+    provider: RuleProvider
+  ): Promise<void> {
+    return invoke('rename_rule_provider_in_profile', { profileId, oldName, newName, provider });
+  },
+
+  /**
    * 更新 Profile 配置
    */
   async updateProfileConfig(profileId: string, config: ProfileConfig): Promise<ProfileMetadata> {
@@ -718,6 +730,18 @@ export const ipc = {
   },
 
   /**
+   * 重命名 Profile 中的 proxy-provider（同时更新所有代理组中的引用）
+   */
+  async renameProxyProviderInProfile(
+    profileId: string,
+    oldName: string,
+    newName: string,
+    provider: ProxyProvider
+  ): Promise<void> {
+    return invoke('rename_proxy_provider_in_profile', { profileId, oldName, newName, provider });
+  },
+
+  /**
    * 删除 Profile 中的 proxy-provider
    */
   async deleteProxyProviderFromProfile(profileId: string, name: string): Promise<void> {
@@ -737,11 +761,51 @@ export const ipc = {
   },
 
   /**
+   * 重命名策略组（同时更新规则和其他策略组中的引用）
+   */
+  async renameProxyGroupInProfile(
+    profileId: string,
+    oldName: string,
+    newName: string,
+    group: ProxyGroupConfig
+  ): Promise<void> {
+    return invoke('rename_proxy_group_in_profile', { profileId, oldName, newName, group });
+  },
+
+  // ============= URL 延迟测试命令 =============
+
+  /**
+   * 测试单个 URL 的延迟
+   * 通过本地代理发送 HTTP 请求，测量响应时间
+   */
+  async testUrlDelay(
+    url: string,
+    timeoutMs?: number
+  ): Promise<{ url: string; delay: number | null; error: string | null }> {
+    return invoke('test_url_delay', { url, timeoutMs });
+  },
+
+  /**
+   * 批量测试多个 URL 的延迟
+   */
+  async testUrlsDelay(
+    urls: string[],
+    timeoutMs?: number
+  ): Promise<{ url: string; delay: number | null; error: string | null }[]> {
+    return invoke('test_urls_delay', { urls, timeoutMs });
+  },
+
+  /**
    * 更新当前活跃 Profile 中的策略组
    */
   async updateProxyGroup(group: ProxyGroupConfig, oldName?: string): Promise<void> {
     const activeId = await invoke<string | null>('get_active_profile_id');
     if (!activeId) throw new Error('No active profile');
+
+    // 如果有 oldName 且名称变化，使用重命名 API（会自动更新规则和其他引用）
+    if (oldName && oldName !== group.name) {
+      return this.renameProxyGroupInProfile(activeId, oldName, group.name, group);
+    }
 
     // Fetch current config
     const [, config] = await invoke<[ProfileMetadata, ProfileConfig]>('get_profile', {
@@ -754,27 +818,13 @@ export const ipc = {
     const nameTaken = existing.some((item) => item.name === group.name && item.name !== oldName);
     if (nameTaken) throw new Error('Group name already exists');
 
-    let nextGroups = [...existing];
+    const nextGroups = [...existing];
 
     if (oldName) {
+      // 名称没变，只更新策略组内容
       const index = nextGroups.findIndex((item) => item.name === oldName);
       if (index === -1) throw new Error('Group not found to update');
       nextGroups[index] = group;
-
-      // Handle renaming references
-      if (oldName !== group.name) {
-        nextGroups = nextGroups.map((item) => ({
-          ...item,
-          proxies: (item.proxies || []).map((proxy) => (proxy === oldName ? group.name : proxy)),
-        }));
-        // Simple regex based replacement for rules might be dangerous, but if we follow ProxyGroups.tsx logic:
-        // It parses rules. I'll skip complex rule parsing here for simplicity or duplicate it?
-        // To avoid duplication and bugs, it is safer to DO THIS IN RUST BACKEND ultimately.
-        // But for now, let's keep it simple: just update the group definition.
-        // Refactoring needed later: move business logic to Backend.
-
-        // For now, I will just update the group array.
-      }
     } else {
       nextGroups.push(group);
     }
