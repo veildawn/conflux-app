@@ -13,7 +13,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  SUBSTORE_VERSION: '2.18.5'
+  SUBSTORE_VERSION: '2.18.5-2'
   RELEASE_TAG: ${{ github.event.inputs.tag_name || github.ref_name }}
   RELEASE_NAME: Conflux ${{ github.event.inputs.tag_name || github.ref_name }}
 

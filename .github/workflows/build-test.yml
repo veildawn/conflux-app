@@ -16,7 +16,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  SUBSTORE_VERSION: "2.18.5"
+  SUBSTORE_VERSION: "2.18.5-2"
 
 permissions:
   contents: read
