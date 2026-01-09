@@ -63,6 +63,7 @@ impl WebDavClient {
 
     /// 确保目录存在（递归创建）
     pub async fn ensure_dir(&self, path: &str) -> Result<()> {
+        log::debug!("确保目录存在: {}", path);
         let parts: Vec<&str> = path.trim_matches('/').split('/').collect();
         let mut current_path = String::new();
 
@@ -74,6 +75,7 @@ impl WebDavClient {
             let url = format!("{}{}/", self.base_url, current_path);
 
             // 先检查目录是否存在
+            log::debug!("检查目录: {}", url);
             let check_response = self
                 .client
                 .request(reqwest::Method::from_bytes(b"PROPFIND").unwrap(), &url)
@@ -82,8 +84,12 @@ impl WebDavClient {
                 .send()
                 .await?;
 
-            if check_response.status() == StatusCode::NOT_FOUND {
+            let status = check_response.status();
+            log::debug!("目录检查响应: HTTP {}", status);
+
+            if status == StatusCode::NOT_FOUND {
                 // 创建目录
+                log::info!("创建目录: {}", current_path);
                 let mkcol_response = self
                     .client
                     .request(reqwest::Method::from_bytes(b"MKCOL").unwrap(), &url)
@@ -91,13 +97,16 @@ impl WebDavClient {
                     .send()
                     .await?;
 
-                if !mkcol_response.status().is_success()
-                    && mkcol_response.status() != StatusCode::METHOD_NOT_ALLOWED
-                {
+                let mkcol_status = mkcol_response.status();
+                log::debug!("创建目录响应: HTTP {}", mkcol_status);
+
+                if !mkcol_status.is_success() && mkcol_status != StatusCode::METHOD_NOT_ALLOWED {
+                    let body = mkcol_response.text().await.unwrap_or_default();
+                    log::error!("创建目录失败: {} - {}", mkcol_status, body);
                     return Err(anyhow!(
                         "创建目录失败 '{}': HTTP {}",
                         current_path,
-                        mkcol_response.status()
+                        mkcol_status
                     ));
                 }
             }
@@ -108,16 +117,20 @@ impl WebDavClient {
 
     /// 上传文件
     pub async fn upload_file(&self, remote_path: &str, content: &[u8]) -> Result<()> {
+        log::debug!("上传文件: {} ({} bytes)", remote_path, content.len());
+
         // 确保父目录存在
         if let Some(parent) = std::path::Path::new(remote_path).parent() {
             if let Some(parent_str) = parent.to_str() {
                 if !parent_str.is_empty() {
+                    log::debug!("确保父目录存在: {}", parent_str);
                     self.ensure_dir(parent_str).await?;
                 }
             }
         }
 
         let url = format!("{}{}", self.base_url, remote_path);
+        log::debug!("PUT {}", url);
 
         let response = self
             .client
@@ -128,10 +141,20 @@ impl WebDavClient {
             .send()
             .await?;
 
-        match response.status() {
-            StatusCode::OK | StatusCode::CREATED | StatusCode::NO_CONTENT => Ok(()),
+        let status = response.status();
+        log::debug!("上传响应: HTTP {}", status);
+
+        match status {
+            StatusCode::OK | StatusCode::CREATED | StatusCode::NO_CONTENT => {
+                log::debug!("上传成功: {}", remote_path);
+                Ok(())
+            }
             StatusCode::UNAUTHORIZED => Err(anyhow!("认证失败")),
-            status => Err(anyhow!("上传失败：HTTP {}", status)),
+            _ => {
+                let body = response.text().await.unwrap_or_default();
+                log::error!("上传失败: HTTP {} - {}", status, body);
+                Err(anyhow!("上传失败：HTTP {}", status))
+            }
         }
     }
 
@@ -276,6 +299,9 @@ impl WebDavClient {
         let mut entries = Vec::new();
         let parent_normalized = parent_path.trim_matches('/');
 
+        log::debug!("解析 PROPFIND 响应, 父目录: {}", parent_normalized);
+        log::trace!("XML 响应: {}", xml);
+
         // 简单解析：查找所有 <d:href> 或 <D:href>
         for pattern in &["<d:href>", "<D:href>"] {
             let end_pattern = if *pattern == "<d:href>" {
@@ -289,36 +315,53 @@ impl WebDavClient {
                 let abs_start = search_start + start_idx + pattern.len();
                 if let Some(end_idx) = xml[abs_start..].find(end_pattern) {
                     let href = &xml[abs_start..abs_start + end_idx];
-                    // 从 href 中提取路径（去掉 /dav/ 前缀）
-                    if let Some(path_start) = href.find("/dav/") {
-                        let path = &href[path_start + 4..]; // 去掉 "/dav"
-                        let path_normalized = path.trim_matches('/');
+                    log::debug!("找到 href: {}", href);
 
-                        // 跳过父目录本身
-                        if path_normalized != parent_normalized
-                            && path_normalized.starts_with(parent_normalized)
-                        {
-                            // 检查是否是目录（以 / 结尾或包含 collection）
-                            let is_dir = path.ends_with('/') || {
-                                // 查找该条目对应的 response 块是否包含 collection
-                                let response_start = xml[..abs_start]
-                                    .rfind("<d:response>")
-                                    .or_else(|| xml[..abs_start].rfind("<D:response>"))
-                                    .unwrap_or(0);
-                                let response_end = xml[abs_start..]
-                                    .find("</d:response>")
-                                    .or_else(|| xml[abs_start..].find("</D:response>"))
-                                    .map(|i| abs_start + i)
-                                    .unwrap_or(xml.len());
-                                let response_block = &xml[response_start..response_end];
-                                response_block.contains("<d:collection")
-                                    || response_block.contains("<D:collection")
-                            };
+                    // 从 href 中提取路径
+                    // 优先尝试找 /dav/ 前缀（坚果云），否则直接查找 parent_path
+                    let path = if let Some(path_start) = href.find("/dav/") {
+                        // 坚果云格式：/dav/conflux/...
+                        &href[path_start + 4..] // 去掉 "/dav"
+                    } else if let Some(path_start) = href.find(&format!("/{}", parent_normalized)) {
+                        // 直接查找父目录路径
+                        &href[path_start..]
+                    } else if href.starts_with('/') {
+                        // 已经是绝对路径
+                        href
+                    } else {
+                        // 跳过无法解析的 href
+                        search_start = abs_start + end_idx;
+                        continue;
+                    };
 
-                            let clean_path = format!("/{}", path_normalized);
-                            if !entries.iter().any(|(p, _)| p == &clean_path) {
-                                entries.push((clean_path, is_dir));
-                            }
+                    let path_normalized = path.trim_matches('/');
+                    log::debug!("解析后路径: {}", path_normalized);
+
+                    // 跳过父目录本身
+                    if path_normalized != parent_normalized
+                        && path_normalized.starts_with(parent_normalized)
+                    {
+                        // 检查是否是目录（以 / 结尾或包含 collection）
+                        let is_dir = path.ends_with('/') || {
+                            // 查找该条目对应的 response 块是否包含 collection
+                            let response_start = xml[..abs_start]
+                                .rfind("<d:response>")
+                                .or_else(|| xml[..abs_start].rfind("<D:response>"))
+                                .unwrap_or(0);
+                            let response_end = xml[abs_start..]
+                                .find("</d:response>")
+                                .or_else(|| xml[abs_start..].find("</D:response>"))
+                                .map(|i| abs_start + i)
+                                .unwrap_or(xml.len());
+                            let response_block = &xml[response_start..response_end];
+                            response_block.contains("<d:collection")
+                                || response_block.contains("<D:collection")
+                        };
+
+                        let clean_path = format!("/{}", path_normalized);
+                        if !entries.iter().any(|(p, _)| p == &clean_path) {
+                            log::debug!("添加条目: {} (目录: {})", clean_path, is_dir);
+                            entries.push((clean_path, is_dir));
                         }
                     }
                     search_start = abs_start + end_idx;
@@ -328,6 +371,7 @@ impl WebDavClient {
             }
         }
 
+        log::debug!("解析完成, 共 {} 个条目", entries.len());
         entries
     }
 

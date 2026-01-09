@@ -695,9 +695,12 @@ fn main() {
             commands::webdav::save_webdav_config,
             commands::webdav::webdav_upload,
             commands::webdav::webdav_download,
+            commands::webdav::webdav_sync,
             commands::webdav::get_sync_status,
+            commands::webdav::clear_sync_status,
             commands::webdav::check_webdav_conflict,
             commands::webdav::resolve_webdav_conflict,
+            commands::webdav::resolve_file_conflict,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

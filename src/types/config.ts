@@ -375,13 +375,15 @@ export interface WebDavConfig {
 }
 
 /**
- * 文件同步状态
+ * 文件同步状态（支持三方比较）
  */
 export interface FileSyncState {
   /** 文件路径 */
   path: string;
-  /** 文件 hash */
-  hash: string;
+  /** 上次同步时的本地文件 hash */
+  localHash: string;
+  /** 上次同步时的远端文件 hash */
+  remoteHash: string;
   /** 同步时间 */
   syncedAt: string;
 }
@@ -397,6 +399,20 @@ export interface SyncState {
 }
 
 /**
+ * 单个冲突项
+ */
+export interface ConflictItem {
+  /** 文件路径 */
+  path: string;
+  /** 冲突类型描述 */
+  conflictType: string;
+  /** 本地状态 */
+  localStatus: string;
+  /** 远端状态 */
+  remoteStatus: string;
+}
+
+/**
  * 冲突信息
  */
 export interface ConflictInfo {
@@ -404,8 +420,10 @@ export interface ConflictInfo {
   localModified: string;
   /** 远端修改时间 */
   remoteModified: string;
-  /** 冲突的文件列表 */
+  /** 冲突的文件列表（向后兼容） */
   conflictingFiles: string[];
+  /** 详细的冲突项列表 */
+  conflictItems?: ConflictItem[];
 }
 
 /**
@@ -420,6 +438,10 @@ export interface SyncResult {
   uploadedFiles: string[];
   /** 下载的文件列表 */
   downloadedFiles: string[];
+  /** 删除的本地文件列表 */
+  deletedLocalFiles?: string[];
+  /** 删除的远端文件列表 */
+  deletedRemoteFiles?: string[];
   /** 是否有冲突 */
   hasConflict: boolean;
   /** 冲突信息 */
