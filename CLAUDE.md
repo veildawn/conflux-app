@@ -466,6 +466,42 @@ let _handle = std::thread::spawn(|| { /* ... */ });
 let _ = std::thread::spawn(|| { /* ... */ });
 ```
 
+### ⚠️ 处理 dead_code 警告的专业方式
+
+**不要使用** `#[allow(dead_code)]`，这是不专业的做法。根据不同场景使用正确的方式：
+
+| 场景                       | ❌ 不专业             | ✅ 专业做法                          |
+| -------------------------- | --------------------- | ------------------------------------ |
+| 平台特定代码               | `#[allow(dead_code)]` | `#[cfg(target_os = "...")]` 条件编译 |
+| 反序列化需要但不读取的字段 | `#[allow(dead_code)]` | 用 `_` 前缀命名：`_field_name`       |
+| 未使用的函数               | `#[allow(dead_code)]` | 直接删除（YAGNI 原则）               |
+
+```rust
+// ❌ 不专业：允许 dead code
+#[allow(dead_code)]
+pub fn get_mihomo_binary_path() -> Result<PathBuf> { /* ... */ }
+
+// ✅ 专业：条件编译，只在非 Windows 平台编译
+#[cfg(not(target_os = "windows"))]
+pub fn get_mihomo_binary_path() -> Result<PathBuf> { /* ... */ }
+
+// ❌ 不专业：反序列化字段用 allow
+#[derive(Deserialize)]
+struct Response {
+    data: String,
+    #[allow(dead_code)]
+    version: String,  // 需要反序列化但不读取
+}
+
+// ✅ 专业：用下划线前缀表示"需要但不使用"
+#[derive(Deserialize)]
+struct Response {
+    data: String,
+    #[serde(rename = "version")]
+    _version: String,  // 明确表示反序列化需要但代码不使用
+}
+```
+
 ## Claude 开发任务指南
 
 ### 1. 添加新页面
