@@ -1,0 +1,36 @@
+# GitHub 自动生成 Release Notes 配置
+# https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes
+
+changelog:
+  # 排除某些类型的 PR/Commit
+  exclude:
+    labels:
+      - skip-changelog
+      - dependencies
+    authors:
+      - github-actions[bot]
+      - dependabot[bot]
+
+  # 按类别分组
+  categories:
+    - title: ✨ 新功能
+      labels:
+        - enhancement
+        - feature
+        - feat
+    - title: 🚀 性能优化
+      labels:
+        - performance
+        - perf
+    - title: 🐛 Bug 修复
+      labels:
+        - bug
+        - fix
+        - bugfix
+    - title: 📚 文档更新
+      labels:
+        - documentation
+        - docs
+    - title: 🔧 其他改进
+      labels:
+        - "*"

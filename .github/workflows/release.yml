@@ -16,20 +16,6 @@ env:
   SUBSTORE_VERSION: "2.18.5"
   RELEASE_TAG: ${{ github.event.inputs.tag_name || github.ref_name }}
   RELEASE_NAME: Conflux ${{ github.event.inputs.tag_name || github.ref_name }}
-  RELEASE_BODY: |
-    ## Changes
-    See the assets below to download and install.
-
-    ### Installation
-    - **macOS ARM64 (Apple Silicon)**: Download `Conflux_x.x.x_aarch64.dmg` for M1/M2/M3/M4 Macs
-    - **macOS x86_64 (Intel)**: Download `Conflux_x.x.x_x64.dmg` for Intel Macs
-    - **Windows x86_64**: Download `Conflux_x.x.x_x64-setup.exe` installer
-
-    ### macOS 首次安装
-    由于应用未签名，首次安装后需要移除隔离属性才能正常运行：
-    ```bash
-    sudo xattr -rd com.apple.quarantine "/Applications/Conflux.app"
-    ```
 
 # Workflow-level permissions for GITHUB_TOKEN
 permissions:
@@ -605,18 +591,104 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-assets
           merge-multiple: true
 
+      - name: Generate changelog from commits
+        id: changelog
+        run: |
+          # 获取上一个 tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          CURRENT_TAG="${{ env.RELEASE_TAG }}"
+
+          echo "Previous tag: $PREVIOUS_TAG"
+          echo "Current tag: $CURRENT_TAG"
+
+          # 生成 changelog
+          {
+            echo "CHANGELOG<<EOF"
+
+            # 新功能 (feat)
+            echo "## ✨ 新功能"
+            echo ""
+            if [ -n "$PREVIOUS_TAG" ]; then
+              FEATS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" --grep="^feat" 2>/dev/null | sed 's/^- feat[:(]/- /; s/)$//' || true)
+            else
+              FEATS=$(git log --pretty=format:"- %s" --grep="^feat" 2>/dev/null | head -20 | sed 's/^- feat[:(]/- /; s/)$//' || true)
+            fi
+            if [ -n "$FEATS" ]; then
+              echo "$FEATS"
+            else
+              echo "_本版本无新功能_"
+            fi
+            echo ""
+
+            # 优化改进 (refactor, perf, ci, chore 中的优化)
+            echo "## 🚀 优化改进"
+            echo ""
+            if [ -n "$PREVIOUS_TAG" ]; then
+              IMPROVEMENTS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" --grep="^refactor\|^perf\|^ci" 2>/dev/null | sed 's/^- \(refactor\|perf\|ci\)[:(]/- /; s/)$//' | head -10 || true)
+            else
+              IMPROVEMENTS=$(git log --pretty=format:"- %s" --grep="^refactor\|^perf\|^ci" 2>/dev/null | head -10 | sed 's/^- \(refactor\|perf\|ci\)[:(]/- /; s/)$//' || true)
+            fi
+            if [ -n "$IMPROVEMENTS" ]; then
+              echo "$IMPROVEMENTS"
+            else
+              echo "_本版本无优化改进_"
+            fi
+            echo ""
+
+            # Bug 修复 - 只列出数量，不详细描述
+            echo "## 🐛 Bug 修复"
+            echo ""
+            if [ -n "$PREVIOUS_TAG" ]; then
+              FIX_COUNT=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"%s" --grep="^fix" 2>/dev/null | wc -l | tr -d ' ')
+            else
+              FIX_COUNT=$(git log --pretty=format:"%s" --grep="^fix" 2>/dev/null | head -50 | wc -l | tr -d ' ')
+            fi
+            if [ "$FIX_COUNT" -gt 0 ]; then
+              echo "修复了 **${FIX_COUNT}** 个问题"
+            else
+              echo "_本版本无 Bug 修复_"
+            fi
+            echo ""
+
+            # 安装说明
+            echo "---"
+            echo ""
+            echo "## 📥 安装说明"
+            echo ""
+            echo "| 平台 | 文件 | 说明 |"
+            echo "|------|------|------|"
+            echo "| macOS (Apple Silicon) | \`Conflux_x.x.x_aarch64.dmg\` | M1/M2/M3/M4 芯片 |"
+            echo "| macOS (Intel) | \`Conflux_x.x.x_x64.dmg\` | Intel 芯片 |"
+            echo "| Windows | \`Conflux_x.x.x_x64-setup.exe\` | 64 位 Windows |"
+            echo ""
+            echo "### macOS 首次安装"
+            echo ""
+            echo "由于应用未签名，首次安装后需要移除隔离属性："
+            echo ""
+            echo "\`\`\`bash"
+            echo "sudo xattr -rd com.apple.quarantine \"/Applications/Conflux.app\""
+            echo "\`\`\`"
+
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: ${{ env.RELEASE_NAME }}
-          body: ${{ env.RELEASE_BODY }}
+          body: ${{ steps.changelog.outputs.CHANGELOG }}
           draft: true
           prerelease: false
           target_commitish: ${{ github.sha }}
@@ -633,4 +705,4 @@ jobs:
           echo "  - macOS x86_64 (Intel): .dmg"
           echo "  - Windows x86_64: NSIS installer (.exe)"
           echo ""
-          echo "🔗 Release: https://github.com/${{ github.repository }}/releases/tag/${{ github.event.inputs.tag_name || github.ref_name }}"
+          echo "🔗 Release: https://github.com/${{ github.repository }}/releases/tag/${{ env.RELEASE_TAG }}"
