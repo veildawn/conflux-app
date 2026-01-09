@@ -126,8 +126,33 @@ impl SyncManager {
             files.push(("settings.json".to_string(), settings_path));
         }
 
-        // 2. 各个 Profile 目录（每个 profile 包含 metadata.json 和 profile.yaml）
         let data_dir = get_app_data_dir()?;
+
+        // 2. Sub-Store 数据文件
+        let substore_path = data_dir.join("sub-store").join("sub-store.json");
+        if substore_path.exists() {
+            files.push(("sub-store/sub-store.json".to_string(), substore_path));
+        }
+
+        // 3. 规则集目录 (ruleset)
+        let ruleset_dir = data_dir.join("ruleset");
+        if ruleset_dir.exists() {
+            if let Ok(entries) = fs::read_dir(&ruleset_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() {
+                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                            // 忽略隐藏文件
+                            if !name.starts_with('.') {
+                                files.push((format!("ruleset/{}", name), path));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. 各个 Profile 目录（每个 profile 包含 metadata.json 和 profile.yaml）
         let profiles_dir = data_dir.join("profiles");
         if profiles_dir.exists() {
             if let Ok(entries) = fs::read_dir(&profiles_dir) {
@@ -202,6 +227,13 @@ impl SyncManager {
         state.last_sync_time = Some(chrono::Local::now().to_rfc3339());
         Self::save_sync_state(&state)?;
 
+        // 上传同步状态文件作为清单
+        let state_content = serde_json::to_string_pretty(&state)?;
+        let remote_state_path = format!("{}/{}", REMOTE_BASE_PATH, SYNC_STATE_FILE);
+        client
+            .upload_file(&remote_state_path, state_content.as_bytes())
+            .await?;
+
         Ok(SyncResult {
             success: true,
             message: format!("成功上传 {} 个文件", uploaded_files.len()),
@@ -272,8 +304,45 @@ impl SyncManager {
         let mut downloaded_files = Vec::new();
         let mut state = Self::load_sync_state()?;
 
+        // 尝试从远端下载同步状态文件作为清单
+        let remote_state_path = format!("{}/{}", REMOTE_BASE_PATH, SYNC_STATE_FILE);
+        match client.download_file(&remote_state_path).await {
+            Ok(content) => {
+                if let Ok(remote_state) = serde_json::from_slice::<SyncState>(&content) {
+                    log::info!("发现远端同步状态文件，将使用它作为下载清单");
+                    state = remote_state;
+                }
+            }
+            Err(e) => {
+                log::warn!("无法下载远端同步状态文件: {}", e);
+                // 如果没有清单，我们只能依赖本地已知的状态，或者这里应该报错？
+                // 考虑到兼容性，如果远端没有清单（旧版本上传的），我们可能无法得知完整文件列表
+                // 但如果用户要求完全覆盖，最好是能获取到清单。
+                // 此时继续使用本地 state (可能是空的)
+            }
+        }
+
         let config_dir = get_app_config_dir()?;
         let data_dir = get_app_data_dir()?;
+
+        // 清理本地数据（完全替换模式）
+        log::info!("正在清理本地数据以进行覆盖恢复...");
+        // 1. 清理 profiles
+        if let Err(e) = fs::remove_dir_all(data_dir.join("profiles")) {
+            log::warn!("清理 profiles 目录失败 (可能不存在): {}", e);
+        }
+        // 2. 清理 ruleset
+        if let Err(e) = fs::remove_dir_all(data_dir.join("ruleset")) {
+            log::warn!("清理 ruleset 目录失败 (可能不存在): {}", e);
+        }
+        // 3. 清理 sub-store.json
+        if let Err(e) = fs::remove_file(data_dir.join("sub-store").join("sub-store.json")) {
+            log::warn!("清理 sub-store.json 失败 (可能不存在): {}", e);
+        }
+        // 4. 清理 settings.json
+        if let Err(e) = fs::remove_file(config_dir.join("settings.json")) {
+            log::warn!("清理 settings.json 失败 (可能不存在): {}", e);
+        }
 
         // 下载应用设置文件（config.yaml 是运行时配置，不需要同步）
         let settings_path = config_dir.join("settings.json");
@@ -302,15 +371,16 @@ impl SyncManager {
             }
         }
 
-        // 下载 profiles 目录下的文件（基于同步状态中记录的文件）
-        let profile_files: Vec<String> = state
+        // 下载数据目录下的文件（profiles, sub-store, ruleset 等）
+        // 排除 settings.json（已处理）
+        let data_files: Vec<String> = state
             .files
             .keys()
-            .filter(|k| k.starts_with("profiles/"))
+            .filter(|k| k.as_str() != "settings.json")
             .cloned()
             .collect();
 
-        for relative_path in profile_files {
+        for relative_path in data_files {
             let remote_path = format!("{}/{}", REMOTE_BASE_PATH, relative_path);
             let local_path = data_dir.join(&relative_path);
 
@@ -334,7 +404,7 @@ impl SyncManager {
                     );
                 }
                 Err(e) => {
-                    log::warn!("下载 Profile 文件 {} 失败: {}", relative_path, e);
+                    log::warn!("下载文件 {} 失败: {}", relative_path, e);
                 }
             }
         }
