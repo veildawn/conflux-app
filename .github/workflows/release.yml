@@ -735,6 +735,7 @@ jobs:
             echo "### 🍺 Homebrew (macOS 推荐)"
             echo "\`\`\`bash"
             echo "brew tap Ashbaer/conflux"
+            echo "brew update"
             echo "brew install --cask conflux --no-quarantine --force"
             echo "\`\`\`"
             echo "> 使用 \`--no-quarantine\` 参数可自动解决\"已损坏\"提示，使用 \`--force\` 参数可覆盖手动安装的版本。"
