@@ -148,7 +148,7 @@ jobs:
             node_binary: node-aarch64-apple-darwin
             mihomo_platform: darwin-arm64
           - platform: macOS-x86_64
-            os: macos-13
+            os: macos-15-intel
             target: x86_64-apple-darwin
             node_platform: darwin-x64
             node_binary: node-x86_64-apple-darwin
