@@ -1,4 +1,5 @@
 name: Release
+run-name: Release ${{ inputs.tag_name || github.ref_name }}
 
 # Build and publish release artifacts for all platforms
 on:
@@ -740,8 +741,9 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}
           name: ${{ env.RELEASE_NAME }}
           body: ${{ steps.changelog.outputs.CHANGELOG }}
-          draft: true
+          draft: false
           prerelease: false
+          make_latest: true
           target_commitish: ${{ github.sha }}
           files: release-assets/**/*
           fail_on_unmatched_files: false
@@ -780,55 +782,55 @@ jobs:
             # Update Cask file
             mkdir -p Casks
             cat > Casks/conflux.rb << 'CASK'
-# typed: false
-# frozen_string_literal: true
+            # typed: false
+            # frozen_string_literal: true
 
-cask "conflux" do
-CASK
+            cask "conflux" do
+            CASK
             echo "  version \"$VERSION\"" >> Casks/conflux.rb
             cat >> Casks/conflux.rb << 'CASK'
 
-  on_intel do
-CASK
+              on_intel do
+            CASK
             echo "    sha256 \"$X64_SHA\"" >> Casks/conflux.rb
             cat >> Casks/conflux.rb << 'CASK'
-    url "https://github.com/Ashbaer/conflux-app/releases/download/v#{version}/Conflux_#{version}_x64.dmg",
-        verified: "github.com/Ashbaer/conflux-app/"
-  end
+                url "https://github.com/Ashbaer/conflux-app/releases/download/v#{version}/Conflux_#{version}_x64.dmg",
+                    verified: "github.com/Ashbaer/conflux-app/"
+              end
 
-  on_arm do
-CASK
+              on_arm do
+            CASK
             echo "    sha256 \"$ARM64_SHA\"" >> Casks/conflux.rb
             cat >> Casks/conflux.rb << 'CASK'
-    url "https://github.com/Ashbaer/conflux-app/releases/download/v#{version}/Conflux_#{version}_aarch64.dmg",
-        verified: "github.com/Ashbaer/conflux-app/"
-  end
+                url "https://github.com/Ashbaer/conflux-app/releases/download/v#{version}/Conflux_#{version}_aarch64.dmg",
+                    verified: "github.com/Ashbaer/conflux-app/"
+              end
 
-  name "Conflux"
-  desc "Modern proxy management app based on MiHomo"
-  homepage "https://github.com/Ashbaer/conflux-app"
+              name "Conflux"
+              desc "Modern proxy management app based on MiHomo"
+              homepage "https://github.com/Ashbaer/conflux-app"
 
-  livecheck do
-    url :url
-    strategy :github_latest
-  end
+              livecheck do
+                url :url
+                strategy :github_latest
+              end
 
-  app "Conflux.app"
+              app "Conflux.app"
 
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-rd", "com.apple.quarantine", "#{appdir}/Conflux.app"],
-                   sudo: false
-  end
+              postflight do
+                system_command "/usr/bin/xattr",
+                               args: ["-rd", "com.apple.quarantine", "#{appdir}/Conflux.app"],
+                               sudo: false
+              end
 
-  zap trash: [
-    "~/Library/Application Support/com.conflux.desktop",
-    "~/Library/Caches/com.conflux.desktop",
-    "~/Library/Preferences/com.conflux.desktop.plist",
-    "~/Library/Saved Application State/com.conflux.desktop.savedState",
-  ]
-end
-CASK
+              zap trash: [
+                "~/Library/Application Support/com.conflux.desktop",
+                "~/Library/Caches/com.conflux.desktop",
+                "~/Library/Preferences/com.conflux.desktop.plist",
+                "~/Library/Saved Application State/com.conflux.desktop.savedState",
+              ]
+            end
+            CASK
 
             # Commit and push
             git config user.name "github-actions[bot]"
