@@ -16,7 +16,7 @@ windows-service = "0.8"
 tokio = { version = "1", features = ["full"] }
 
 # HTTP server for IPC
-warp = "0.4"
+warp = { version = "0.4", features = ["server"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

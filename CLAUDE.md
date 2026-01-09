@@ -439,6 +439,33 @@ WS   /logs             # 日志 WebSocket
 - Serde JSON 序列化
 - 使用 `thiserror` 定义错误类型
 
+### ⚠️ 依赖配置注意事项
+
+**warp HTTP 框架**：warp 0.4+ 版本默认不包含 `server` feature，使用 `warp::serve()` 需要显式启用：
+
+```toml
+# ❌ 错误：缺少 server feature，warp::serve() 不可用
+warp = "0.4"
+
+# ✅ 正确：启用 server feature
+warp = { version = "0.4", features = ["server"] }
+```
+
+### ⚠️ 忽略返回值的正确方式
+
+当需要忽略带有 `#[must_use]` 标记的返回值（如 `JoinHandle`）时，使用 `let _ =` 明确忽略：
+
+```rust
+// ❌ 未使用变量警告
+let handle = std::thread::spawn(|| { /* ... */ });
+
+// ❌ 命名但不使用，仍有警告风险
+let _handle = std::thread::spawn(|| { /* ... */ });
+
+// ✅ 正确：明确忽略返回值，无警告
+let _ = std::thread::spawn(|| { /* ... */ });
+```
+
 ## Claude 开发任务指南
 
 ### 1. 添加新页面

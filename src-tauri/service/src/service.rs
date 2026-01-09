@@ -170,7 +170,7 @@ fn run_service_main() -> windows_service::Result<()> {
     log::info!("Conflux Service started");
 
     // Start IPC server in a separate thread
-    let ipc_handle = std::thread::spawn(|| {
+    let _ = std::thread::spawn(|| {
         let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
         rt.block_on(async {
             if let Err(e) = crate::ipc::start_ipc_server().await {
