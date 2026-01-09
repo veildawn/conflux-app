@@ -208,7 +208,7 @@ jobs:
   # Build for macOS x86_64 (Intel)
   build-macos-x86:
     name: Build macOS x86_64
-    runs-on: macos-13
+    runs-on: macos-15-intel
     permissions:
       contents: write
     steps:
@@ -730,8 +730,10 @@ jobs:
           prerelease: false
           target_commitish: ${{ github.sha }}
           files: release-assets/**/*
+          fail_on_unmatched_files: false
+          generate_release_notes: false
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Release Summary
         run: |
