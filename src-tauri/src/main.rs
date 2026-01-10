@@ -587,7 +587,6 @@ fn main() {
             commands::config::save_config,
             commands::config::get_app_settings,
             commands::config::save_app_settings,
-            commands::config::apply_subscription,
             commands::config::get_rules,
             commands::config::save_rules,
             commands::config::download_resource,

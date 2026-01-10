@@ -376,8 +376,54 @@ impl Workspace {
             .cloned()
             .collect();
 
-        let mut final_config = old_config.clone();
-        final_config.proxies = new_fetched_config.proxies;
+        // 使用新的远程配置作为基础
+        let mut final_config = new_fetched_config;
+
+        // 3.1 保留用户自定义的 Proxy Providers (远程配置中不存在的)
+        for (name, provider) in old_config.proxy_providers {
+            if !final_config.proxy_providers.contains_key(&name) {
+                log::info!("Preserving local proxy provider: {}", name);
+                final_config.proxy_providers.insert(name, provider);
+            }
+        }
+
+        // 3.2 保留用户自定义的 Rule Providers (远程配置中不存在的)
+        for (name, provider) in old_config.rule_providers {
+            if !final_config.rule_providers.contains_key(&name) {
+                log::info!("Preserving local rule provider: {}", name);
+                final_config.rule_providers.insert(name, provider);
+            }
+        }
+
+        // 3.3 保留用户自定义的 Proxy Groups (远程配置中不存在的)
+        let new_group_names: std::collections::HashSet<String> = final_config
+            .proxy_groups
+            .iter()
+            .map(|g| g.name.clone())
+            .collect();
+
+        for group in old_config.proxy_groups {
+            if !new_group_names.contains(&group.name) {
+                log::info!("Preserving local proxy group: {}", group.name);
+                final_config.proxy_groups.push(group);
+            }
+        }
+
+        // 3.4 规则处理：完全保留用户的规则配置
+        // 规则没有唯一标识（只有内容本身），无法区分"用户添加的"和"用户重新排序的"
+        // 为了保留用户对规则的所有修改（添加、删除、排序），刷新时不更新规则
+        // 如果用户想获取远程最新规则，可以删除后重新导入订阅
+        log::info!(
+            "Preserving user's rule configuration ({} rules)",
+            old_config.rules.len()
+        );
+        final_config.rules = old_config.rules;
+
+        // 修正 rule-provider 路径 (确保新下载的配置路径正确)
+        Composer::fix_provider_paths(&mut final_config, &self.ruleset_dir)?;
+
+        // 过滤无效规则
+        Composer::filter_invalid_rules(&mut final_config);
 
         // 追加保留的本地代理
         if !local_proxies.is_empty() {
@@ -391,9 +437,9 @@ impl Workspace {
         // 4. 更新元数据
         let mut new_metadata = metadata.clone();
         new_metadata.update_stats(
-            final_config.proxy_count(), // 使用新的代理数量
-            final_config.group_count(), // 保持旧的组数量
-            final_config.rule_count(),  // 保持旧的规则数量
+            final_config.proxy_count(),
+            final_config.group_count(),
+            final_config.rule_count(),
         );
         // 这里我们不更新 default_rules_applied，因为我们没有重新应用规则模板
 
@@ -401,7 +447,7 @@ impl Workspace {
         self.save_profile(id, &new_metadata, &final_config)?;
 
         log::info!(
-            "Refreshed remote profile '{}' (Server List Only). Proxies: {} (Updated), Groups: {} (Preserved), Rules: {} (Preserved)",
+            "Refreshed remote profile '{}'. Proxies: {}, Groups: {}, Rules: {}",
             new_metadata.name,
             final_config.proxy_count(),
             final_config.group_count(),
