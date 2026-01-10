@@ -139,9 +139,9 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
     Ok(ProxyStatus {
         running,
         mode: config.mode,
-        port: config.port,
-        socks_port: config.socks_port,
-        mixed_port: config.mixed_port,
+        port: config.port.unwrap_or(7890),
+        socks_port: config.socks_port.unwrap_or(7891),
+        mixed_port: config.mixed_port.unwrap_or(7892),
         system_proxy,
         enhanced_mode,
         allow_lan: config.allow_lan,
@@ -169,8 +169,8 @@ pub async fn set_ports(app: AppHandle, port: u16, socks_port: u16) -> Result<(),
 
     // 端口变更使用安全模式，因为可能影响系统代理设置
     apply_mihomo_settings_change(Some(&app), &ReloadOptions::safe(), |settings| {
-        settings.port = port;
-        settings.socks_port = socks_port;
+        settings.port = Some(port);
+        settings.socks_port = Some(socks_port);
         Ok(())
     })
     .await
@@ -910,7 +910,7 @@ pub async fn set_mixed_port(app: AppHandle, port: Option<u16>) -> Result<(), Str
     let port_value = port.unwrap_or(7893);
 
     apply_mihomo_settings_change(Some(&app), &ReloadOptions::default(), |settings| {
-        settings.mixed_port = port_value;
+        settings.mixed_port = Some(port_value);
         Ok(())
     })
     .await
@@ -992,7 +992,7 @@ pub async fn test_url_delay(
         .load_mihomo_config()
         .map_err(|e| e.to_string())?;
 
-    let proxy_port = config.mixed_port;
+    let proxy_port = config.mixed_port.unwrap_or(7892);
     let proxy_url = format!("http://127.0.0.1:{}", proxy_port);
     let timeout = timeout_ms.unwrap_or(5000);
 
@@ -1063,7 +1063,7 @@ pub async fn test_urls_delay(
         .load_mihomo_config()
         .map_err(|e| e.to_string())?;
 
-    let proxy_port = config.mixed_port;
+    let proxy_port = config.mixed_port.unwrap_or(7892);
     let proxy_url = format!("http://127.0.0.1:{}", proxy_port);
     let timeout = timeout_ms.unwrap_or(5000);
 
