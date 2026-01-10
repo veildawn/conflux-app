@@ -458,7 +458,8 @@ pub async fn close_all_connections() -> Result<(), String> {
 #[tauri::command]
 pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
     use crate::commands::reload::{
-        reload_config, safe_restart_proxy, sync_proxy_status, ConfigBackup, ReloadOptions,
+        apply_settings_to_config, reload_config, safe_restart_proxy, sync_proxy_status,
+        ConfigBackup, ReloadOptions,
     };
 
     let state = get_app_state_or_err()?;
@@ -491,19 +492,12 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
                 .map_err(|e| format!("设置 TUN 权限失败: {}", e))?;
         }
 
-        // Windows: 检查是否需要 UAC 权限，如果需要则先请求用户确认
-        // 这样可以避免在用户取消 UAC 后 mihomo 已经停止的问题
+        // Windows: 检查是否需要 UAC 权限，不需要预先确认，直接由 safe_restart_proxy 触发提权
         #[cfg(target_os = "windows")]
         {
             use crate::mihomo::MihomoManager;
-
             if MihomoManager::is_tun_elevation_required() {
-                log::info!("UAC elevation required for TUN mode, requesting confirmation before stopping mihomo...");
-
-                MihomoManager::request_elevation_confirmation()
-                    .map_err(|e| format!("需要管理员权限才能启用增强模式: {}", e))?;
-
-                log::info!("UAC elevation confirmed, proceeding with TUN mode change...");
+                log::info!("UAC elevation required for TUN mode, will trigger during restart...");
             }
         }
     }
@@ -594,11 +588,54 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
             log::error!("Failed to apply TUN mode change: {}", e);
 
             // 回滚配置
-            if let Err(rollback_err) = backup.rollback() {
-                log::error!("Failed to rollback config: {}", rollback_err);
+            // 既然启动失败，说明 TUN 模式无法工作（可能是用户拒绝了 UAC）
+            // 此时 settings.json 中的 tun.enable 应该还是 false（因为我们只在成功后才更新 settings）
+            // 所以正确的做法是重新从 settings.json 加载配置并应用到 config.yaml，然后重启服务
+
+            // 1. 清理备份文件（我们改用配置合并的方式回滚，不需要文件备份了）
+            backup.cleanup();
+
+            log::info!("Reverting config from settings...");
+            let mut recovered = false;
+
+            // 2. 执行配置合并回滚
+            if let Ok(app_settings) = state.config_manager.load_app_settings() {
+                if let Ok(mut config) = state.config_manager.load_mihomo_config() {
+                    // 将 settings 中的配置（包含关闭的 TUN）应用到 config
+                    apply_settings_to_config(&app_settings.mihomo, &mut config);
+
+                    // 保存 config
+                    if let Err(save_err) = state.config_manager.save_mihomo_config(&config) {
+                        log::error!("Failed to save reverted config: {}", save_err);
+                    } else {
+                        recovered = true;
+                    }
+                }
+            }
+
+            if !recovered {
+                log::error!(
+                    "Failed to recover config from settings, falling back to file rollback"
+                );
+                // 如果上述逻辑失败，尝试使用文件回滚作为最后的手段
+                if let Err(rollback_err) = backup.rollback() {
+                    log::error!("Failed to rollback config from backup: {}", rollback_err);
+                }
+            }
+
+            // 3. 尝试重启服务（普通模式）
+            // reload_config 只对运行中的进程有效，所以必须检查进程状态并尝试重启
+            if !state.mihomo_manager.is_running().await {
+                log::warn!(
+                    "Mihomo is not running after rollback, attempting to restart in normal mode..."
+                );
+                if let Err(restart_err) = state.mihomo_manager.start().await {
+                    log::error!("Failed to recover mihomo process: {}", restart_err);
+                } else {
+                    log::info!("Mihomo recovered successfully in normal mode");
+                }
             } else {
-                log::info!("Config rolled back after TUN mode change failure");
-                // 尝试用回滚后的配置重新加载
+                // 如果进程还在运行（虽然不太可能，但为了保险），重载一下配置
                 let _ = reload_config(Some(&app), &ReloadOptions::quick()).await;
             }
 
