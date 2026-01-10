@@ -430,26 +430,27 @@ impl SyncManager {
 
         // 2. 尝试下载远端 sync_state.json
         let remote_state_path = format!("{}/{}", REMOTE_BASE_PATH, SYNC_STATE_FILE);
-        let (remote_sync_state, state_file_exists) = match client.download_file(&remote_state_path).await {
-            Ok(content) => {
-                match serde_json::from_slice::<SyncState>(&content) {
-                    Ok(state) => {
-                        log::debug!("成功加载远端同步状态，包含 {} 个文件", state.files.len());
-                        (Some(state), true)
-                    }
-                    Err(e) => {
-                        log::warn!("解析远端 sync_state.json 失败: {}", e);
-                        // 文件存在但解析失败，我们仍然将其标记为存在，以触发后续的安全检查
-                        (None, true)
+        let (remote_sync_state, state_file_exists) =
+            match client.download_file(&remote_state_path).await {
+                Ok(content) => {
+                    match serde_json::from_slice::<SyncState>(&content) {
+                        Ok(state) => {
+                            log::debug!("成功加载远端同步状态，包含 {} 个文件", state.files.len());
+                            (Some(state), true)
+                        }
+                        Err(e) => {
+                            log::warn!("解析远端 sync_state.json 失败: {}", e);
+                            // 文件存在但解析失败，我们仍然将其标记为存在，以触发后续的安全检查
+                            (None, true)
+                        }
                     }
                 }
-            }
-            Err(e) => {
-                // 404 错误表示是新环境，这是正常情况
-                log::debug!("远端 sync_state.json 不存在或下载失败: {}", e);
-                (None, false)
-            }
-        };
+                Err(e) => {
+                    // 404 错误表示是新环境，这是正常情况
+                    log::debug!("远端 sync_state.json 不存在或下载失败: {}", e);
+                    (None, false)
+                }
+            };
 
         // 安全检查：如果下载到了 sync_state.json（说明远端非空），但文件列表中没有它，
         // 说明 WebDAV 列表解析失败（可能是 XML 格式兼容性问题）。
@@ -457,9 +458,9 @@ impl SyncManager {
         if state_file_exists {
             let state_file_full_path = format!("{}/{}", REMOTE_BASE_PATH, SYNC_STATE_FILE);
             // 简单的路径匹配，忽略首尾斜杠差异
-            let has_state_in_list = entries.iter().any(|(p, _)| {
-                p.trim_matches('/') == state_file_full_path.trim_matches('/')
-            });
+            let has_state_in_list = entries
+                .iter()
+                .any(|(p, _)| p.trim_matches('/') == state_file_full_path.trim_matches('/'));
 
             if !has_state_in_list {
                 return Err(anyhow!(
