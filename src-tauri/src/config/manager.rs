@@ -183,10 +183,10 @@ impl ConfigManager {
     /// 验证 MiHomo 配置
     pub fn validate_mihomo_config(&self, config: &MihomoConfig) -> Result<bool> {
         // 检查端口是否有效
-        if config.port == 0 {
+        if config.port == Some(0) {
             return Err(anyhow::anyhow!("Invalid HTTP port"));
         }
-        if config.socks_port == 0 {
+        if config.socks_port == Some(0) {
             return Err(anyhow::anyhow!("Invalid SOCKS port"));
         }
 

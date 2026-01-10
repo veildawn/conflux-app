@@ -5,13 +5,13 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MihomoConfig {
     #[serde(default = "default_port")]
-    pub port: u16,
+    pub port: Option<u16>,
 
     #[serde(rename = "socks-port", default = "default_socks_port")]
-    pub socks_port: u16,
+    pub socks_port: Option<u16>,
 
     #[serde(rename = "mixed-port", default = "default_mixed_port")]
-    pub mixed_port: u16,
+    pub mixed_port: Option<u16>,
 
     #[serde(rename = "allow-lan", default)]
     pub allow_lan: bool,
@@ -414,14 +414,14 @@ pub struct GeoxUrl {
     pub asn: Option<String>,
 }
 
-fn default_port() -> u16 {
-    7890
+fn default_port() -> Option<u16> {
+    Some(7890)
 }
-fn default_socks_port() -> u16 {
-    7891
+fn default_socks_port() -> Option<u16> {
+    Some(7891)
 }
-fn default_mixed_port() -> u16 {
-    7892
+fn default_mixed_port() -> Option<u16> {
+    Some(7892)
 }
 fn default_mode() -> String {
     "rule".to_string()
@@ -719,15 +719,15 @@ pub struct WebDavConfig {
 pub struct MihomoSettings {
     /// HTTP 代理端口
     #[serde(default = "default_port")]
-    pub port: u16,
+    pub port: Option<u16>,
 
     /// SOCKS5 代理端口
     #[serde(default = "default_socks_port")]
-    pub socks_port: u16,
+    pub socks_port: Option<u16>,
 
     /// 混合代理端口
     #[serde(default = "default_mixed_port")]
-    pub mixed_port: u16,
+    pub mixed_port: Option<u16>,
 
     /// 允许局域网连接
     #[serde(default)]

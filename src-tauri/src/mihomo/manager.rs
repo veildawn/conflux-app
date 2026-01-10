@@ -567,11 +567,16 @@ impl MihomoManager {
             const CREATE_NO_WINDOW: u32 = 0x08000000;
             // Windows 上匹配可执行文件名
             let binary_name = crate::utils::get_mihomo_binary_name();
-            log::info!("Killing all processes matching: {}", binary_name);
-            let _ = Command::new("taskkill")
-                .args(["/F", "/IM", binary_name])
-                .creation_flags(CREATE_NO_WINDOW)
-                .output();
+            // 尝试杀死当前版本的进程，以及可能存在的旧版本进程
+            let targets = vec![binary_name, "mihomo.exe", "mihomo-core.exe"];
+
+            for target in targets {
+                log::info!("Killing processes matching: {}", target);
+                let _ = Command::new("taskkill")
+                    .args(["/F", "/IM", target])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .output();
+            }
         }
     }
 

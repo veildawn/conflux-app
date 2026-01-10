@@ -17,10 +17,12 @@ pub async fn set_system_proxy(app: AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     // 设置 HTTP 代理
-    SystemProxy::set_http_proxy("127.0.0.1", config.port).map_err(|e| e.to_string())?;
+    SystemProxy::set_http_proxy("127.0.0.1", config.port.unwrap_or(7890))
+        .map_err(|e| e.to_string())?;
 
     // 设置 SOCKS 代理
-    SystemProxy::set_socks_proxy("127.0.0.1", config.socks_port).map_err(|e| e.to_string())?;
+    SystemProxy::set_socks_proxy("127.0.0.1", config.socks_port.unwrap_or(7891))
+        .map_err(|e| e.to_string())?;
 
     // 更新状态（注意：必须在调用 get_proxy_status 之前释放锁，否则会死锁）
     {

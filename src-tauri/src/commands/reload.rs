@@ -512,11 +512,15 @@ pub async fn safe_restart_proxy(app: &AppHandle) -> Result<(), String> {
             .load_mihomo_config()
             .map_err(|e| e.to_string())?;
 
-        if let Err(e) = crate::system::SystemProxy::set_http_proxy("127.0.0.1", config.port) {
+        if let Err(e) =
+            crate::system::SystemProxy::set_http_proxy("127.0.0.1", config.port.unwrap_or(7890))
+        {
             log::warn!("Failed to restore HTTP proxy: {}", e);
         }
-        if let Err(e) = crate::system::SystemProxy::set_socks_proxy("127.0.0.1", config.socks_port)
-        {
+        if let Err(e) = crate::system::SystemProxy::set_socks_proxy(
+            "127.0.0.1",
+            config.socks_port.unwrap_or(7891),
+        ) {
             log::warn!("Failed to restore SOCKS proxy: {}", e);
         }
 

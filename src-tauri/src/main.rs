@@ -49,8 +49,8 @@ fn build_terminal_proxy_command() -> Result<String, String> {
     let config = config_manager
         .load_mihomo_config()
         .map_err(|e| e.to_string())?;
-    let http = format!("http://127.0.0.1:{}", config.port);
-    let socks = format!("socks5://127.0.0.1:{}", config.socks_port);
+    let http = format!("http://127.0.0.1:{}", config.port.unwrap_or(7890));
+    let socks = format!("socks5://127.0.0.1:{}", config.socks_port.unwrap_or(7891));
 
     #[cfg(target_os = "windows")]
     {
