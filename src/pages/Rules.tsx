@@ -712,7 +712,7 @@ const SortableRuleRow = memo(function SortableRuleRow({
         {payload ? (
           <div className="flex items-center gap-2 min-w-0">
             {payloadBadge && (
-              <span className="text-[10px] font-semibold rounded bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-gray-400 px-1.5 py-0.5 shrink-0">
+              <span className="text-[10px] font-semibold rounded bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-gray-400 px-1.5 py-0.5 shrink-0 border border-gray-200 dark:border-zinc-700">
                 {payloadBadge}
               </span>
             )}

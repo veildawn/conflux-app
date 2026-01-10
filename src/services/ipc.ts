@@ -227,20 +227,6 @@ export const ipc = {
   },
 
   /**
-   * 应用订阅配置
-   */
-  async applySubscription(
-    path: string,
-    subType: string
-  ): Promise<{
-    proxies_count: number;
-    proxy_groups_count: number;
-    rules_count: number;
-  }> {
-    return invoke('apply_subscription', { path, sub_type: subType });
-  },
-
-  /**
    * 获取配置文件中的规则
    */
   async getRules(): Promise<string[]> {
