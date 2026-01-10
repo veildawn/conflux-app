@@ -1,6 +1,6 @@
 [package]
 name = "conflux"
-version = "0.2.1"
+version = "0.2.3"
 description = "基于 Tauri 2 + MiHomo 的现代化代理管理桌面应用"
 authors = ["Conflux Team"]
 license = "MIT"
