@@ -413,17 +413,63 @@ impl SyncManager {
 
     /// 扫描远端文件
     ///
-    /// 通过 PROPFIND 递归列出远端所有文件，下载并计算 SHA256 hash。
-    /// 注意：不使用 ETag，因为 ETag 格式与本地 SHA256 hash 不兼容，无法比较。
+    /// 优化策略：
+    /// 1. 获取远端 sync_state.json，利用其中的 hash 信息
+    /// 2. 获取远端文件列表
+    /// 3. 对于在 sync_state 中存在且在文件列表中存在的文件，直接使用记录的 hash
+    /// 4. 对于只在文件列表中存在的（新文件），下载并计算 hash
     async fn scan_remote_files(&self) -> Result<HashMap<String, RemoteFileInfo>> {
         let client = self.create_client()?;
         let mut files = HashMap::new();
 
-        // 递归列出远端目录
+        // 1. 获取远端文件列表
         let entries = self
             .list_remote_files_recursive(&client, REMOTE_BASE_PATH)
             .await?;
         log::info!("远端目录列表: {} 个条目", entries.len());
+
+        // 2. 尝试下载远端 sync_state.json
+        let remote_state_path = format!("{}/{}", REMOTE_BASE_PATH, SYNC_STATE_FILE);
+        let (remote_sync_state, state_file_exists) = match client.download_file(&remote_state_path).await {
+            Ok(content) => {
+                match serde_json::from_slice::<SyncState>(&content) {
+                    Ok(state) => {
+                        log::debug!("成功加载远端同步状态，包含 {} 个文件", state.files.len());
+                        (Some(state), true)
+                    }
+                    Err(e) => {
+                        log::warn!("解析远端 sync_state.json 失败: {}", e);
+                        // 文件存在但解析失败，我们仍然将其标记为存在，以触发后续的安全检查
+                        (None, true)
+                    }
+                }
+            }
+            Err(e) => {
+                // 404 错误表示是新环境，这是正常情况
+                log::debug!("远端 sync_state.json 不存在或下载失败: {}", e);
+                (None, false)
+            }
+        };
+
+        // 安全检查：如果下载到了 sync_state.json（说明远端非空），但文件列表中没有它，
+        // 说明 WebDAV 列表解析失败（可能是 XML 格式兼容性问题）。
+        // 此时必须中止，否则会被误判为"远端文件被清空"，导致本地文件被错误删除。
+        if state_file_exists {
+            let state_file_full_path = format!("{}/{}", REMOTE_BASE_PATH, SYNC_STATE_FILE);
+            // 简单的路径匹配，忽略首尾斜杠差异
+            let has_state_in_list = entries.iter().any(|(p, _)| {
+                p.trim_matches('/') == state_file_full_path.trim_matches('/')
+            });
+
+            if !has_state_in_list {
+                return Err(anyhow!(
+                    "Critical Error: WebDAV listing failed (sync_state.json missing from list). Aborting to prevent data loss."
+                ));
+            }
+        }
+
+        // 构建远端状态查找表
+        let remote_state_map = remote_sync_state.map(|s| s.files);
 
         for (path, is_dir) in entries {
             if is_dir {
@@ -440,19 +486,35 @@ impl SyncManager {
                 continue;
             }
 
-            log::debug!("扫描远端文件: {}", relative_path);
+            // 检查是否在远端状态中有记录
+            let mut hash = None;
+            if let Some(ref state_map) = remote_state_map {
+                if let Some(file_state) = state_map.get(relative_path) {
+                    // 如果远端状态中有记录，直接使用
+                    // 注意：这里我们使用的是 file_state.local_hash
+                    // 因为 sync_state.json 记录的是上传者视角的 local_hash（即文件的真实 hash）
+                    // 字段名虽为 local_hash，但在远端文件中代表了该文件的内容 hash
+                    log::debug!("从远端状态中使用缓存 Hash: {}", relative_path);
+                    hash = Some(file_state.local_hash.clone());
+                }
+            }
 
-            // 下载文件内容并计算 SHA256 hash
-            // 这确保与本地 hash 使用相同的算法，可以正确比较
-            match client.download_file(&path).await {
-                Ok(content) => {
-                    let hash = Self::compute_hash(&content);
-                    files.insert(relative_path.to_string(), RemoteFileInfo { hash });
+            // 如果没有记录（新文件），或者为了保险起见，我们需要下载计算
+            if hash.is_none() {
+                log::debug!("下载新文件计算 Hash: {}", relative_path);
+                match client.download_file(&path).await {
+                    Ok(content) => {
+                        hash = Some(Self::compute_hash(&content));
+                    }
+                    Err(e) => {
+                        log::warn!("下载远端文件 {} 失败: {}", relative_path, e);
+                        continue;
+                    }
                 }
-                Err(e) => {
-                    log::warn!("下载远端文件 {} 失败: {}", relative_path, e);
-                    continue;
-                }
+            }
+
+            if let Some(h) = hash {
+                files.insert(relative_path.to_string(), RemoteFileInfo { hash: h });
             }
         }
 
