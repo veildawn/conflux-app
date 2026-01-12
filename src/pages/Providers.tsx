@@ -158,6 +158,95 @@ function ProxyProviderDialog({
   });
   const [submitting, setSubmitting] = useState(false);
 
+  // 生成简单的 UUID
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  };
+
+  // 从 URL 提取文件名并生成相对路径
+  const getPathFromUrl = (url: string, prefix: string, ext: string = 'yaml') => {
+    let filename = '';
+    try {
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+      filename = pathname.split('/').pop() || '';
+    } catch {
+      // URL 解析失败，尝试简单提取
+      const parts = url.split('/');
+      filename = parts.pop() || '';
+      if (filename.includes('?')) {
+        filename = '';
+      }
+    }
+    // 如果提取不到有效文件名，使用 UUID
+    if (!filename || filename === '') {
+      return `${prefix}/${generateUUID()}.${ext}`;
+    }
+    // 去掉原有后缀，使用我们的后缀
+    const baseName = filename.includes('.')
+      ? filename.substring(0, filename.lastIndexOf('.'))
+      : filename;
+    return `${prefix}/${baseName}.${ext}`;
+  };
+
+  // 当 URL 变化时自动生成 path
+  const handleUrlChange = (url: string) => {
+    const newPath = getPathFromUrl(url, './proxyset', 'yaml');
+    // 只在 path 为空或者是之前自动生成的路径时才更新
+    if (!formData.path || formData.path.startsWith('./proxyset/')) {
+      setFormData({ ...formData, url, path: newPath });
+    } else {
+      setFormData({ ...formData, url });
+    }
+  };
+
+  // 当类型变化时，如果切换到 http 且 path 不是相对路径，自动生成相对路径
+  const handleTypeChange = (type: string) => {
+    if (type === 'http') {
+      // 切换到 http 类型时，如果 path 不是相对路径，根据 URL 生成新路径
+      if (!formData.path.startsWith('./proxyset/')) {
+        const newPath = formData.url ? getPathFromUrl(formData.url, './proxyset', 'yaml') : '';
+        setFormData({ ...formData, type, path: newPath });
+      } else {
+        setFormData({ ...formData, type });
+      }
+    } else {
+      setFormData({ ...formData, type });
+    }
+  };
+
+  const handleBrowse = async () => {
+    try {
+      const selected = await openDialog({
+        title: '选择代理文件',
+        multiple: false,
+        filters: [
+          {
+            name: '代理文件',
+            extensions: ['yaml', 'yml', 'txt', 'list'],
+          },
+        ],
+      });
+
+      if (selected) {
+        // 如果文件路径在 proxyset 目录下，使用相对路径
+        const path = selected as string;
+        const proxysetMatch = path.match(/.*[/\\]proxyset[/\\](.+)/);
+        if (proxysetMatch) {
+          setFormData((prev) => ({ ...prev, path: `./proxyset/${proxysetMatch[1]}` }));
+        } else {
+          setFormData((prev) => ({ ...prev, path: path }));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to open proxy file dialog:', error);
+    }
+  };
+
   useEffect(() => {
     if (editData && editName) {
       setFormData({
@@ -186,6 +275,8 @@ function ProxyProviderDialog({
 
   const handleSubmit = async () => {
     if (!formData.name.trim()) return;
+    if (formData.type === 'http' && !formData.url.trim()) return;
+    if (formData.type === 'file' && !formData.path.trim()) return;
 
     setSubmitting(true);
     try {
@@ -224,10 +315,7 @@ function ProxyProviderDialog({
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">类型</label>
-            <Select
-              value={formData.type}
-              onValueChange={(v) => setFormData({ ...formData, type: v })}
-            >
+            <Select value={formData.type} onValueChange={(v) => handleTypeChange(v)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -237,14 +325,45 @@ function ProxyProviderDialog({
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">URL</label>
-            <Input
-              value={formData.url}
-              onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-              placeholder="https://example.com/proxies.yaml"
-            />
-          </div>
+          {formData.type === 'http' ? (
+            <>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">URL</label>
+                <Input
+                  value={formData.url}
+                  onChange={(e) => handleUrlChange(e.target.value)}
+                  placeholder="https://example.com/proxies.yaml"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">下载路径</label>
+                <Input
+                  value={formData.path}
+                  onChange={(e) => setFormData({ ...formData, path: e.target.value })}
+                  placeholder="./proxyset/proxies.yaml"
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-gray-500">
+                  下载的文件将保存到此路径（根据 URL 自动生成）
+                </p>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">文件路径</label>
+              <div className="flex gap-2">
+                <Input
+                  value={formData.path}
+                  onChange={(e) => setFormData({ ...formData, path: e.target.value })}
+                  placeholder="./proxyset/proxies.yaml"
+                  className="font-mono text-sm"
+                />
+                <Button variant="outline" className="shrink-0" onClick={handleBrowse}>
+                  浏览...
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <label className="text-sm font-medium">更新间隔 (秒)</label>
             <Input
@@ -297,7 +416,15 @@ function ProxyProviderDialog({
           <Button variant="outline" onClick={onClose} disabled={submitting}>
             取消
           </Button>
-          <Button onClick={handleSubmit} disabled={!formData.name.trim() || submitting}>
+          <Button
+            onClick={handleSubmit}
+            disabled={
+              !formData.name.trim() ||
+              (formData.type === 'http' && !formData.url.trim()) ||
+              (formData.type === 'file' && !formData.path.trim()) ||
+              submitting
+            }
+          >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : editName ? '保存' : '添加'}
           </Button>
         </DialogFooter>
@@ -330,6 +457,81 @@ function RuleProviderDialog({
   });
   const [submitting, setSubmitting] = useState(false);
 
+  // 生成简单的 UUID
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  };
+
+  // 从 URL 提取文件名并生成相对路径
+  const getPathFromUrl = (url: string, prefix: string, ext: string = 'yaml') => {
+    let filename = '';
+    try {
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+      filename = pathname.split('/').pop() || '';
+    } catch {
+      // URL 解析失败，尝试简单提取
+      const parts = url.split('/');
+      filename = parts.pop() || '';
+      if (filename.includes('?')) {
+        filename = '';
+      }
+    }
+    // 如果提取不到有效文件名，使用 UUID
+    if (!filename || filename === '') {
+      return `${prefix}/${generateUUID()}.${ext}`;
+    }
+    // 去掉原有后缀，使用我们的后缀
+    const baseName = filename.includes('.')
+      ? filename.substring(0, filename.lastIndexOf('.'))
+      : filename;
+    return `${prefix}/${baseName}.${ext}`;
+  };
+
+  // 当 URL 变化时自动生成 path
+  const handleUrlChange = (url: string) => {
+    // 根据 format 决定扩展名：yaml -> yaml, text -> txt
+    const ext = formData.format === 'text' ? 'txt' : 'yaml';
+    const newPath = getPathFromUrl(url, './ruleset', ext);
+    // 只在 path 为空或者是之前自动生成的路径时才更新
+    if (!formData.path || formData.path.startsWith('./ruleset/')) {
+      setFormData({ ...formData, url, path: newPath });
+    } else {
+      setFormData({ ...formData, url });
+    }
+  };
+
+  // 当格式变化时，如果有 URL 且 path 是自动生成的，更新扩展名
+  const handleFormatChange = (format: string) => {
+    if (formData.url && formData.path.startsWith('./ruleset/')) {
+      const ext = format === 'text' ? 'txt' : 'yaml';
+      const newPath = getPathFromUrl(formData.url, './ruleset', ext);
+      setFormData({ ...formData, format, path: newPath });
+    } else {
+      setFormData({ ...formData, format });
+    }
+  };
+
+  // 当类型变化时，如果切换到 http 且 path 不是相对路径，自动生成相对路径
+  const handleTypeChange = (type: string) => {
+    if (type === 'http') {
+      // 切换到 http 类型时，如果 path 不是相对路径，根据 URL 生成新路径
+      if (!formData.path.startsWith('./ruleset/')) {
+        const ext = formData.format === 'text' ? 'txt' : 'yaml';
+        const newPath = formData.url ? getPathFromUrl(formData.url, './ruleset', ext) : '';
+        setFormData({ ...formData, type, path: newPath });
+      } else {
+        setFormData({ ...formData, type });
+      }
+    } else {
+      setFormData({ ...formData, type });
+    }
+  };
+
   const handleBrowse = async () => {
     try {
       const selected = await openDialog({
@@ -344,7 +546,14 @@ function RuleProviderDialog({
       });
 
       if (selected) {
-        setFormData((prev) => ({ ...prev, path: selected as string }));
+        // 如果文件路径在 ruleset 目录下，使用相对路径
+        const path = selected as string;
+        const rulesetMatch = path.match(/.*[/\\]ruleset[/\\](.+)/);
+        if (rulesetMatch) {
+          setFormData((prev) => ({ ...prev, path: `./ruleset/${rulesetMatch[1]}` }));
+        } else {
+          setFormData((prev) => ({ ...prev, path: path }));
+        }
       }
     } catch (error) {
       console.error('Failed to open rule file dialog:', error);
@@ -387,7 +596,7 @@ function RuleProviderDialog({
         behavior: formData.behavior,
         format: formData.format || undefined,
         url: formData.type === 'http' ? formData.url || undefined : undefined,
-        path: formData.type === 'file' ? formData.path || undefined : undefined,
+        path: formData.path || undefined,
         interval: formData.interval,
       };
       await onSubmit(formData.name.trim(), provider, editName);
@@ -415,10 +624,7 @@ function RuleProviderDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">类型</label>
-              <Select
-                value={formData.type}
-                onValueChange={(v) => setFormData({ ...formData, type: v })}
-              >
+              <Select value={formData.type} onValueChange={(v) => handleTypeChange(v)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -447,10 +653,7 @@ function RuleProviderDialog({
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">格式</label>
-            <Select
-              value={formData.format}
-              onValueChange={(v) => setFormData({ ...formData, format: v })}
-            >
+            <Select value={formData.format} onValueChange={(v) => handleFormatChange(v)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -461,14 +664,28 @@ function RuleProviderDialog({
             </Select>
           </div>
           {formData.type === 'http' ? (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">URL</label>
-              <Input
-                value={formData.url}
-                onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                placeholder="https://example.com/rules.yaml"
-              />
-            </div>
+            <>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">URL</label>
+                <Input
+                  value={formData.url}
+                  onChange={(e) => handleUrlChange(e.target.value)}
+                  placeholder="https://example.com/rules.yaml"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">下载路径</label>
+                <Input
+                  value={formData.path}
+                  onChange={(e) => setFormData({ ...formData, path: e.target.value })}
+                  placeholder="./ruleset/rules.yaml"
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-gray-500">
+                  下载的文件将保存到此路径（根据 URL 自动生成）
+                </p>
+              </div>
+            </>
           ) : (
             <div className="space-y-2">
               <label className="text-sm font-medium">文件路径</label>
@@ -476,7 +693,7 @@ function RuleProviderDialog({
                 <Input
                   value={formData.path}
                   onChange={(e) => setFormData({ ...formData, path: e.target.value })}
-                  placeholder="/path/to/rules.yaml"
+                  placeholder="./ruleset/rules.yaml"
                   className="font-mono text-sm"
                 />
                 <Button variant="outline" className="shrink-0" onClick={handleBrowse}>

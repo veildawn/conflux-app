@@ -253,10 +253,13 @@ impl Workspace {
     }
 
     /// 生成运行时配置（不改变 active 状态）
+    ///
+    /// `use_jsdelivr`: 是否使用 JsDelivr 加速 GitHub 资源 URL，传入 None 则不转换
     pub fn generate_runtime_config(
         &self,
         id: &str,
         base_config: &MihomoConfig,
+        use_jsdelivr: Option<bool>,
     ) -> Result<MihomoConfig> {
         let (_metadata, mut config) = self.get_profile(id)?;
 
@@ -273,6 +276,30 @@ impl Workspace {
             }
         }
 
+        // 如果启用 JsDelivr，转换 provider URL
+        if use_jsdelivr == Some(true) {
+            // 转换 proxy_providers 的 URL
+            for (_name, provider) in config.proxy_providers.iter_mut() {
+                if let Some(url) = &provider.url {
+                    if crate::utils::is_github_resource_url(url) {
+                        let converted = crate::utils::convert_github_to_jsdelivr(url);
+                        log::debug!("JsDelivr: proxy-provider URL {} -> {}", url, converted);
+                        provider.url = Some(converted);
+                    }
+                }
+            }
+            // 转换 rule_providers 的 URL
+            for (_name, provider) in config.rule_providers.iter_mut() {
+                if let Some(url) = &provider.url {
+                    if crate::utils::is_github_resource_url(url) {
+                        let converted = crate::utils::convert_github_to_jsdelivr(url);
+                        log::debug!("JsDelivr: rule-provider URL {} -> {}", url, converted);
+                        provider.url = Some(converted);
+                    }
+                }
+            }
+        }
+
         // 合并配置
         let mut runtime_config = base_config.clone();
         runtime_config.proxies = config.proxies;
@@ -285,9 +312,16 @@ impl Workspace {
     }
 
     /// 激活 Profile（生成运行时配置）
-    pub fn activate_profile(&self, id: &str, base_config: &MihomoConfig) -> Result<MihomoConfig> {
+    ///
+    /// `use_jsdelivr`: 是否使用 JsDelivr 加速 GitHub 资源 URL，传入 None 则不转换
+    pub fn activate_profile(
+        &self,
+        id: &str,
+        base_config: &MihomoConfig,
+        use_jsdelivr: Option<bool>,
+    ) -> Result<MihomoConfig> {
         let metadata = self.get_metadata(id)?;
-        let runtime_config = self.generate_runtime_config(id, base_config)?;
+        let runtime_config = self.generate_runtime_config(id, base_config, use_jsdelivr)?;
 
         // 更新所有 Profile 的 active 状态
         self.set_active_profile(id)?;

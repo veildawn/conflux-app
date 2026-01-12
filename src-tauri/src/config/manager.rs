@@ -98,7 +98,18 @@ impl ConfigManager {
                     if let Some(path) = &provider.path {
                         let path_obj = std::path::Path::new(path);
                         // 检查路径是否不存在
-                        if !path_obj.exists() {
+                        // 支持相对路径，如果不是绝对路径，先尝试解析为绝对路径
+                        let check_path = if path_obj.is_relative() {
+                            if let Ok(data_dir) = crate::utils::get_app_data_dir() {
+                                data_dir.join(path_obj)
+                            } else {
+                                path_obj.to_path_buf()
+                            }
+                        } else {
+                            path_obj.to_path_buf()
+                        };
+
+                        if !check_path.exists() {
                             let is_linux_path =
                                 path.starts_with("/root") || path.starts_with("/home");
                             if is_linux_path {
@@ -150,6 +161,33 @@ impl ConfigManager {
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 自动修正代理提供者路径（支持相对路径）
+        if !config.proxy_providers.is_empty() {
+            for (_name, provider) in config.proxy_providers.iter_mut() {
+                if provider.provider_type == "file" {
+                    if let Some(path) = &provider.path {
+                        let path_obj = std::path::Path::new(path);
+                        // 检查路径是否不存在
+                        // 支持相对路径，如果不是绝对路径，先尝试解析为绝对路径
+                        let check_path = if path_obj.is_relative() {
+                            if let Ok(data_dir) = crate::utils::get_app_data_dir() {
+                                data_dir.join(path_obj)
+                            } else {
+                                path_obj.to_path_buf()
+                            }
+                        } else {
+                            path_obj.to_path_buf()
+                        };
+
+                        // 如果路径不存在，这里暂时不做特殊处理
+                        if !check_path.exists() {
+                            // no-op
                         }
                     }
                 }

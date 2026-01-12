@@ -573,6 +573,7 @@ dependencies = [
  "log",
  "nix",
  "once_cell",
+ "regex",
  "reqwest",
  "resvg",
  "serde",
