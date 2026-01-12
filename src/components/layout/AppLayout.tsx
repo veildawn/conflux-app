@@ -8,6 +8,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import { useProxyStore } from '@/stores/proxyStore';
 import { useAppStore } from '@/stores/appStore';
+import { useToast } from '@/hooks/useToast';
 import { DRAG_IGNORE_SELECTOR } from '@/utils/dragUtils';
 import logger from '@/utils/logger';
 import type { ProxyStatus } from '@/types/proxy';
@@ -24,7 +25,45 @@ export default function AppLayout() {
     }))
   );
   const { fetchSettings, checkRuleDatabaseUpdates } = useAppStore();
+  const { toast } = useToast();
   const initStarted = useRef(false);
+
+  useEffect(() => {
+    // 监听 Profile 重载完成事件（处理全局通知）
+    const unlisten = listen<{
+      profile_id: string;
+      success: boolean;
+      error?: string;
+      restarted?: boolean;
+      restart_reason?: string;
+    }>('profile-reload-complete', (event) => {
+      logger.log('AppLayout: Received profile-reload-complete event:', event.payload);
+      const { success, error, restarted, restart_reason } = event.payload;
+
+      if (success) {
+        // 显示成功提示，如果重启了核心则显示原因
+        if (restarted && restart_reason) {
+          toast({
+            title: '配置已应用（已重启核心）',
+            description: restart_reason,
+          });
+        } else {
+          toast({ title: '配置已应用' });
+        }
+      } else {
+        // 重载失败，显示错误
+        toast({
+          title: '配置重载失败',
+          description: error || '未知错误',
+          variant: 'destructive',
+        });
+      }
+    });
+
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [toast]);
 
   useEffect(() => {
     // 防止重复初始化

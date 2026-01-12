@@ -233,6 +233,51 @@ export default function SubscriptionPage() {
     };
   }, [loadProfiles]);
 
+  // 监听 Profile 重载完成事件（异步重载完成后触发）
+  useEffect(() => {
+    console.log('[Subscription] 注册 profile-reload-complete 事件监听');
+    const unlisten = listen<{
+      profile_id: string;
+      success: boolean;
+      error?: string;
+      restarted?: boolean;
+      restart_reason?: string;
+    }>('profile-reload-complete', async (event) => {
+      console.log('[Subscription] 收到 profile-reload-complete 事件:', event.payload);
+      const { profile_id, success, error } = event.payload;
+
+      if (success) {
+        // 重载成功，刷新代理组数据
+        fetchGroups();
+        // 更新 provider 统计
+        try {
+          const providers = await ipc.getProxyProviders();
+          if (providers.length > 0) {
+            const counts: Record<string, number> = {};
+            for (const provider of providers) {
+              counts[provider.name] = provider.proxies?.length || 0;
+            }
+            await ipc.updateProfileProviderStats(profile_id, counts);
+            loadProfiles();
+          }
+        } catch (e) {
+          console.error('Failed to update provider stats:', e);
+        }
+        // Toast 提示已移至全局 AppLayout 处理
+      } else {
+        // 重载失败
+        console.log('[Subscription] 配置重载失败:', error);
+      }
+
+      // 无论成功失败都清除加载状态
+      setApplyingId(null);
+    });
+
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, [fetchGroups, loadProfiles, toast]);
+
   const toWindowLabelSafe = (value: string) => {
     const encoded = encodeURIComponent(value);
     const sanitized = encoded.replace(/%/g, '_').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -350,14 +395,17 @@ export default function SubscriptionPage() {
   const handleActivate = async (id: string) => {
     setApplyingId(id);
     try {
+      // 调用激活（后端会异步执行重载）
       await ipc.activateProfile(id);
+      // 立即刷新 profile 列表以显示新的激活状态
       await loadProfiles();
-      if (status.running) {
-        await fetchGroups();
-        // 激活后更新提供者节点数量统计
-        await updateProviderStats(id);
+      // 显示正在应用的提示（重载完成后会通过事件通知）
+      toast({ title: '配置已激活', description: '正在应用...' });
+      // 注意：不在这里清除 applyingId，等待 profile-reload-complete 事件
+      // 如果 MiHomo 未运行，立即清除状态
+      if (!status.running) {
+        setApplyingId(null);
       }
-      toast({ title: '配置已激活' });
     } catch (error) {
       console.error('Failed to activate profile:', error);
       toast({
@@ -365,27 +413,7 @@ export default function SubscriptionPage() {
         description: String(error),
         variant: 'destructive',
       });
-    } finally {
       setApplyingId(null);
-    }
-  };
-
-  // 更新提供者节点数量统计
-  const updateProviderStats = async (profileId: string) => {
-    try {
-      const providers = await ipc.getProxyProviders();
-      if (providers.length > 0) {
-        const counts: Record<string, number> = {};
-        for (const provider of providers) {
-          counts[provider.name] = provider.proxies?.length || 0;
-        }
-        await ipc.updateProfileProviderStats(profileId, counts);
-        // 重新加载配置列表以显示更新后的统计
-        await loadProfiles();
-      }
-    } catch (error) {
-      console.error('Failed to update provider stats:', error);
-      // 不影响主流程，只记录错误
     }
   };
 

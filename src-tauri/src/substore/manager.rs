@@ -207,7 +207,7 @@ impl SubStoreManager {
 
     /// 清理残留的 Sub-Store 进程
     /// 在启动新进程前调用，确保没有孤儿进程（例如热重载后遗留的进程）
-    pub fn cleanup_stale_processes() {
+    pub fn cleanup_stale_processes(port: u16) {
         log::info!("Cleaning up stale Sub-Store processes...");
 
         #[cfg(unix)]
@@ -225,7 +225,29 @@ impl SubStoreManager {
             use std::os::windows::process::CommandExt;
             use std::process::Command;
             const CREATE_NO_WINDOW: u32 = 0x08000000;
-            // Windows 上使用 wmic 精确匹配命令行中包含 run-substore.js 的 node 进程
+
+            // 1. 尝试通过端口杀死进程 (更可靠)
+            log::info!("Attempting to kill process on port {}", port);
+            let cmd = format!("Get-NetTCPConnection -LocalPort {} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess", port);
+            if let Ok(output) = Command::new("powershell")
+                .args(["-NoProfile", "-Command", &cmd])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output()
+            {
+                if let Ok(stdout) = String::from_utf8(output.stdout) {
+                    for line in stdout.lines() {
+                        if let Ok(pid) = line.trim().parse::<u32>() {
+                            log::info!("Killing process on port {} with PID: {}", port, pid);
+                            let _ = Command::new("taskkill")
+                                .args(["/F", "/PID", &pid.to_string()])
+                                .creation_flags(CREATE_NO_WINDOW)
+                                .output();
+                        }
+                    }
+                }
+            }
+
+            // 2. Windows 上使用 wmic 精确匹配命令行中包含 run-substore.js 的 node 进程 (备用)
             // 先查找 PID
             if let Ok(output) = Command::new("wmic")
                 .args([
@@ -265,8 +287,20 @@ impl SubStoreManager {
             return Ok(());
         }
 
+        // 检查端口是否已经被占用
+        // 如果已经被占用，说明有一个 Sub-Store 实例正在运行（可能是上一次调试留下的，或者是外部启动的）
+        // 这种情况下，直接复用该实例，避免 EADDRINUSE 错误
+        if self.check_port_accessible().await {
+            log::info!(
+                "Port {} is already in use. Reusing existing Sub-Store instance.",
+                self.api_port
+            );
+            self.app_handle = Some(app_handle);
+            return Ok(());
+        }
+
         // 在启动新进程前，清理可能存在的孤儿进程（例如热重载后遗留的）
-        Self::cleanup_stale_processes();
+        Self::cleanup_stale_processes(self.api_port);
 
         log::info!("Starting Sub-Store...");
 

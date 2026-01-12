@@ -150,11 +150,6 @@ impl ProfileMetadata {
         self.provider_proxy_counts = counts;
         self.updated_at = chrono::Local::now().to_rfc3339();
     }
-
-    /// 获取提供者节点总数
-    pub fn provider_proxy_total(&self) -> u32 {
-        self.provider_proxy_counts.values().sum()
-    }
 }
 
 /// Profile 配置内容（与 MiHomo 兼容的格式）
