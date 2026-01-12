@@ -1,6 +1,6 @@
 # Homebrew Tap for Conflux
 
-这是 [Conflux](https://github.com/Ashbaer/conflux-app) 的 Homebrew Tap 仓库。
+这是 [Conflux](https://github.com/veildawn/conflux-app) 的 Homebrew Tap 仓库。
 
 ## 安装
 
@@ -37,4 +37,4 @@ Conflux（汇流）是一个基于 MiHomo 核心的现代化代理管理桌面�
 - 🛡️ TUN 模式支持
 - 🌐 Sub-Store 集成
 
-更多信息请访问：https://github.com/Ashbaer/conflux-app
+更多信息请访问：https://github.com/veildawn/conflux-app

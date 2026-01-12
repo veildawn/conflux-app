@@ -31,7 +31,7 @@ export function useUpdateChecker(appVersion: string) {
     setUpdateStatus('checking');
     try {
       const response = await fetch(
-        'https://api.github.com/repos/Ashbaer/conflux-app/releases/latest',
+        'https://api.github.com/repos/veildawn/conflux-app/releases/latest',
         {
           headers: { Accept: 'application/vnd.github+json' },
         }
@@ -51,7 +51,9 @@ export function useUpdateChecker(appVersion: string) {
       const data = await response.json();
       const tag = String(data.tag_name || data.name || '').trim();
       const latest = normalizeVersion(tag);
-      const releaseUrl = String(data.html_url || 'https://github.com/Ashbaer/conflux-app/releases');
+      const releaseUrl = String(
+        data.html_url || 'https://github.com/veildawn/conflux-app/releases'
+      );
       setLatestVersion(latest || tag);
       setUpdateUrl(releaseUrl);
 

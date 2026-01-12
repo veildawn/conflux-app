@@ -368,8 +368,6 @@ export interface WebDavConfig {
   username: string;
   /** 密码 */
   password: string;
-  /** 配置变更后自动上传 */
-  autoUpload: boolean;
   /** 上次同步时间 */
   lastSyncTime?: string;
 }

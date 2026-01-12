@@ -55,29 +55,6 @@ pub struct MihomoConfig {
     pub geox_url: Option<GeoxUrl>,
 
     #[serde(default)]
-    pub proxies: Vec<ProxyConfig>,
-
-    #[serde(rename = "proxy-groups", default)]
-    pub proxy_groups: Vec<ProxyGroupConfig>,
-
-    #[serde(
-        rename = "proxy-providers",
-        default,
-        skip_serializing_if = "std::collections::HashMap::is_empty"
-    )]
-    pub proxy_providers: std::collections::HashMap<String, ProxyProvider>,
-
-    #[serde(
-        rename = "rule-providers",
-        default,
-        skip_serializing_if = "std::collections::HashMap::is_empty"
-    )]
-    pub rule_providers: std::collections::HashMap<String, RuleProvider>,
-
-    #[serde(default)]
-    pub rules: Vec<String>,
-
-    #[serde(default)]
     pub ipv6: bool,
 
     #[serde(rename = "tcp-concurrent", default)]
@@ -92,6 +69,31 @@ pub struct MihomoConfig {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dns: Option<DnsConfig>,
+
+    #[serde(default, alias = "Proxy")]
+    pub proxies: Vec<ProxyConfig>,
+
+    #[serde(rename = "proxy-groups", default, alias = "Proxy Group")]
+    pub proxy_groups: Vec<ProxyGroupConfig>,
+
+    #[serde(
+        rename = "proxy-providers",
+        default,
+        alias = "proxy-provider",
+        skip_serializing_if = "std::collections::HashMap::is_empty"
+    )]
+    pub proxy_providers: std::collections::HashMap<String, ProxyProvider>,
+
+    #[serde(
+        rename = "rule-providers",
+        default,
+        alias = "rule-provider",
+        skip_serializing_if = "std::collections::HashMap::is_empty"
+    )]
+    pub rule_providers: std::collections::HashMap<String, RuleProvider>,
+
+    #[serde(default, alias = "Rule")]
+    pub rules: Vec<String>,
 }
 
 /// Sniffer 配置（域名嗅探）
@@ -704,8 +706,8 @@ pub struct WebDavConfig {
     #[serde(default)]
     pub password: String,
 
-    /// 配置变更后自动上传
-    #[serde(default)]
+    /// 是否开启自动同步（在配置变更时）
+    #[serde(default, rename = "autoUpload")]
     pub auto_upload: bool,
 
     /// 上次同步时间

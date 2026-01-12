@@ -132,23 +132,31 @@ impl ProfileMetadata {
 #[serde(rename_all = "kebab-case")]
 pub struct ProfileConfig {
     /// 代理节点列表
-    #[serde(default)]
+    #[serde(default, alias = "Proxy")]
     pub proxies: Vec<ProxyConfig>,
 
     /// 代理组列表
-    #[serde(default)]
+    #[serde(default, alias = "Proxy Group")]
     pub proxy_groups: Vec<ProxyGroupConfig>,
 
     /// 代理提供者
-    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    #[serde(
+        default,
+        alias = "proxy-provider",
+        skip_serializing_if = "HashMap::is_empty"
+    )]
     pub proxy_providers: HashMap<String, ProxyProvider>,
 
     /// 规则提供者
-    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    #[serde(
+        default,
+        alias = "rule-provider",
+        skip_serializing_if = "HashMap::is_empty"
+    )]
     pub rule_providers: HashMap<String, RuleProvider>,
 
     /// 规则列表
-    #[serde(default)]
+    #[serde(default, alias = "Rule")]
     pub rules: Vec<String>,
 }
 

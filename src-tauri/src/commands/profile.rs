@@ -1,7 +1,6 @@
 use std::path::Path;
 use tauri::State;
 
-use crate::commands::reload::trigger_auto_upload;
 use crate::commands::AppState;
 use crate::config::Workspace;
 use crate::models::{ProfileConfig, ProfileMetadata, ProxyConfig, ProxyProvider, RuleProvider};
@@ -817,8 +816,6 @@ async fn on_profile_changed(
         }
     }
 
-    // 触发自动同步
-    trigger_auto_upload().await;
     Ok(())
 }
 

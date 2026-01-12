@@ -155,7 +155,6 @@ export default function Sync() {
     url: '',
     username: '',
     password: '',
-    autoUpload: false,
     lastSyncTime: undefined,
   });
 
@@ -616,33 +615,6 @@ export default function Sync() {
                 )}
               </Button>
             </div>
-          </Card>
-        </div>
-
-        {/* 同步设置卡片 */}
-        <div>
-          <h2 className="text-xs font-bold text-gray-400 dark:text-gray-500 px-1 mb-3 uppercase tracking-wider">
-            同步设置
-          </h2>
-          <Card>
-            <SettingItem
-              icon={CloudUpload}
-              iconBgColor="bg-green-50 dark:bg-green-500/10"
-              iconColor="text-green-500"
-              title="自动上传"
-              description="配置变更后自动上传到云端"
-              action={
-                <Switch
-                  checked={config.autoUpload}
-                  onCheckedChange={(checked) => {
-                    const newConfig = { ...config, autoUpload: checked };
-                    saveConfig(newConfig);
-                  }}
-                  disabled={!config.enabled}
-                  className="scale-90"
-                />
-              }
-            />
           </Card>
         </div>
 

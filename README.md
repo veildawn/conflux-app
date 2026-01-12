@@ -1,9 +1,9 @@
 # Conflux 汇流
 
-[![CI](https://github.com/Ashbaer/conflux-app/actions/workflows/ci.yml/badge.svg)](https://github.com/Ashbaer/conflux-app/actions/workflows/ci.yml)
-[![Release](https://github.com/Ashbaer/conflux-app/actions/workflows/release.yml/badge.svg)](https://github.com/Ashbaer/conflux-app/actions/workflows/release.yml)
-[![GitHub release](https://img.shields.io/github/v/release/Ashbaer/conflux-app?include_prereleases)](https://github.com/Ashbaer/conflux-app/releases)
-[![License](https://img.shields.io/github/license/Ashbaer/conflux-app)](LICENSE)
+[![CI](https://github.com/veildawn/conflux-app/actions/workflows/ci.yml/badge.svg)](https://github.com/veildawn/conflux-app/actions/workflows/ci.yml)
+[![Release](https://github.com/veildawn/conflux-app/actions/workflows/release.yml/badge.svg)](https://github.com/veildawn/conflux-app/actions/workflows/release.yml)
+[![GitHub release](https://img.shields.io/github/v/release/veildawn/conflux-app?include_prereleases)](https://github.com/veildawn/conflux-app/releases)
+[![License](https://img.shields.io/github/license/veildawn/conflux-app)](LICENSE)
 
 基于 Tauri 2 + MiHomo 的现代化跨平台代理管理桌面应用。
 
@@ -39,13 +39,13 @@
 ### 通过 Homebrew 安装 (macOS)
 
 ```bash
-brew tap Ashbaer/conflux
+brew tap veildawn/conflux
 brew install --cask conflux
 ```
 
 或者直接下载安装包：
 
-前往 [Releases](https://github.com/Ashbaer/conflux-app/releases) 页面下载对应平台的安装包：
+前往 [Releases](https://github.com/veildawn/conflux-app/releases) 页面下载对应平台的安装包：
 
 | 平台    | 架构                        | 文件格式             |
 | ------- | --------------------------- | -------------------- |
@@ -85,7 +85,7 @@ brew install --cask conflux
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/Ashbaer/conflux-app.git
+git clone https://github.com/veildawn/conflux-app.git
 cd conflux-app
 ```
 
