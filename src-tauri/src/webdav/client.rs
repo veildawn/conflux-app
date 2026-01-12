@@ -2,6 +2,11 @@ use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use reqwest::{header, Client, StatusCode};
 use serde::{Deserialize, Serialize};
+use tokio::time::{sleep, Duration};
+
+const RETRY_MAX_ATTEMPTS: usize = 5;
+const RETRY_BASE_DELAY_MS: u64 = 250;
+const RETRY_MAX_DELAY_MS: u64 = 4000;
 
 /// WebDAV 文件信息
 #[allow(dead_code)]
@@ -132,50 +137,108 @@ impl WebDavClient {
 
         let url = format!("{}{}", self.base_url, remote_path);
         log::debug!("PUT {}", url);
+        for attempt in 1..=RETRY_MAX_ATTEMPTS {
+            let response = self
+                .client
+                .put(&url)
+                .header(header::AUTHORIZATION, &self.auth_header)
+                .header(header::CONTENT_TYPE, "application/octet-stream")
+                .body(content.to_vec())
+                .send()
+                .await;
 
-        let response = self
-            .client
-            .put(&url)
-            .header(header::AUTHORIZATION, &self.auth_header)
-            .header(header::CONTENT_TYPE, "application/octet-stream")
-            .body(content.to_vec())
-            .send()
-            .await?;
+            match response {
+                Ok(resp) => {
+                    let status = resp.status();
+                    log::debug!(
+                        "上传响应: HTTP {} (attempt {}/{})",
+                        status,
+                        attempt,
+                        RETRY_MAX_ATTEMPTS
+                    );
 
-        let status = response.status();
-        log::debug!("上传响应: HTTP {}", status);
-
-        match status {
-            StatusCode::OK | StatusCode::CREATED | StatusCode::NO_CONTENT => {
-                log::debug!("上传成功: {}", remote_path);
-                Ok(())
-            }
-            StatusCode::UNAUTHORIZED => Err(anyhow!("认证失败")),
-            _ => {
-                let body = response.text().await.unwrap_or_default();
-                log::error!("上传失败: HTTP {} - {}", status, body);
-                Err(anyhow!("上传失败：HTTP {}", status))
+                    match status {
+                        StatusCode::OK | StatusCode::CREATED | StatusCode::NO_CONTENT => {
+                            log::debug!("上传成功: {}", remote_path);
+                            return Ok(());
+                        }
+                        StatusCode::UNAUTHORIZED => return Err(anyhow!("认证失败")),
+                        _ if should_retry_status(status) && attempt < RETRY_MAX_ATTEMPTS => {
+                            let _ = resp.text().await; // 尽量读掉 body，便于连接复用
+                            sleep(retry_delay(attempt)).await;
+                            continue;
+                        }
+                        _ => {
+                            let body = resp.text().await.unwrap_or_default();
+                            log::error!("上传失败: HTTP {} - {}", status, body);
+                            return Err(anyhow!("上传失败：HTTP {}", status));
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::warn!(
+                        "上传请求失败: {} (attempt {}/{})",
+                        e,
+                        attempt,
+                        RETRY_MAX_ATTEMPTS
+                    );
+                    if attempt < RETRY_MAX_ATTEMPTS && is_retryable_reqwest_error(&e) {
+                        sleep(retry_delay(attempt)).await;
+                        continue;
+                    }
+                    return Err(anyhow!("上传失败：{}", e));
+                }
             }
         }
+
+        Err(anyhow!("上传失败：超过最大重试次数"))
     }
 
     /// 下载文件
     pub async fn download_file(&self, remote_path: &str) -> Result<Vec<u8>> {
         let url = format!("{}{}", self.base_url, remote_path);
+        for attempt in 1..=RETRY_MAX_ATTEMPTS {
+            let response = self
+                .client
+                .get(&url)
+                .header(header::AUTHORIZATION, &self.auth_header)
+                .send()
+                .await;
 
-        let response = self
-            .client
-            .get(&url)
-            .header(header::AUTHORIZATION, &self.auth_header)
-            .send()
-            .await?;
-
-        match response.status() {
-            StatusCode::OK => Ok(response.bytes().await?.to_vec()),
-            StatusCode::NOT_FOUND => Err(anyhow!("文件不存在：{}", remote_path)),
-            StatusCode::UNAUTHORIZED => Err(anyhow!("认证失败")),
-            status => Err(anyhow!("下载失败：HTTP {}", status)),
+            match response {
+                Ok(resp) => {
+                    let status = resp.status();
+                    match status {
+                        StatusCode::OK => return Ok(resp.bytes().await?.to_vec()),
+                        StatusCode::NOT_FOUND => {
+                            return Err(anyhow!("文件不存在：{}", remote_path))
+                        }
+                        StatusCode::UNAUTHORIZED => return Err(anyhow!("认证失败")),
+                        _ if should_retry_status(status) && attempt < RETRY_MAX_ATTEMPTS => {
+                            let _ = resp.text().await;
+                            sleep(retry_delay(attempt)).await;
+                            continue;
+                        }
+                        _ => return Err(anyhow!("下载失败：HTTP {}", status)),
+                    }
+                }
+                Err(e) => {
+                    log::warn!(
+                        "下载请求失败: {} (attempt {}/{})",
+                        e,
+                        attempt,
+                        RETRY_MAX_ATTEMPTS
+                    );
+                    if attempt < RETRY_MAX_ATTEMPTS && is_retryable_reqwest_error(&e) {
+                        sleep(retry_delay(attempt)).await;
+                        continue;
+                    }
+                    return Err(anyhow!("下载失败：{}", e));
+                }
+            }
         }
+
+        Err(anyhow!("下载失败：超过最大重试次数"))
     }
 
     /// 获取文件信息（Last-Modified, ETag 等）
@@ -411,6 +474,31 @@ impl WebDavClient {
 
         None
     }
+}
+
+fn should_retry_status(status: StatusCode) -> bool {
+    matches!(
+        status,
+        StatusCode::TOO_MANY_REQUESTS
+            | StatusCode::INTERNAL_SERVER_ERROR
+            | StatusCode::BAD_GATEWAY
+            | StatusCode::SERVICE_UNAVAILABLE
+            | StatusCode::GATEWAY_TIMEOUT
+    )
+}
+
+fn retry_delay(attempt: usize) -> Duration {
+    // attempt 从 1 开始：250ms, 500ms, 1000ms, 2000ms, 4000ms
+    let pow = (attempt - 1).min(8) as u32;
+    let mut ms = RETRY_BASE_DELAY_MS.saturating_mul(2u64.saturating_pow(pow));
+    if ms > RETRY_MAX_DELAY_MS {
+        ms = RETRY_MAX_DELAY_MS;
+    }
+    Duration::from_millis(ms)
+}
+
+fn is_retryable_reqwest_error(e: &reqwest::Error) -> bool {
+    e.is_timeout() || e.is_connect() || e.is_request() || e.is_body() || e.is_decode()
 }
 
 #[cfg(test)]
