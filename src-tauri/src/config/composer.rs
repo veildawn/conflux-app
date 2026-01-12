@@ -389,6 +389,9 @@ impl Composer {
         config: &mut ProfileConfig,
         ruleset_dir: &std::path::Path,
     ) -> Result<()> {
+        // 确保 ruleset 目录存在
+        std::fs::create_dir_all(ruleset_dir).ok();
+
         for (name, provider) in config.rule_providers.iter_mut() {
             // 对于 http 类型，将路径指向本地 ruleset 目录
             if provider.provider_type == "http" {
@@ -409,6 +412,10 @@ impl Composer {
                 if let Some(path) = &provider.path {
                     let path_obj = std::path::Path::new(path);
                     if !path_obj.exists() {
+                        // 检查是否是其他系统的路径（如 Linux 的 /root 或 /home）
+                        let is_foreign_path =
+                            path.starts_with("/root") || path.starts_with("/home");
+
                         // 如果有 URL，转换为 http 类型
                         if provider.url.is_some() {
                             provider.provider_type = "http".to_string();
@@ -422,6 +429,37 @@ impl Composer {
                             provider.path = Some(new_path.to_string_lossy().to_string());
 
                             log::info!("Converted rule provider '{}' from file to http type", name);
+                        } else if is_foreign_path {
+                            // 没有 URL 但路径是其他系统的路径，创建占位文件
+                            let file_name = path_obj
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| format!("{}.yaml", name));
+
+                            let new_path = ruleset_dir.join(&file_name);
+
+                            // 创建占位文件（空的规则集）
+                            let placeholder_content = match provider.behavior.as_str() {
+                                "domain" => "payload:\n  - '+.example.com'",
+                                "ipcidr" => "payload:\n  - '127.0.0.1/32'",
+                                _ => "payload:\n  - DOMAIN,example.com",
+                            };
+
+                            if std::fs::write(&new_path, placeholder_content).is_ok() {
+                                provider.path = Some(new_path.to_string_lossy().to_string());
+                                log::info!(
+                                    "Created placeholder file for rule provider '{}': {}",
+                                    name,
+                                    new_path.display()
+                                );
+                            } else {
+                                log::warn!(
+                                    "Failed to create placeholder for rule provider '{}': {}",
+                                    name,
+                                    new_path.display()
+                                );
+                            }
                         } else {
                             log::warn!(
                                 "Rule provider '{}' has invalid path and no URL: {}",
