@@ -608,6 +608,18 @@ export const ipc = {
     return invoke('export_profile_config', { id, targetPath });
   },
 
+  /**
+   * 更新 Profile 的提供者节点数量统计
+   * @param id Profile ID
+   * @param counts 每个提供者的节点数量映射（提供者名称 -> 节点数量）
+   */
+  async updateProfileProviderStats(
+    id: string,
+    counts: Record<string, number>
+  ): Promise<ProfileMetadata> {
+    return invoke('update_profile_provider_stats', { id, counts });
+  },
+
   // ============= Profile 代理 CRUD =============
 
   /**

@@ -769,6 +769,11 @@ export default function Providers() {
   // 正在更新的 Provider 名称
   const [updatingProviders, setUpdatingProviders] = useState<Set<string>>(new Set());
 
+  // 提供者节点数量映射（从 MiHomo API 获取）
+  const [providerProxyCounts, setProviderProxyCounts] = useState<Record<string, number>>({});
+  // 规则源规则数量映射（从 MiHomo API 获取）
+  const [ruleProviderCounts, setRuleProviderCounts] = useState<Record<string, number>>({});
+
   // 加载活跃 Profile 配置
   const loadActiveProfile = useCallback(async () => {
     setLoading(true);
@@ -794,6 +799,42 @@ export default function Providers() {
     loadActiveProfile();
   }, [loadActiveProfile]);
 
+  // 加载提供者节点数量（从 MiHomo API 获取实时数据）
+  const loadProviderProxyCounts = useCallback(async () => {
+    try {
+      const providers = await ipc.getProxyProviders();
+      const counts: Record<string, number> = {};
+      for (const provider of providers) {
+        counts[provider.name] = provider.proxies?.length || 0;
+      }
+      setProviderProxyCounts(counts);
+    } catch (error) {
+      console.error('Failed to load provider proxy counts:', error);
+    }
+  }, []);
+
+  // 加载规则源规则数量（从 MiHomo API 获取实时数据）
+  const loadRuleProviderCounts = useCallback(async () => {
+    try {
+      const providers = await ipc.getRuleProviders();
+      const counts: Record<string, number> = {};
+      for (const provider of providers) {
+        counts[provider.name] = provider.ruleCount || 0;
+      }
+      setRuleProviderCounts(counts);
+    } catch (error) {
+      console.error('Failed to load rule provider counts:', error);
+    }
+  }, []);
+
+  // 页面加载时获取提供者数量
+  useEffect(() => {
+    if (activeProfileId && !loading) {
+      loadProviderProxyCounts();
+      loadRuleProviderCounts();
+    }
+  }, [activeProfileId, loading, loadProviderProxyCounts, loadRuleProviderCounts]);
+
   // Proxy Provider 数据
   const proxyProviders = profileConfig?.['proxy-providers'] || {};
   const proxyProviderList = Object.entries(proxyProviders);
@@ -801,6 +842,22 @@ export default function Providers() {
   // Rule Provider 数据
   const ruleProviders = profileConfig?.['rule-providers'] || {};
   const ruleProviderList = Object.entries(ruleProviders);
+
+  // 更新提供者节点数量统计
+  const updateProviderStats = async (profileId: string) => {
+    try {
+      const providers = await ipc.getProxyProviders();
+      if (providers.length > 0) {
+        const counts: Record<string, number> = {};
+        for (const provider of providers) {
+          counts[provider.name] = provider.proxies?.length || 0;
+        }
+        await ipc.updateProfileProviderStats(profileId, counts);
+      }
+    } catch (error) {
+      console.error('Failed to update provider stats:', error);
+    }
+  };
 
   // CRUD 操作
   const handleAddProxyProvider = async (
@@ -812,6 +869,8 @@ export default function Providers() {
     try {
       await ipc.addProxyProviderToProfile(activeProfileId, name, provider);
       await loadActiveProfile();
+      // 添加后更新提供者统计（需要等待 MiHomo 加载提供者）
+      setTimeout(() => updateProviderStats(activeProfileId), 2000);
       toast({ title: '添加成功', description: `代理源 "${name}" 已添加` });
     } catch (error) {
       toast({ title: '添加失败', description: String(error), variant: 'destructive' });
@@ -966,6 +1025,11 @@ export default function Providers() {
     setUpdatingProviders((prev) => new Set(prev).add(name));
     try {
       await ipc.updateProxyProvider(name);
+      // 刷新成功后更新配置的提供者统计和本地显示
+      if (activeProfileId) {
+        await updateProviderStats(activeProfileId);
+        await loadProviderProxyCounts();
+      }
       toast({ title: '更新成功', description: `代理源 "${name}" 已更新` });
     } catch (error) {
       toast({ title: '更新失败', description: String(error), variant: 'destructive' });
@@ -983,6 +1047,8 @@ export default function Providers() {
     setUpdatingProviders((prev) => new Set(prev).add(name));
     try {
       await ipc.updateRuleProvider(name);
+      // 刷新成功后更新规则数量显示
+      await loadRuleProviderCounts();
       toast({ title: '更新成功', description: `规则源 "${name}" 已更新` });
     } catch (error) {
       toast({ title: '更新失败', description: String(error), variant: 'destructive' });
@@ -1137,6 +1203,11 @@ export default function Providers() {
                     >
                       {provider.type}
                     </span>
+                    {providerProxyCounts[name] !== undefined && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                        {providerProxyCounts[name]} 节点
+                      </span>
+                    )}
                     {provider['health-check']?.enable && (
                       <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
                         健康检查
@@ -1215,7 +1286,7 @@ export default function Providers() {
               <div className="space-y-3">
                 <div>
                   <h3 className="font-bold text-lg text-gray-900 dark:text-white">{name}</h3>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span
                       className={cn(
                         'text-[10px] font-bold px-1.5 py-0.5 rounded uppercase',
@@ -1232,6 +1303,11 @@ export default function Providers() {
                     >
                       {provider.type}
                     </span>
+                    {ruleProviderCounts[name] !== undefined && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
+                        {ruleProviderCounts[name]} 规则
+                      </span>
+                    )}
                     {provider.format && (
                       <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 dark:bg-zinc-800 text-gray-500">
                         {provider.format}
