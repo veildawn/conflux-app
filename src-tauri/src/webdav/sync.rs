@@ -1,9 +1,10 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::io::{Cursor, Read, Write};
+use std::path::{Component, Path, PathBuf};
 
 use super::client::WebDavClient;
 use crate::models::{AppSettings, WebDavConfig};
@@ -12,23 +13,32 @@ use crate::utils::{get_app_config_dir, get_app_data_dir};
 /// 远端目录前缀
 const REMOTE_BASE_PATH: &str = "/conflux";
 
-/// 同步状态文件名
+/// 本地同步状态文件名（继续使用，以保持前端展示/调用不变）
 const SYNC_STATE_FILE: &str = "sync_state.json";
 
+/// 远端快照文件名
+const SNAPSHOT_FILE: &str = "snapshot.zip";
+
+/// 远端快照元信息文件名
+const SNAPSHOT_META_FILE: &str = "snapshot.json";
+
+/// 本地同步状态里用于存储“快照”的 key
+const SNAPSHOT_STATE_KEY: &str = "__snapshot__";
+
 // ============================================================================
-// 数据结构定义
+// 数据结构定义（保持与前端 types/config.ts 一致）
 // ============================================================================
 
-/// 文件同步状态（支持三方比较）
+/// 文件同步状态（用于前端展示；在新逻辑中用来记录快照 hash）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileSyncState {
     /// 文件路径（相对路径）
     pub path: String,
-    /// 上次同步时的本地文件 hash
+    /// 上次同步时的本地内容 hash
     #[serde(alias = "hash")]
     pub local_hash: String,
-    /// 上次同步时的远端文件 hash（用于检测远端变化）
+    /// 上次同步时的远端内容 hash
     #[serde(default)]
     pub remote_hash: String,
     /// 上次同步时间
@@ -36,82 +46,36 @@ pub struct FileSyncState {
     pub synced_at: String,
 }
 
-/// 全局同步状态
+/// 全局同步状态（本地）
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncState {
     /// 上次同步时间
     #[serde(alias = "last_sync_time")]
     pub last_sync_time: Option<String>,
-    /// 各文件的同步状态
+    /// 同步状态（新逻辑中只会保存一条快照记录）
     pub files: HashMap<String, FileSyncState>,
 }
 
-/// 文件变更类型
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FileChangeType {
-    /// 无变化
-    Unchanged,
-    /// 本地修改
-    LocalModified,
-    /// 远端修改
-    RemoteModified,
-    /// 本地新增
-    LocalAdded,
-    /// 远端新增
-    RemoteAdded,
-    /// 本地删除
-    LocalDeleted,
-    /// 远端删除
-    RemoteDeleted,
-    /// 双方都修改（冲突）
-    BothModified,
-    /// 一方删除一方修改（冲突）
-    DeleteModifyConflict,
-}
-
-/// 单个冲突项
+/// 单个冲突项（新逻辑中用“快照冲突”占位）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConflictItem {
-    /// 文件路径
     pub path: String,
-    /// 冲突类型描述
     pub conflict_type: String,
-    /// 本地状态
     pub local_status: String,
-    /// 远端状态
     pub remote_status: String,
 }
 
-/// 冲突信息（保持向后兼容）
+/// 冲突信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConflictInfo {
-    /// 本地修改时间
     pub local_modified: String,
-    /// 远端修改时间
     pub remote_modified: String,
-    /// 冲突的文件列表（简单列表，向后兼容）
     pub conflicting_files: Vec<String>,
-    /// 详细的冲突项列表
     #[serde(default)]
     pub conflict_items: Vec<ConflictItem>,
-}
-
-/// 变更集
-#[derive(Debug, Clone, Default)]
-pub struct ChangeSet {
-    /// 需要上传的文件
-    pub to_upload: Vec<String>,
-    /// 需要下载的文件
-    pub to_download: Vec<String>,
-    /// 需要删除的本地文件
-    pub to_delete_local: Vec<String>,
-    /// 需要删除的远端文件
-    pub to_delete_remote: Vec<String>,
-    /// 冲突项
-    pub conflicts: Vec<ConflictItem>,
 }
 
 /// 同步结果
@@ -130,35 +94,36 @@ pub struct SyncResult {
     pub conflict_info: Option<ConflictInfo>,
 }
 
-/// 本地文件信息
+/// 本地文件信息（用于构建快照）
 #[derive(Debug, Clone)]
 struct LocalFileInfo {
-    pub full_path: PathBuf,
-    pub hash: String,
+    full_path: PathBuf,
+    hash: String,
 }
 
-/// 远端文件信息
-#[derive(Debug, Clone)]
-struct RemoteFileInfo {
-    pub hash: String, // 使用 ETag 或下载后计算
+/// 远端快照元信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SnapshotMeta {
+    version: u32,
+    updated_at: String,
+    snapshot_hash: String,
+    file_count: usize,
 }
 
 // ============================================================================
-// 同步管理器实现
+// 同步管理器实现（单包快照协议）
 // ============================================================================
 
-/// 同步管理器
 pub struct SyncManager {
     config: WebDavConfig,
 }
 
 impl SyncManager {
-    /// 创建新的同步管理器
     pub fn new(config: WebDavConfig) -> Self {
         Self { config }
     }
 
-    /// 创建 WebDAV 客户端
     fn create_client(&self) -> Result<WebDavClient> {
         WebDavClient::new(
             &self.config.url,
@@ -167,13 +132,11 @@ impl SyncManager {
         )
     }
 
-    /// 获取同步状态文件路径
     fn get_sync_state_path() -> Result<PathBuf> {
         let config_dir = get_app_config_dir()?;
         Ok(config_dir.join(SYNC_STATE_FILE))
     }
 
-    /// 加载同步状态
     pub fn load_sync_state() -> Result<SyncState> {
         let state_path = Self::get_sync_state_path()?;
         if state_path.exists() {
@@ -184,7 +147,6 @@ impl SyncManager {
         }
     }
 
-    /// 保存同步状态
     fn save_sync_state(state: &SyncState) -> Result<()> {
         let state_path = Self::get_sync_state_path()?;
         let content = serde_json::to_string_pretty(state)?;
@@ -192,19 +154,33 @@ impl SyncManager {
         Ok(())
     }
 
-    /// 计算文件 hash
     fn compute_hash(content: &[u8]) -> String {
         let mut hasher = Sha256::new();
         hasher.update(content);
         format!("{:x}", hasher.finalize())
     }
 
-    /// 获取同步状态摘要
+    /// 计算本地文件集合的“清单 hash”（与打包格式无关）
+    fn compute_manifest_hash(local_files: &HashMap<String, LocalFileInfo>) -> String {
+        let mut keys: Vec<&String> = local_files.keys().collect();
+        keys.sort();
+
+        let mut hasher = Sha256::new();
+        for k in keys {
+            if let Some(info) = local_files.get(k) {
+                hasher.update(k.as_bytes());
+                hasher.update(b"\n");
+                hasher.update(info.hash.as_bytes());
+                hasher.update(b"\n");
+            }
+        }
+        format!("{:x}", hasher.finalize())
+    }
+
     pub fn get_sync_status() -> Result<SyncState> {
         Self::load_sync_state()
     }
 
-    /// 清除同步状态（重置为初始状态）
     pub fn clear_sync_state() -> Result<()> {
         let state_path = Self::get_sync_state_path()?;
         if state_path.exists() {
@@ -214,851 +190,313 @@ impl SyncManager {
         Ok(())
     }
 
-    // ========================================================================
-    // 增量同步核心方法
-    // ========================================================================
-
-    /// 增量同步（主入口）
-    ///
-    /// 自动检测本地和远端的变化，执行双向增量同步。
-    /// 如果有冲突，返回冲突信息让用户选择。
-    pub async fn sync(&self) -> Result<SyncResult> {
-        log::info!("开始增量同步...");
-
-        // 1. 加载上次同步状态（Base）
-        let base_state = Self::load_sync_state()?;
-        log::debug!("加载同步状态: {} 个文件", base_state.files.len());
-
-        // 2. 扫描本地文件（Local）
-        let local_files = self.scan_local_files()?;
-        log::debug!("扫描到本地文件: {} 个", local_files.len());
-
-        // 3. 扫描远端文件（Remote）
-        let remote_files = self.scan_remote_files().await?;
-        log::debug!("扫描到远端文件: {} 个", remote_files.len());
-
-        // 4. 三方比较，生成变更集
-        let change_set = self.compute_changes(&base_state, &local_files, &remote_files);
-        log::info!(
-            "变更集: 上传={}, 下载={}, 删除本地={}, 删除远端={}, 冲突={}",
-            change_set.to_upload.len(),
-            change_set.to_download.len(),
-            change_set.to_delete_local.len(),
-            change_set.to_delete_remote.len(),
-            change_set.conflicts.len()
-        );
-
-        // 5. 如果有冲突，返回让用户选择
-        if !change_set.conflicts.is_empty() {
-            let conflict_files: Vec<String> = change_set
-                .conflicts
-                .iter()
-                .map(|c| c.path.clone())
-                .collect();
-            return Ok(SyncResult {
-                success: false,
-                message: format!(
-                    "检测到 {} 个文件冲突，请选择处理方式",
-                    change_set.conflicts.len()
-                ),
-                uploaded_files: vec![],
-                downloaded_files: vec![],
-                deleted_local_files: vec![],
-                deleted_remote_files: vec![],
-                has_conflict: true,
-                conflict_info: Some(ConflictInfo {
-                    local_modified: chrono::Local::now().to_rfc3339(),
-                    remote_modified: chrono::Local::now().to_rfc3339(),
-                    conflicting_files: conflict_files,
-                    conflict_items: change_set.conflicts,
-                }),
-            });
-        }
-
-        // 6. 无冲突，执行同步
-        self.execute_sync(&change_set, &local_files, &remote_files)
-            .await
-    }
-
-    /// 扫描本地文件并计算 hash
+    /// 扫描本地文件并计算 hash（用于快照）
     fn scan_local_files(&self) -> Result<HashMap<String, LocalFileInfo>> {
         let mut files = HashMap::new();
 
-        // 1. 应用设置文件
+        // 1) settings.json（config dir）
         let config_dir = get_app_config_dir()?;
-        log::debug!("扫描配置目录: {:?}", config_dir);
         let settings_path = config_dir.join("settings.json");
         if settings_path.exists() {
-            log::debug!("找到 settings.json: {:?}", settings_path);
-            if let Ok(content) = fs::read(&settings_path) {
-                let hash = Self::compute_hash(&content);
-                files.insert(
-                    "settings.json".to_string(),
-                    LocalFileInfo {
-                        full_path: settings_path,
-                        hash,
-                    },
-                );
-            }
-        } else {
-            log::debug!("settings.json 不存在");
+            let content = fs::read(&settings_path)?;
+            let hash = Self::compute_hash(&content);
+            files.insert(
+                "settings.json".to_string(),
+                LocalFileInfo {
+                    full_path: settings_path,
+                    hash,
+                },
+            );
         }
 
+        // 2) data dir: sub-store / ruleset / profiles
         let data_dir = get_app_data_dir()?;
-        log::debug!("扫描数据目录: {:?}", data_dir);
 
-        // 2. Sub-Store 数据文件
         let substore_path = data_dir.join("sub-store").join("sub-store.json");
         if substore_path.exists() {
-            log::debug!("找到 sub-store.json: {:?}", substore_path);
-            if let Ok(content) = fs::read(&substore_path) {
-                let hash = Self::compute_hash(&content);
-                files.insert(
-                    "sub-store/sub-store.json".to_string(),
-                    LocalFileInfo {
-                        full_path: substore_path,
-                        hash,
-                    },
-                );
-            }
+            let content = fs::read(&substore_path)?;
+            let hash = Self::compute_hash(&content);
+            files.insert(
+                "sub-store/sub-store.json".to_string(),
+                LocalFileInfo {
+                    full_path: substore_path,
+                    hash,
+                },
+            );
         }
 
-        // 3. 规则集目录 (ruleset)
         let ruleset_dir = data_dir.join("ruleset");
-        log::debug!("扫描 ruleset 目录: {:?}", ruleset_dir);
         if ruleset_dir.exists() {
             if let Ok(entries) = fs::read_dir(&ruleset_dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if path.is_file() {
                         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                            if !name.starts_with('.') {
-                                if let Ok(content) = fs::read(&path) {
-                                    let hash = Self::compute_hash(&content);
-                                    let relative_path = format!("ruleset/{}", name);
-                                    log::debug!("找到 ruleset 文件: {}", relative_path);
-                                    files.insert(
-                                        relative_path,
-                                        LocalFileInfo {
-                                            full_path: path,
-                                            hash,
-                                        },
-                                    );
-                                }
+                            if name.starts_with('.') {
+                                continue;
                             }
+                            let content = fs::read(&path)?;
+                            let hash = Self::compute_hash(&content);
+                            files.insert(
+                                format!("ruleset/{}", name),
+                                LocalFileInfo {
+                                    full_path: path,
+                                    hash,
+                                },
+                            );
                         }
                     }
                 }
             }
-        } else {
-            log::debug!("ruleset 目录不存在");
         }
 
-        // 4. 各个 Profile 目录
         let profiles_dir = data_dir.join("profiles");
-        log::debug!("扫描 profiles 目录: {:?}", profiles_dir);
         if profiles_dir.exists() {
             if let Ok(entries) = fs::read_dir(&profiles_dir) {
                 for entry in entries.flatten() {
                     let profile_path = entry.path();
-                    if profile_path.is_dir() {
-                        if let Some(profile_id) = profile_path.file_name().and_then(|n| n.to_str())
-                        {
-                            log::debug!("扫描 profile: {}", profile_id);
-                            // metadata.json
-                            let metadata_path = profile_path.join("metadata.json");
-                            if metadata_path.exists() {
-                                if let Ok(content) = fs::read(&metadata_path) {
-                                    let hash = Self::compute_hash(&content);
-                                    let relative_path =
-                                        format!("profiles/{}/metadata.json", profile_id);
-                                    log::debug!("找到: {}", relative_path);
-                                    files.insert(
-                                        relative_path,
-                                        LocalFileInfo {
-                                            full_path: metadata_path,
-                                            hash,
-                                        },
-                                    );
-                                }
-                            }
-                            // profile.yaml
-                            let profile_yaml_path = profile_path.join("profile.yaml");
-                            if profile_yaml_path.exists() {
-                                if let Ok(content) = fs::read(&profile_yaml_path) {
-                                    let hash = Self::compute_hash(&content);
-                                    let relative_path =
-                                        format!("profiles/{}/profile.yaml", profile_id);
-                                    log::debug!("找到: {}", relative_path);
-                                    files.insert(
-                                        relative_path,
-                                        LocalFileInfo {
-                                            full_path: profile_yaml_path,
-                                            hash,
-                                        },
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            log::debug!("profiles 目录不存在");
-        }
-
-        log::info!("本地文件扫描完成，共 {} 个文件", files.len());
-        Ok(files)
-    }
-
-    /// 扫描远端文件
-    ///
-    /// 优化策略：
-    /// 1. 获取远端 sync_state.json，利用其中的 hash 信息
-    /// 2. 获取远端文件列表
-    /// 3. 对于在 sync_state 中存在且在文件列表中存在的文件，直接使用记录的 hash
-    /// 4. 对于只在文件列表中存在的（新文件），下载并计算 hash
-    async fn scan_remote_files(&self) -> Result<HashMap<String, RemoteFileInfo>> {
-        let client = self.create_client()?;
-        let mut files = HashMap::new();
-
-        // 1. 获取远端文件列表
-        let entries = self
-            .list_remote_files_recursive(&client, REMOTE_BASE_PATH)
-            .await?;
-        log::info!("远端目录列表: {} 个条目", entries.len());
-
-        // 2. 尝试下载远端 sync_state.json
-        let remote_state_path = format!("{}/{}", REMOTE_BASE_PATH, SYNC_STATE_FILE);
-        let (remote_sync_state, state_file_exists) =
-            match client.download_file(&remote_state_path).await {
-                Ok(content) => {
-                    match serde_json::from_slice::<SyncState>(&content) {
-                        Ok(state) => {
-                            log::debug!("成功加载远端同步状态，包含 {} 个文件", state.files.len());
-                            (Some(state), true)
-                        }
-                        Err(e) => {
-                            log::warn!("解析远端 sync_state.json 失败: {}", e);
-                            // 文件存在但解析失败，我们仍然将其标记为存在，以触发后续的安全检查
-                            (None, true)
-                        }
-                    }
-                }
-                Err(e) => {
-                    // 404 错误表示是新环境，这是正常情况
-                    log::debug!("远端 sync_state.json 不存在或下载失败: {}", e);
-                    (None, false)
-                }
-            };
-
-        // 安全检查：如果下载到了 sync_state.json（说明远端非空），但文件列表中没有它，
-        // 说明 WebDAV 列表解析失败（可能是 XML 格式兼容性问题）。
-        // 此时必须中止，否则会被误判为"远端文件被清空"，导致本地文件被错误删除。
-        if state_file_exists {
-            let state_file_full_path = format!("{}/{}", REMOTE_BASE_PATH, SYNC_STATE_FILE);
-            // 简单的路径匹配，忽略首尾斜杠差异
-            let has_state_in_list = entries
-                .iter()
-                .any(|(p, _)| p.trim_matches('/') == state_file_full_path.trim_matches('/'));
-
-            if !has_state_in_list {
-                return Err(anyhow!(
-                    "Critical Error: WebDAV listing failed (sync_state.json missing from list). Aborting to prevent data loss."
-                ));
-            }
-        }
-
-        // 构建远端状态查找表
-        let remote_state_map = remote_sync_state.map(|s| s.files);
-
-        for (path, is_dir) in entries {
-            if is_dir {
-                continue;
-            }
-
-            // 跳过同步状态文件
-            let relative_path = path
-                .strip_prefix(REMOTE_BASE_PATH)
-                .unwrap_or(&path)
-                .trim_start_matches('/');
-
-            if relative_path == SYNC_STATE_FILE || relative_path.is_empty() {
-                continue;
-            }
-
-            // 检查是否在远端状态中有记录
-            let mut hash = None;
-            if let Some(ref state_map) = remote_state_map {
-                if let Some(file_state) = state_map.get(relative_path) {
-                    // 如果远端状态中有记录，直接使用
-                    // 注意：这里我们使用的是 file_state.local_hash
-                    // 因为 sync_state.json 记录的是上传者视角的 local_hash（即文件的真实 hash）
-                    // 字段名虽为 local_hash，但在远端文件中代表了该文件的内容 hash
-                    log::debug!("从远端状态中使用缓存 Hash: {}", relative_path);
-                    hash = Some(file_state.local_hash.clone());
-                }
-            }
-
-            // 如果没有记录（新文件），或者为了保险起见，我们需要下载计算
-            if hash.is_none() {
-                log::debug!("下载新文件计算 Hash: {}", relative_path);
-                match client.download_file(&path).await {
-                    Ok(content) => {
-                        hash = Some(Self::compute_hash(&content));
-                    }
-                    Err(e) => {
-                        log::warn!("下载远端文件 {} 失败: {}", relative_path, e);
+                    if !profile_path.is_dir() {
                         continue;
                     }
-                }
-            }
-
-            if let Some(h) = hash {
-                files.insert(relative_path.to_string(), RemoteFileInfo { hash: h });
-            }
-        }
-
-        log::info!("扫描到远端文件: {} 个", files.len());
-        Ok(files)
-    }
-
-    /// 递归列出远端目录下所有文件
-    async fn list_remote_files_recursive(
-        &self,
-        client: &WebDavClient,
-        path: &str,
-    ) -> Result<Vec<(String, bool)>> {
-        let mut all_entries = Vec::new();
-        let mut dirs_to_process = vec![path.to_string()];
-
-        while let Some(current_dir) = dirs_to_process.pop() {
-            log::debug!("列出远端目录: {}", current_dir);
-            match client.list_dir(&current_dir).await {
-                Ok(entries) => {
-                    log::debug!("目录 {} 包含 {} 个条目", current_dir, entries.len());
-                    for (entry_path, is_dir) in entries {
-                        log::debug!("  - {} (目录: {})", entry_path, is_dir);
-                        all_entries.push((entry_path.clone(), is_dir));
-                        if is_dir {
-                            dirs_to_process.push(entry_path);
-                        }
-                    }
-                }
-                Err(e) => {
-                    log::warn!("列出目录 {} 失败: {}", current_dir, e);
-                }
-            }
-        }
-
-        Ok(all_entries)
-    }
-
-    /// 三方比较算法
-    ///
-    /// 比较 Base（上次同步状态）、Local（当前本地）、Remote（当前远端），
-    /// 生成精确的变更集。
-    fn compute_changes(
-        &self,
-        base: &SyncState,
-        local: &HashMap<String, LocalFileInfo>,
-        remote: &HashMap<String, RemoteFileInfo>,
-    ) -> ChangeSet {
-        let mut change_set = ChangeSet::default();
-
-        // 收集所有文件路径
-        let mut all_paths: HashSet<String> = HashSet::new();
-        all_paths.extend(base.files.keys().cloned());
-        all_paths.extend(local.keys().cloned());
-        all_paths.extend(remote.keys().cloned());
-
-        for path in all_paths {
-            let base_state = base.files.get(&path);
-            let local_info = local.get(&path);
-            let remote_info = remote.get(&path);
-
-            let change_type =
-                self.determine_change_type(&path, base_state, local_info, remote_info);
-
-            match change_type {
-                FileChangeType::Unchanged => {
-                    // 无需操作
-                }
-                FileChangeType::LocalModified | FileChangeType::LocalAdded => {
-                    change_set.to_upload.push(path);
-                }
-                FileChangeType::RemoteModified | FileChangeType::RemoteAdded => {
-                    change_set.to_download.push(path);
-                }
-                FileChangeType::LocalDeleted => {
-                    change_set.to_delete_remote.push(path);
-                }
-                FileChangeType::RemoteDeleted => {
-                    change_set.to_delete_local.push(path);
-                }
-                FileChangeType::BothModified => {
-                    change_set.conflicts.push(ConflictItem {
-                        path,
-                        conflict_type: "双方修改".to_string(),
-                        local_status: "已修改".to_string(),
-                        remote_status: "已修改".to_string(),
-                    });
-                }
-                FileChangeType::DeleteModifyConflict => {
-                    let (local_status, remote_status) = if local_info.is_some() {
-                        ("已修改".to_string(), "已删除".to_string())
-                    } else {
-                        ("已删除".to_string(), "已修改".to_string())
+                    let Some(profile_id) = profile_path.file_name().and_then(|n| n.to_str()) else {
+                        continue;
                     };
-                    change_set.conflicts.push(ConflictItem {
-                        path,
-                        conflict_type: "删除冲突".to_string(),
-                        local_status,
-                        remote_status,
-                    });
-                }
-            }
-        }
 
-        change_set
-    }
-
-    /// 判断单个文件的变更类型
-    fn determine_change_type(
-        &self,
-        _path: &str,
-        base: Option<&FileSyncState>,
-        local: Option<&LocalFileInfo>,
-        remote: Option<&RemoteFileInfo>,
-    ) -> FileChangeType {
-        match (base, local, remote) {
-            // 1. Base 中不存在（新文件）
-            (None, Some(_), None) => FileChangeType::LocalAdded,
-            (None, None, Some(_)) => FileChangeType::RemoteAdded,
-            (None, Some(_), Some(_)) => {
-                // 两边都新增，视为冲突
-                FileChangeType::BothModified
-            }
-
-            // 2. Base 中存在，检查两边的变化
-            (Some(base_state), local_opt, remote_opt) => {
-                let local_changed = match local_opt {
-                    Some(local_info) => local_info.hash != base_state.local_hash,
-                    None => true, // 本地删除
-                };
-
-                let remote_changed = match remote_opt {
-                    Some(remote_info) => {
-                        // 如果 base 记录了 remote_hash，则比较
-                        // 否则与 local_hash 比较（兼容旧数据）
-                        if !base_state.remote_hash.is_empty() {
-                            remote_info.hash != base_state.remote_hash
-                        } else {
-                            remote_info.hash != base_state.local_hash
-                        }
-                    }
-                    None => true, // 远端删除
-                };
-
-                match (
-                    local_opt.is_some(),
-                    remote_opt.is_some(),
-                    local_changed,
-                    remote_changed,
-                ) {
-                    // 两边都存在
-                    (true, true, false, false) => FileChangeType::Unchanged,
-                    (true, true, true, false) => FileChangeType::LocalModified,
-                    (true, true, false, true) => FileChangeType::RemoteModified,
-                    (true, true, true, true) => FileChangeType::BothModified,
-
-                    // 本地存在，远端不存在
-                    (true, false, false, _) => FileChangeType::RemoteDeleted,
-                    (true, false, true, _) => FileChangeType::DeleteModifyConflict, // 本地修改，远端删除
-
-                    // 本地不存在，远端存在
-                    (false, true, _, false) => FileChangeType::LocalDeleted,
-                    (false, true, _, true) => FileChangeType::DeleteModifyConflict, // 本地删除，远端修改
-
-                    // 两边都不存在（理论上不应该发生，但作为防御）
-                    (false, false, _, _) => FileChangeType::Unchanged,
-                }
-            }
-
-            // 3. Base 不存在，两边也都不存在（不应该发生）
-            (None, None, None) => FileChangeType::Unchanged,
-        }
-    }
-
-    /// 执行同步操作
-    async fn execute_sync(
-        &self,
-        changes: &ChangeSet,
-        local_files: &HashMap<String, LocalFileInfo>,
-        remote_files: &HashMap<String, RemoteFileInfo>,
-    ) -> Result<SyncResult> {
-        let client = self.create_client()?;
-        let mut state = Self::load_sync_state()?;
-
-        let mut uploaded_files = Vec::new();
-        let mut downloaded_files = Vec::new();
-        let mut deleted_local_files = Vec::new();
-        let mut deleted_remote_files = Vec::new();
-
-        let config_dir = get_app_config_dir()?;
-        let data_dir = get_app_data_dir()?;
-
-        // 保存当前的 WebDAV 配置（下载 settings.json 后需要恢复）
-        let current_webdav_config = self.config.clone();
-
-        // 1. 上传本地修改/新增的文件
-        for path in &changes.to_upload {
-            if let Some(local_info) = local_files.get(path) {
-                let remote_path = format!("{}/{}", REMOTE_BASE_PATH, path);
-                match fs::read(&local_info.full_path) {
-                    Ok(content) => {
-                        if let Err(e) = client.upload_file(&remote_path, &content).await {
-                            log::error!("上传文件 {} 失败: {}", path, e);
-                            continue;
-                        }
-                        uploaded_files.push(path.clone());
-
-                        // 更新状态
+                    let metadata_path = profile_path.join("metadata.json");
+                    if metadata_path.exists() {
+                        let content = fs::read(&metadata_path)?;
                         let hash = Self::compute_hash(&content);
-                        state.files.insert(
-                            path.clone(),
-                            FileSyncState {
-                                path: path.clone(),
-                                local_hash: hash.clone(),
-                                remote_hash: hash, // 上传后本地和远端一致
-                                synced_at: chrono::Local::now().to_rfc3339(),
+                        files.insert(
+                            format!("profiles/{}/metadata.json", profile_id),
+                            LocalFileInfo {
+                                full_path: metadata_path,
+                                hash,
                             },
                         );
                     }
-                    Err(e) => {
-                        log::error!("读取本地文件 {} 失败: {}", path, e);
+
+                    let profile_yaml_path = profile_path.join("profile.yaml");
+                    if profile_yaml_path.exists() {
+                        let content = fs::read(&profile_yaml_path)?;
+                        let hash = Self::compute_hash(&content);
+                        files.insert(
+                            format!("profiles/{}/profile.yaml", profile_id),
+                            LocalFileInfo {
+                                full_path: profile_yaml_path,
+                                hash,
+                            },
+                        );
                     }
                 }
             }
         }
 
-        // 2. 下载远端修改/新增的文件
-        for path in &changes.to_download {
-            let remote_path = format!("{}/{}", REMOTE_BASE_PATH, path);
-            match client.download_file(&remote_path).await {
-                Ok(content) => {
-                    // 确定本地路径
-                    let local_path = if path == "settings.json" {
-                        config_dir.join(path)
-                    } else {
-                        data_dir.join(path)
-                    };
-
-                    // 确保父目录存在
-                    if let Some(parent) = local_path.parent() {
-                        fs::create_dir_all(parent)?;
-                    }
-
-                    // 如果是 settings.json，需要合并而不是覆盖
-                    let final_content = if path == "settings.json" {
-                        self.merge_settings(&content, &current_webdav_config)?
-                    } else {
-                        content
-                    };
-
-                    fs::write(&local_path, &final_content)?;
-                    downloaded_files.push(path.clone());
-
-                    // 更新状态
-                    let hash = Self::compute_hash(&final_content);
-                    let remote_hash = remote_files
-                        .get(path)
-                        .map(|r| r.hash.clone())
-                        .unwrap_or_else(|| hash.clone());
-
-                    state.files.insert(
-                        path.clone(),
-                        FileSyncState {
-                            path: path.clone(),
-                            local_hash: hash,
-                            remote_hash,
-                            synced_at: chrono::Local::now().to_rfc3339(),
-                        },
-                    );
-                }
-                Err(e) => {
-                    log::error!("下载文件 {} 失败: {}", path, e);
-                }
-            }
-        }
-
-        // 3. 删除本地文件（远端已删除的）
-        for path in &changes.to_delete_local {
-            let local_path = if path == "settings.json" {
-                config_dir.join(path)
-            } else {
-                data_dir.join(path)
-            };
-
-            // settings.json 不删除，只移除状态
-            if path != "settings.json" {
-                if local_path.exists() {
-                    if let Err(e) = fs::remove_file(&local_path) {
-                        log::error!("删除本地文件 {} 失败: {}", path, e);
-                        continue;
-                    }
-                }
-            }
-
-            deleted_local_files.push(path.clone());
-            state.files.remove(path);
-        }
-
-        // 4. 删除远端文件（本地已删除的）
-        for path in &changes.to_delete_remote {
-            let remote_path = format!("{}/{}", REMOTE_BASE_PATH, path);
-            if let Err(e) = client.delete_file(&remote_path).await {
-                log::error!("删除远端文件 {} 失败: {}", path, e);
-                continue;
-            }
-            deleted_remote_files.push(path.clone());
-            state.files.remove(path);
-        }
-
-        // 5. 更新同步状态
-        state.last_sync_time = Some(chrono::Local::now().to_rfc3339());
-        Self::save_sync_state(&state)?;
-
-        // 6. 上传同步状态文件到远端
-        let state_content = serde_json::to_string_pretty(&state)?;
-        let remote_state_path = format!("{}/{}", REMOTE_BASE_PATH, SYNC_STATE_FILE);
-        client
-            .upload_file(&remote_state_path, state_content.as_bytes())
-            .await?;
-
-        let total_changes = uploaded_files.len()
-            + downloaded_files.len()
-            + deleted_local_files.len()
-            + deleted_remote_files.len();
-
-        let message = if total_changes == 0 {
-            "已是最新，无需同步".to_string()
-        } else {
-            format!(
-                "同步完成：上传 {} 个，下载 {} 个，删除本地 {} 个，删除远端 {} 个",
-                uploaded_files.len(),
-                downloaded_files.len(),
-                deleted_local_files.len(),
-                deleted_remote_files.len()
-            )
-        };
-
-        Ok(SyncResult {
-            success: true,
-            message,
-            uploaded_files,
-            downloaded_files,
-            deleted_local_files,
-            deleted_remote_files,
-            has_conflict: false,
-            conflict_info: None,
-        })
+        Ok(files)
     }
 
-    /// 合并 settings.json，保留本地的 WebDAV 配置
-    fn merge_settings(
-        &self,
-        remote_content: &[u8],
-        local_webdav: &WebDavConfig,
-    ) -> Result<Vec<u8>> {
-        // 解析远端的 settings
-        let mut remote_settings: AppSettings = serde_json::from_slice(remote_content)
-            .map_err(|e| anyhow!("解析远端 settings.json 失败: {}", e))?;
+    fn build_snapshot_zip(&self, local_files: &HashMap<String, LocalFileInfo>) -> Result<Vec<u8>> {
+        use zip::write::FileOptions;
+        use zip::CompressionMethod;
+        use zip::ZipWriter;
 
-        // 保留本地的 WebDAV 配置
-        remote_settings.webdav = local_webdav.clone();
+        let mut buf = Vec::new();
+        {
+            let cursor = Cursor::new(&mut buf);
+            let mut zip = ZipWriter::new(cursor);
+            let options = FileOptions::default().compression_method(CompressionMethod::Deflated);
 
-        // 序列化回去
-        let merged = serde_json::to_string_pretty(&remote_settings)?;
-        Ok(merged.into_bytes())
+            let mut keys: Vec<&String> = local_files.keys().collect();
+            keys.sort();
+
+            for rel in keys {
+                let Some(info) = local_files.get(rel) else {
+                    continue;
+                };
+                let content = fs::read(&info.full_path)?;
+                zip.start_file(rel, options)?;
+                zip.write_all(&content)?;
+            }
+
+            zip.finish()?;
+        }
+        Ok(buf)
     }
 
-    // ========================================================================
-    // 冲突解决方法
-    // ========================================================================
+    fn is_safe_zip_entry_path(p: &Path) -> bool {
+        !p.is_absolute()
+            && !p.components().any(|c| {
+                matches!(
+                    c,
+                    Component::ParentDir | Component::RootDir | Component::Prefix(_)
+                )
+            })
+    }
 
-    /// 解决单个文件的冲突
-    ///
-    /// choice: "local" 保留本地版本并上传，"remote" 使用远端版本
-    pub async fn resolve_file_conflict(&self, path: &str, choice: &str) -> Result<()> {
-        let client = self.create_client()?;
-        let mut state = Self::load_sync_state()?;
+    /// 解包快照并覆盖恢复本地（全量替换 data_dir 下的相关目录/文件；settings.json 合并）
+    fn apply_snapshot_zip(&self, zip_bytes: &[u8], local_webdav: &WebDavConfig) -> Result<()> {
+        use zip::ZipArchive;
 
         let config_dir = get_app_config_dir()?;
         let data_dir = get_app_data_dir()?;
 
-        let local_path = if path == "settings.json" {
-            config_dir.join(path)
-        } else {
-            data_dir.join(path)
-        };
-        let remote_path = format!("{}/{}", REMOTE_BASE_PATH, path);
+        // 清理本地数据（完全替换模式）
+        let _ = fs::remove_dir_all(data_dir.join("profiles"));
+        let _ = fs::remove_dir_all(data_dir.join("ruleset"));
+        let _ = fs::remove_file(data_dir.join("sub-store").join("sub-store.json"));
 
-        match choice {
-            "local" => {
-                // 保留本地，上传覆盖远端
-                if local_path.exists() {
-                    let content = fs::read(&local_path)?;
-                    client.upload_file(&remote_path, &content).await?;
+        // 解包到临时目录，避免半恢复
+        let tmp_dir = data_dir.join(format!("webdav_restore_{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&tmp_dir)?;
 
-                    let hash = Self::compute_hash(&content);
-                    state.files.insert(
-                        path.to_string(),
-                        FileSyncState {
-                            path: path.to_string(),
-                            local_hash: hash.clone(),
-                            remote_hash: hash,
-                            synced_at: chrono::Local::now().to_rfc3339(),
-                        },
-                    );
-                } else {
-                    // 本地已删除，删除远端
-                    let _ = client.delete_file(&remote_path).await;
-                    state.files.remove(path);
-                }
+        let cursor = Cursor::new(zip_bytes);
+        let mut archive = ZipArchive::new(cursor)?;
+
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i)?;
+            let name = file.name().to_string();
+            let rel_path = Path::new(&name);
+
+            if !Self::is_safe_zip_entry_path(rel_path) {
+                return Err(anyhow!("非法快照路径: {}", name));
             }
-            "remote" => {
-                // 使用远端，下载覆盖本地
-                match client.download_file(&remote_path).await {
-                    Ok(content) => {
-                        // 如果是 settings.json，合并 WebDAV 配置
-                        let final_content = if path == "settings.json" {
-                            self.merge_settings(&content, &self.config)?
-                        } else {
-                            content
-                        };
 
-                        if let Some(parent) = local_path.parent() {
-                            fs::create_dir_all(parent)?;
-                        }
-                        fs::write(&local_path, &final_content)?;
+            if file.is_dir() {
+                continue;
+            }
 
-                        let hash = Self::compute_hash(&final_content);
-                        state.files.insert(
-                            path.to_string(),
-                            FileSyncState {
-                                path: path.to_string(),
-                                local_hash: hash.clone(),
-                                remote_hash: hash,
-                                synced_at: chrono::Local::now().to_rfc3339(),
-                            },
-                        );
-                    }
-                    Err(_) => {
-                        // 远端已删除，删除本地
-                        if path != "settings.json" && local_path.exists() {
-                            fs::remove_file(&local_path)?;
-                        }
-                        state.files.remove(path);
-                    }
-                }
+            let out_path = tmp_dir.join(rel_path);
+            if let Some(parent) = out_path.parent() {
+                fs::create_dir_all(parent)?;
             }
-            _ => {
-                return Err(anyhow!("无效的选择: {}", choice));
-            }
+
+            let mut out = fs::File::create(&out_path)?;
+            let mut buf = Vec::new();
+            file.read_to_end(&mut buf)?;
+            out.write_all(&buf)?;
         }
 
-        Self::save_sync_state(&state)?;
+        // 1) settings.json：合并 WebDAV 配置后写入 config_dir
+        let extracted_settings = tmp_dir.join("settings.json");
+        if extracted_settings.exists() {
+            let content = fs::read(&extracted_settings)?;
+            let merged = self.merge_settings(&content, local_webdav)?;
+            fs::write(config_dir.join("settings.json"), &merged)?;
+        }
+
+        // 2) 其他内容：只允许写入 data_dir 下的固定前缀
+        for prefix in ["profiles", "ruleset", "sub-store"] {
+            let src = tmp_dir.join(prefix);
+            if !src.exists() {
+                continue;
+            }
+            self.copy_dir_recursive(&src, &data_dir.join(prefix))?;
+        }
+
+        // 清理临时目录
+        let _ = fs::remove_dir_all(&tmp_dir);
         Ok(())
     }
 
-    /// 批量解决冲突
-    ///
-    /// 对所有冲突文件应用相同的选择
-    pub async fn resolve_all_conflicts(&self, choice: &str) -> Result<SyncResult> {
-        // 重新扫描并获取冲突列表
-        let base_state = Self::load_sync_state()?;
-        let local_files = self.scan_local_files()?;
-        let remote_files = self.scan_remote_files().await?;
-        let change_set = self.compute_changes(&base_state, &local_files, &remote_files);
-
-        for conflict in &change_set.conflicts {
-            self.resolve_file_conflict(&conflict.path, choice).await?;
+    fn copy_dir_recursive(&self, src: &Path, dst: &Path) -> Result<()> {
+        if src.is_file() {
+            if let Some(parent) = dst.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(src, dst)?;
+            return Ok(());
         }
-
-        // 解决冲突后重新执行同步
-        self.sync().await
+        fs::create_dir_all(dst)?;
+        for entry in fs::read_dir(src)? {
+            let entry = entry?;
+            let path = entry.path();
+            let name = entry.file_name();
+            let dst_path = dst.join(name);
+            if path.is_dir() {
+                self.copy_dir_recursive(&path, &dst_path)?;
+            } else {
+                if let Some(parent) = dst_path.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::copy(&path, &dst_path)?;
+            }
+        }
+        Ok(())
     }
 
-    // ========================================================================
-    // 强制全量同步方法（保留向后兼容）
-    // ========================================================================
+    async fn fetch_remote_meta(&self, client: &WebDavClient) -> Result<Option<SnapshotMeta>> {
+        let remote_meta_path = format!("{}/{}", REMOTE_BASE_PATH, SNAPSHOT_META_FILE);
+        match client.download_file(&remote_meta_path).await {
+            Ok(bytes) => {
+                let meta: SnapshotMeta = serde_json::from_slice(&bytes)?;
+                Ok(Some(meta))
+            }
+            Err(e) => {
+                // 远端不存在就视为“无快照”
+                if e.to_string().contains("HTTP 404") || e.to_string().contains("文件不存在") {
+                    return Ok(None);
+                }
+                Err(e)
+            }
+        }
+    }
 
-    /// 强制上传所有配置到远端（覆盖远端）
-    pub async fn upload_all(&self) -> Result<SyncResult> {
-        log::info!("开始强制上传所有配置...");
+    async fn upload_snapshot(&self) -> Result<SyncResult> {
         let client = self.create_client()?;
-        let mut uploaded_files = Vec::new();
-        let mut state = SyncState::default();
-
-        // 1. 递归删除远端目录内容
-        log::info!("清理远端目录: {}", REMOTE_BASE_PATH);
-        let _ = client.delete_dir_contents(REMOTE_BASE_PATH).await;
-
-        // 2. 确保目录存在
-        log::info!("确保远端目录存在: {}", REMOTE_BASE_PATH);
         client.ensure_dir(REMOTE_BASE_PATH).await?;
 
-        // 3. 上传本地所有文件
         let local_files = self.scan_local_files()?;
-        log::info!("扫描到本地文件: {} 个", local_files.len());
-        for (path, info) in &local_files {
-            log::debug!("  - {} ({:?})", path, info.full_path);
+        if local_files.is_empty() {
+            return Ok(SyncResult {
+                success: true,
+                message: "本地没有可同步内容".to_string(),
+                uploaded_files: vec![],
+                downloaded_files: vec![],
+                deleted_local_files: vec![],
+                deleted_remote_files: vec![],
+                has_conflict: false,
+                conflict_info: None,
+            });
         }
 
-        for (path, local_info) in &local_files {
-            let content = fs::read(&local_info.full_path)?;
-            let remote_path = format!("{}/{}", REMOTE_BASE_PATH, path);
+        let snapshot_hash = Self::compute_manifest_hash(&local_files);
+        let zip_bytes = self.build_snapshot_zip(&local_files)?;
 
-            log::info!("上传文件: {} -> {}", path, remote_path);
-            match client.upload_file(&remote_path, &content).await {
-                Ok(_) => {
-                    uploaded_files.push(path.clone());
-                    log::info!("上传成功: {}", path);
-                }
-                Err(e) => {
-                    log::error!("上传失败: {} - {}", path, e);
-                    return Err(e);
-                }
-            }
-
-            let hash = Self::compute_hash(&content);
-            state.files.insert(
-                path.clone(),
-                FileSyncState {
-                    path: path.clone(),
-                    local_hash: hash.clone(),
-                    remote_hash: hash,
-                    synced_at: chrono::Local::now().to_rfc3339(),
-                },
-            );
-        }
-
-        // 更新同步状态
-        state.last_sync_time = Some(chrono::Local::now().to_rfc3339());
-        Self::save_sync_state(&state)?;
-
-        // 上传同步状态文件
-        let state_content = serde_json::to_string_pretty(&state)?;
-        let remote_state_path = format!("{}/{}", REMOTE_BASE_PATH, SYNC_STATE_FILE);
+        let remote_snapshot_path = format!("{}/{}", REMOTE_BASE_PATH, SNAPSHOT_FILE);
         client
-            .upload_file(&remote_state_path, state_content.as_bytes())
+            .upload_file(&remote_snapshot_path, zip_bytes.as_slice())
             .await?;
+
+        let meta = SnapshotMeta {
+            version: 1,
+            updated_at: chrono::Local::now().to_rfc3339(),
+            snapshot_hash: snapshot_hash.clone(),
+            file_count: local_files.len(),
+        };
+        let meta_bytes = serde_json::to_vec_pretty(&meta)?;
+        let remote_meta_path = format!("{}/{}", REMOTE_BASE_PATH, SNAPSHOT_META_FILE);
+        client
+            .upload_file(&remote_meta_path, meta_bytes.as_slice())
+            .await?;
+
+        // 更新本地同步状态（只记录快照）
+        let mut state = Self::load_sync_state()?;
+        let now = chrono::Local::now().to_rfc3339();
+        state.last_sync_time = Some(now.clone());
+        state.files.insert(
+            SNAPSHOT_STATE_KEY.to_string(),
+            FileSyncState {
+                path: SNAPSHOT_FILE.to_string(),
+                local_hash: snapshot_hash.clone(),
+                remote_hash: snapshot_hash.clone(),
+                synced_at: now,
+            },
+        );
+        Self::save_sync_state(&state)?;
 
         Ok(SyncResult {
             success: true,
-            message: format!("成功上传 {} 个文件", uploaded_files.len()),
-            uploaded_files,
+            message: format!("上传成功：快照包含 {} 个文件", local_files.len()),
+            uploaded_files: vec![SNAPSHOT_FILE.to_string(), SNAPSHOT_META_FILE.to_string()],
             downloaded_files: vec![],
             deleted_local_files: vec![],
             deleted_remote_files: vec![],
@@ -1067,114 +505,62 @@ impl SyncManager {
         })
     }
 
-    /// 强制从远端下载所有配置（覆盖本地）
-    pub async fn download_all(&self, force: bool) -> Result<SyncResult> {
-        // 如果不是强制下载，先检查冲突
+    async fn download_snapshot(&self, force: bool) -> Result<SyncResult> {
+        let client = self.create_client()?;
+        client.ensure_dir(REMOTE_BASE_PATH).await?;
+
+        let remote_meta = self
+            .fetch_remote_meta(&client)
+            .await?
+            .ok_or_else(|| anyhow!("远端没有快照可下载"))?;
+
+        // 非强制下载：如果本地与远端都相对上次同步发生变化，则冲突
         if !force {
             let base_state = Self::load_sync_state()?;
+            let base_hash = base_state
+                .files
+                .get(SNAPSHOT_STATE_KEY)
+                .map(|s| s.local_hash.clone());
+
             let local_files = self.scan_local_files()?;
-            let remote_files = self.scan_remote_files().await?;
-            let change_set = self.compute_changes(&base_state, &local_files, &remote_files);
+            let local_current_hash = Self::compute_manifest_hash(&local_files);
+            let local_changed = base_hash.as_deref() != Some(local_current_hash.as_str());
+            let remote_changed = base_hash.as_deref() != Some(remote_meta.snapshot_hash.as_str());
 
-            if !change_set.conflicts.is_empty() {
-                let conflict_files: Vec<String> = change_set
-                    .conflicts
-                    .iter()
-                    .map(|c| c.path.clone())
-                    .collect();
-                return Ok(SyncResult {
-                    success: false,
-                    message: "检测到冲突，请选择保留本地或使用远端配置".to_string(),
-                    uploaded_files: vec![],
-                    downloaded_files: vec![],
-                    deleted_local_files: vec![],
-                    deleted_remote_files: vec![],
-                    has_conflict: true,
-                    conflict_info: Some(ConflictInfo {
-                        local_modified: chrono::Local::now().to_rfc3339(),
-                        remote_modified: chrono::Local::now().to_rfc3339(),
-                        conflicting_files: conflict_files,
-                        conflict_items: change_set.conflicts,
-                    }),
-                });
+            if local_changed && remote_changed && local_current_hash != remote_meta.snapshot_hash {
+                return Ok(Self::make_conflict_result(
+                    "检测到快照冲突，请选择保留本地或使用远端配置",
+                ));
             }
         }
 
-        let client = self.create_client()?;
-        let mut downloaded_files = Vec::new();
-        let mut state = SyncState::default();
+        let remote_snapshot_path = format!("{}/{}", REMOTE_BASE_PATH, SNAPSHOT_FILE);
+        let zip_bytes = client.download_file(&remote_snapshot_path).await?;
 
-        let config_dir = get_app_config_dir()?;
-        let data_dir = get_app_data_dir()?;
-
-        // 保存当前的 WebDAV 配置
+        // 保留当前本地 WebDAV 配置（写回 settings 时合并）
         let current_webdav_config = self.config.clone();
+        self.apply_snapshot_zip(&zip_bytes, &current_webdav_config)?;
 
-        // 扫描远端文件
-        let remote_files = self.scan_remote_files().await?;
-
-        if remote_files.is_empty() {
-            return Err(anyhow!("远端没有可下载的文件"));
-        }
-
-        // 清理本地数据（完全替换模式）
-        log::info!("正在清理本地数据以进行覆盖恢复...");
-        let _ = fs::remove_dir_all(data_dir.join("profiles"));
-        let _ = fs::remove_dir_all(data_dir.join("ruleset"));
-        let _ = fs::remove_file(data_dir.join("sub-store").join("sub-store.json"));
-        // 不删除 settings.json，因为要合并
-
-        // 下载所有远端文件
-        for (path, remote_info) in &remote_files {
-            let remote_path = format!("{}/{}", REMOTE_BASE_PATH, path);
-            match client.download_file(&remote_path).await {
-                Ok(content) => {
-                    let local_path = if path == "settings.json" {
-                        config_dir.join(path)
-                    } else {
-                        data_dir.join(path)
-                    };
-
-                    if let Some(parent) = local_path.parent() {
-                        fs::create_dir_all(parent)?;
-                    }
-
-                    // 如果是 settings.json，合并 WebDAV 配置
-                    let final_content = if path == "settings.json" {
-                        self.merge_settings(&content, &current_webdav_config)?
-                    } else {
-                        content
-                    };
-
-                    fs::write(&local_path, &final_content)?;
-                    downloaded_files.push(path.clone());
-
-                    let hash = Self::compute_hash(&final_content);
-                    state.files.insert(
-                        path.clone(),
-                        FileSyncState {
-                            path: path.clone(),
-                            local_hash: hash,
-                            remote_hash: remote_info.hash.clone(),
-                            synced_at: chrono::Local::now().to_rfc3339(),
-                        },
-                    );
-                }
-                Err(e) => {
-                    log::warn!("下载文件 {} 失败: {}", path, e);
-                }
-            }
-        }
-
-        // 更新同步状态
-        state.last_sync_time = Some(chrono::Local::now().to_rfc3339());
+        // 更新本地同步状态
+        let mut state = Self::load_sync_state()?;
+        let now = chrono::Local::now().to_rfc3339();
+        state.last_sync_time = Some(now.clone());
+        state.files.insert(
+            SNAPSHOT_STATE_KEY.to_string(),
+            FileSyncState {
+                path: SNAPSHOT_FILE.to_string(),
+                local_hash: remote_meta.snapshot_hash.clone(),
+                remote_hash: remote_meta.snapshot_hash.clone(),
+                synced_at: now,
+            },
+        );
         Self::save_sync_state(&state)?;
 
         Ok(SyncResult {
             success: true,
-            message: format!("成功下载 {} 个文件", downloaded_files.len()),
+            message: "下载成功：配置已恢复，请前往「配置管理」激活配置以应用更改".to_string(),
             uploaded_files: vec![],
-            downloaded_files,
+            downloaded_files: vec![SNAPSHOT_FILE.to_string(), SNAPSHOT_META_FILE.to_string()],
             deleted_local_files: vec![],
             deleted_remote_files: vec![],
             has_conflict: false,
@@ -1182,27 +568,185 @@ impl SyncManager {
         })
     }
 
-    /// 检查是否有冲突（向后兼容）
+    fn make_conflict_result(message: &str) -> SyncResult {
+        let now = chrono::Local::now().to_rfc3339();
+        let item = ConflictItem {
+            path: "snapshot".to_string(),
+            conflict_type: "快照冲突".to_string(),
+            local_status: "已修改".to_string(),
+            remote_status: "已修改".to_string(),
+        };
+        SyncResult {
+            success: false,
+            message: message.to_string(),
+            uploaded_files: vec![],
+            downloaded_files: vec![],
+            deleted_local_files: vec![],
+            deleted_remote_files: vec![],
+            has_conflict: true,
+            conflict_info: Some(ConflictInfo {
+                local_modified: now.clone(),
+                remote_modified: now,
+                conflicting_files: vec!["snapshot".to_string()],
+                conflict_items: vec![item],
+            }),
+        }
+    }
+
+    /// 增量同步（新语义：基于快照 hash/时间戳 的方向选择）
+    pub async fn sync(&self) -> Result<SyncResult> {
+        let client = self.create_client()?;
+        client.ensure_dir(REMOTE_BASE_PATH).await?;
+
+        let base_state = Self::load_sync_state()?;
+        let base_hash = base_state
+            .files
+            .get(SNAPSHOT_STATE_KEY)
+            .map(|s| s.local_hash.clone());
+
+        let local_files = self.scan_local_files()?;
+        let local_current_hash = Self::compute_manifest_hash(&local_files);
+        let local_changed = base_hash.as_deref() != Some(local_current_hash.as_str());
+
+        let remote_meta = self.fetch_remote_meta(&client).await?;
+        let Some(remote_meta) = remote_meta else {
+            // 远端无快照：如果本地有内容，上传；否则无需同步
+            if local_files.is_empty() {
+                return Ok(SyncResult {
+                    success: true,
+                    message: "已是最新，无需同步".to_string(),
+                    uploaded_files: vec![],
+                    downloaded_files: vec![],
+                    deleted_local_files: vec![],
+                    deleted_remote_files: vec![],
+                    has_conflict: false,
+                    conflict_info: None,
+                });
+            }
+            return self.upload_snapshot().await;
+        };
+
+        let remote_hash = remote_meta.snapshot_hash.clone();
+        let remote_changed = base_hash.as_deref() != Some(remote_hash.as_str());
+
+        if !local_changed && !remote_changed {
+            return Ok(SyncResult {
+                success: true,
+                message: "已是最新，无需同步".to_string(),
+                uploaded_files: vec![],
+                downloaded_files: vec![],
+                deleted_local_files: vec![],
+                deleted_remote_files: vec![],
+                has_conflict: false,
+                conflict_info: None,
+            });
+        }
+
+        if local_changed && !remote_changed {
+            return self.upload_snapshot().await;
+        }
+
+        if !local_changed && remote_changed {
+            return self.download_snapshot(true).await;
+        }
+
+        // 两边都变了：相同则只更新状态；不同则冲突
+        if local_current_hash == remote_hash {
+            let mut state = Self::load_sync_state()?;
+            let now = chrono::Local::now().to_rfc3339();
+            state.last_sync_time = Some(now.clone());
+            state.files.insert(
+                SNAPSHOT_STATE_KEY.to_string(),
+                FileSyncState {
+                    path: SNAPSHOT_FILE.to_string(),
+                    local_hash: remote_hash.clone(),
+                    remote_hash: remote_hash.clone(),
+                    synced_at: now,
+                },
+            );
+            Self::save_sync_state(&state)?;
+            return Ok(SyncResult {
+                success: true,
+                message: "已同步：本地与远端快照一致".to_string(),
+                uploaded_files: vec![],
+                downloaded_files: vec![],
+                deleted_local_files: vec![],
+                deleted_remote_files: vec![],
+                has_conflict: false,
+                conflict_info: None,
+            });
+        }
+
+        Ok(Self::make_conflict_result("检测到快照冲突，请选择处理方式"))
+    }
+
+    /// 强制上传（全量覆盖远端快照）
+    pub async fn upload_all(&self) -> Result<SyncResult> {
+        self.upload_snapshot().await
+    }
+
+    /// 强制下载（全量覆盖本地）；force=false 时会做冲突检查
+    pub async fn download_all(&self, force: bool) -> Result<SyncResult> {
+        self.download_snapshot(force).await
+    }
+
     pub async fn check_conflict(&self) -> Result<Option<ConflictInfo>> {
         let base_state = Self::load_sync_state()?;
-        let local_files = self.scan_local_files()?;
-        let remote_files = self.scan_remote_files().await?;
-        let change_set = self.compute_changes(&base_state, &local_files, &remote_files);
+        let base_hash = base_state
+            .files
+            .get(SNAPSHOT_STATE_KEY)
+            .map(|s| s.local_hash.clone());
 
-        if change_set.conflicts.is_empty() {
-            Ok(None)
-        } else {
-            let conflict_files: Vec<String> = change_set
-                .conflicts
-                .iter()
-                .map(|c| c.path.clone())
-                .collect();
-            Ok(Some(ConflictInfo {
-                local_modified: chrono::Local::now().to_rfc3339(),
-                remote_modified: chrono::Local::now().to_rfc3339(),
-                conflicting_files: conflict_files,
-                conflict_items: change_set.conflicts,
-            }))
+        let local_files = self.scan_local_files()?;
+        let local_current_hash = Self::compute_manifest_hash(&local_files);
+        let local_changed = base_hash.as_deref() != Some(local_current_hash.as_str());
+
+        let client = self.create_client()?;
+        let remote_meta = self.fetch_remote_meta(&client).await?;
+        let Some(remote_meta) = remote_meta else {
+            return Ok(None);
+        };
+        let remote_changed = base_hash.as_deref() != Some(remote_meta.snapshot_hash.as_str());
+
+        if local_changed && remote_changed && local_current_hash != remote_meta.snapshot_hash {
+            return Ok(Self::make_conflict_result("检测到快照冲突").conflict_info);
         }
+        Ok(None)
+    }
+
+    /// 解决单个“冲突项”（新逻辑：忽略 path，只按 choice 决定上传或下载）
+    pub async fn resolve_file_conflict(&self, _path: &str, choice: &str) -> Result<()> {
+        match choice {
+            "local" => {
+                let _ = self.upload_snapshot().await?;
+                Ok(())
+            }
+            "remote" => {
+                let _ = self.download_snapshot(true).await?;
+                Ok(())
+            }
+            _ => Err(anyhow!("无效的选择: {}", choice)),
+        }
+    }
+
+    /// 批量解决冲突（新逻辑：直接按 choice 执行一次）
+    pub async fn resolve_all_conflicts(&self, choice: &str) -> Result<SyncResult> {
+        match choice {
+            "local" => self.upload_snapshot().await,
+            "remote" => self.download_snapshot(true).await,
+            _ => Err(anyhow!("无效的选择: {}", choice)),
+        }
+    }
+
+    fn merge_settings(
+        &self,
+        remote_content: &[u8],
+        local_webdav: &WebDavConfig,
+    ) -> Result<Vec<u8>> {
+        let mut remote_settings: AppSettings = serde_json::from_slice(remote_content)
+            .map_err(|e| anyhow!("解析远端 settings.json 失败: {}", e))?;
+        remote_settings.webdav = local_webdav.clone();
+        let merged = serde_json::to_string_pretty(&remote_settings)?;
+        Ok(merged.into_bytes())
     }
 }
