@@ -974,3 +974,36 @@ async fn reload_active_profile_internal(state: &State<'_, AppState>) -> Result<(
     backup.cleanup();
     Ok(())
 }
+
+/// 更新 Profile 的提供者节点数量统计
+///
+/// 参数 counts 是一个 HashMap，key 是提供者名称，value 是节点数量
+#[tauri::command]
+pub async fn update_profile_provider_stats(
+    id: String,
+    counts: std::collections::HashMap<String, u32>,
+) -> Result<ProfileMetadata, String> {
+    let workspace = Workspace::new().map_err(|e| e.to_string())?;
+
+    // 获取当前元数据
+    let mut metadata = workspace.get_metadata(&id).map_err(|e| e.to_string())?;
+
+    // 更新提供者节点数量
+    metadata.update_provider_proxy_counts(counts);
+
+    // 保存元数据
+    workspace
+        .update_metadata(&id, &metadata)
+        .map_err(|e| e.to_string())?;
+
+    log::info!(
+        "Updated provider proxy counts for profile '{}': {:?}",
+        metadata.name,
+        metadata.provider_proxy_counts
+    );
+
+    // 通知前端配置已变更
+    on_profile_changed(None, false).await?;
+
+    Ok(metadata)
+}

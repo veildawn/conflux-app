@@ -104,6 +104,56 @@ function formatDate(isoString: string): string {
   }
 }
 
+// 节点数量显示组件
+function ProxyCountDisplay({ profile }: { profile: ProfileMetadata }) {
+  // 计算提供者节点总数
+  const providerProxyTotal = profile.providerProxyCounts
+    ? Object.values(profile.providerProxyCounts).reduce((sum, count) => sum + count, 0)
+    : 0;
+
+  // 总节点数 = 直接节点 + 提供者节点
+  const totalCount = profile.proxyCount + providerProxyTotal;
+
+  // 生成提供者详情的 title 属性
+  const getProviderDetails = () => {
+    if (!profile.providerProxyCounts || Object.keys(profile.providerProxyCounts).length === 0) {
+      return '';
+    }
+    const details = Object.entries(profile.providerProxyCounts)
+      .map(([name, count]) => `${name}: ${count} 节点`)
+      .join('\n');
+    return `直接节点: ${profile.proxyCount}\n${details}`;
+  };
+
+  return (
+    <span
+      className={cn(
+        'text-xs font-medium px-2 py-0.5 rounded-md cursor-default',
+        profile.active
+          ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+          : 'bg-gray-100 text-gray-500 dark:bg-zinc-800 dark:text-gray-400'
+      )}
+      title={getProviderDetails()}
+    >
+      {providerProxyTotal > 0 ? (
+        <>
+          {totalCount} 节点
+          <span className="opacity-60 ml-1">
+            ({profile.proxyCount}+{providerProxyTotal})
+          </span>
+        </>
+      ) : profile.providerCount > 0 ? (
+        <>
+          {profile.proxyCount} 节点
+          <span className="opacity-60 ml-1">+{profile.providerCount} 提供者</span>
+        </>
+      ) : (
+        <>{profile.proxyCount} 节点</>
+      )}
+    </span>
+  );
+}
+
 // -----------------------------------------------------------------------------
 // Main Component
 // -----------------------------------------------------------------------------
@@ -140,6 +190,38 @@ export default function SubscriptionPage() {
   useEffect(() => {
     loadProfiles();
   }, [loadProfiles]);
+
+  // 页面加载时，如果 MiHomo 运行中，更新激活配置的提供者统计
+  useEffect(() => {
+    const updateActiveProfileProviderStats = async () => {
+      if (!status.running) return;
+
+      const activeProfile = profiles.find((p) => p.active);
+      if (!activeProfile || activeProfile.providerCount === 0) return;
+
+      try {
+        const providers = await ipc.getProxyProviders();
+        if (providers.length > 0) {
+          const counts: Record<string, number> = {};
+          for (const provider of providers) {
+            counts[provider.name] = provider.proxies?.length || 0;
+          }
+          // 只有当统计数据有变化时才更新
+          const existingCounts = activeProfile.providerProxyCounts || {};
+          const hasChanges = Object.keys(counts).some((key) => existingCounts[key] !== counts[key]);
+          if (hasChanges) {
+            await ipc.updateProfileProviderStats(activeProfile.id, counts);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to update active profile provider stats:', error);
+      }
+    };
+
+    if (profiles.length > 0) {
+      updateActiveProfileProviderStats();
+    }
+  }, [status.running, profiles]);
 
   // 监听配置变更
   useEffect(() => {
@@ -272,6 +354,8 @@ export default function SubscriptionPage() {
       await loadProfiles();
       if (status.running) {
         await fetchGroups();
+        // 激活后更新提供者节点数量统计
+        await updateProviderStats(id);
       }
       toast({ title: '配置已激活' });
     } catch (error) {
@@ -283,6 +367,25 @@ export default function SubscriptionPage() {
       });
     } finally {
       setApplyingId(null);
+    }
+  };
+
+  // 更新提供者节点数量统计
+  const updateProviderStats = async (profileId: string) => {
+    try {
+      const providers = await ipc.getProxyProviders();
+      if (providers.length > 0) {
+        const counts: Record<string, number> = {};
+        for (const provider of providers) {
+          counts[provider.name] = provider.proxies?.length || 0;
+        }
+        await ipc.updateProfileProviderStats(profileId, counts);
+        // 重新加载配置列表以显示更新后的统计
+        await loadProfiles();
+      }
+    } catch (error) {
+      console.error('Failed to update provider stats:', error);
+      // 不影响主流程，只记录错误
     }
   };
 
@@ -470,16 +573,7 @@ export default function SubscriptionPage() {
                       <span>{formatDate(profile.updatedAt)}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          'text-xs font-medium px-2 py-0.5 rounded-md',
-                          profile.active
-                            ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
-                            : 'bg-gray-100 text-gray-500 dark:bg-zinc-800 dark:text-gray-400'
-                        )}
-                      >
-                        {profile.proxyCount} 节点
-                      </span>
+                      <ProxyCountDisplay profile={profile} />
                       <span className="text-xs text-gray-400">{profile.ruleCount} 规则</span>
                     </div>
                   </div>

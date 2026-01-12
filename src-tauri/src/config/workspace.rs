@@ -125,6 +125,7 @@ impl Workspace {
             config.proxy_count(),
             config.group_count(),
             config.rule_count(),
+            config.provider_count(),
         );
         metadata.default_rules_applied = Some(default_rules_applied);
 
@@ -160,6 +161,7 @@ impl Workspace {
             config.proxy_count(),
             config.group_count(),
             config.rule_count(),
+            config.provider_count(),
         );
 
         self.save_profile(&id, &metadata, &config)?;
@@ -185,6 +187,7 @@ impl Workspace {
             config.proxy_count(),
             config.group_count(),
             config.rule_count(),
+            config.provider_count(),
         );
 
         self.save_profile(&id, &metadata, &config)?;
@@ -228,6 +231,7 @@ impl Workspace {
             config.proxy_count(),
             config.group_count(),
             config.rule_count(),
+            config.provider_count(),
         );
 
         self.save_profile(id, &metadata, config)?;
@@ -474,6 +478,7 @@ impl Workspace {
             final_config.proxy_count(),
             final_config.group_count(),
             final_config.rule_count(),
+            final_config.provider_count(),
         );
         // 这里我们不更新 default_rules_applied，因为我们没有重新应用规则模板
 

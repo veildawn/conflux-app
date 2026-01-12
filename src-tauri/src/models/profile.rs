@@ -44,6 +44,12 @@ pub struct ProfileMetadata {
     pub group_count: u32,
     /// 规则数量
     pub rule_count: u32,
+    /// 代理提供者数量
+    #[serde(default)]
+    pub provider_count: u32,
+    /// 每个代理提供者的节点数量映射（提供者名称 -> 节点数量）
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub provider_proxy_counts: HashMap<String, u32>,
     /// 是否自动生成默认规则（远程订阅且无规则时）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_rules_applied: Option<bool>,
@@ -71,6 +77,8 @@ impl ProfileMetadata {
             proxy_count: 0,
             group_count: 0,
             rule_count: 0,
+            provider_count: 0,
+            provider_proxy_counts: HashMap::new(),
             default_rules_applied: None,
             active: false,
             auto_update: Some(true),
@@ -91,6 +99,8 @@ impl ProfileMetadata {
             proxy_count: 0,
             group_count: 0,
             rule_count: 0,
+            provider_count: 0,
+            provider_proxy_counts: HashMap::new(),
             default_rules_applied: None,
             active: false,
             auto_update: None,
@@ -111,6 +121,8 @@ impl ProfileMetadata {
             proxy_count: 0,
             group_count: 0,
             rule_count: 0,
+            provider_count: 0,
+            provider_proxy_counts: HashMap::new(),
             default_rules_applied: None,
             active: false,
             auto_update: None,
@@ -119,11 +131,29 @@ impl ProfileMetadata {
     }
 
     /// 更新统计信息
-    pub fn update_stats(&mut self, proxy_count: u32, group_count: u32, rule_count: u32) {
+    pub fn update_stats(
+        &mut self,
+        proxy_count: u32,
+        group_count: u32,
+        rule_count: u32,
+        provider_count: u32,
+    ) {
         self.proxy_count = proxy_count;
         self.group_count = group_count;
         self.rule_count = rule_count;
+        self.provider_count = provider_count;
         self.updated_at = chrono::Local::now().to_rfc3339();
+    }
+
+    /// 更新提供者节点数量统计
+    pub fn update_provider_proxy_counts(&mut self, counts: HashMap<String, u32>) {
+        self.provider_proxy_counts = counts;
+        self.updated_at = chrono::Local::now().to_rfc3339();
+    }
+
+    /// 获取提供者节点总数
+    pub fn provider_proxy_total(&self) -> u32 {
+        self.provider_proxy_counts.values().sum()
     }
 }
 
@@ -190,6 +220,11 @@ impl ProfileConfig {
     /// 获取规则数量
     pub fn rule_count(&self) -> u32 {
         self.rules.len() as u32
+    }
+
+    /// 获取代理提供者数量
+    pub fn provider_count(&self) -> u32 {
+        self.proxy_providers.len() as u32
     }
 
     /// 检查代理名称是否存在

@@ -296,6 +296,10 @@ export interface ProfileMetadata {
   proxyCount: number;
   groupCount: number;
   ruleCount: number;
+  /** 代理提供者数量 */
+  providerCount: number;
+  /** 每个代理提供者的节点数量映射（提供者名称 -> 节点数量） */
+  providerProxyCounts?: Record<string, number>;
   /** 是否自动生成默认规则（远程订阅且无规则时） */
   defaultRulesApplied?: boolean;
   active: boolean;

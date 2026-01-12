@@ -685,6 +685,8 @@ fn main() {
             commands::profile::delete_proxy_provider_from_profile,
             // Profile Proxy Group 命令
             commands::profile::rename_proxy_group_in_profile,
+            // Profile 提供者统计命令
+            commands::profile::update_profile_provider_stats,
             // URL 延迟测试命令
             commands::proxy::test_url_delay,
             commands::proxy::test_urls_delay,
