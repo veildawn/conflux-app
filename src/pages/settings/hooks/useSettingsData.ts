@@ -25,6 +25,7 @@ export function useSettingsData() {
   const [coreVersion, setCoreVersion] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [autostart, setAutostart] = useState(false);
+  const [useJsdelivr, setUseJsdelivr] = useState(false);
 
   const { status, fetchStatus, setAllowLan, setPorts, setIpv6, setTcpConcurrent } = useProxyStore(
     useShallow((state) => ({
@@ -62,6 +63,13 @@ export function useSettingsData() {
         setAutostart(await ipc.getAutostartEnabled());
       } catch {
         // Autostart not supported on this platform
+      }
+      // 加载应用设置获取 useJsdelivr
+      try {
+        const appSettings = await ipc.getAppSettings();
+        setUseJsdelivr(appSettings.useJsdelivr ?? false);
+      } catch {
+        // 加载设置失败，使用默认值
       }
     } catch (error) {
       logger.error('Failed to load versions:', error);
@@ -115,6 +123,20 @@ export function useSettingsData() {
     [toast]
   );
 
+  const handleUseJsdelivrToggle = useCallback(
+    async (checked: boolean) => {
+      try {
+        const appSettings = await ipc.getAppSettings();
+        await ipc.saveAppSettings({ ...appSettings, useJsdelivr: checked });
+        setUseJsdelivr(checked);
+        toast({ title: checked ? '已启用 JsDelivr 加速' : '已关闭 JsDelivr 加速' });
+      } catch (error) {
+        toast({ title: '设置失败', description: String(error), variant: 'destructive' });
+      }
+    },
+    [toast]
+  );
+
   return {
     config,
     setConfig,
@@ -122,6 +144,7 @@ export function useSettingsData() {
     coreVersion,
     loading,
     autostart,
+    useJsdelivr,
     status,
     setAllowLan,
     setPorts,
@@ -130,6 +153,7 @@ export function useSettingsData() {
     handleConfigChange,
     handleDnsConfigChange,
     handleAutostartToggle,
+    handleUseJsdelivrToggle,
     toast,
   };
 }

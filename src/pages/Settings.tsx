@@ -14,6 +14,7 @@ export default function Settings() {
     coreVersion,
     loading,
     autostart,
+    useJsdelivr,
     status,
     setAllowLan,
     setPorts,
@@ -21,6 +22,7 @@ export default function Settings() {
     setTcpConcurrent,
     handleDnsConfigChange,
     handleAutostartToggle,
+    handleUseJsdelivrToggle,
     toast,
   } = useSettingsData();
 
@@ -52,6 +54,8 @@ export default function Settings() {
           coreVersion={coreVersion}
           autostart={autostart}
           onAutostartChange={handleAutostartToggle}
+          useJsdelivr={useJsdelivr}
+          onUseJsdelivrChange={handleUseJsdelivrToggle}
           updateStatus={updateStatus}
           latestVersion={latestVersion}
           updateUrl={updateUrl}

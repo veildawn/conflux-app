@@ -106,8 +106,9 @@ pub async fn activate_profile(id: String, state: State<'_, AppState>) -> Result<
     let base_config = build_base_config_from_settings(&app_settings.mihomo);
 
     // 生成运行时配置（合并 profile 内容：proxies/rules 等）
+    // 传入 use_jsdelivr 设置，避免重复读取配置文件
     let runtime_config = workspace
-        .activate_profile(&id, &base_config)
+        .activate_profile(&id, &base_config, Some(app_settings.use_jsdelivr))
         .map_err(|e| e.to_string())?;
 
     // 保存运行时配置
@@ -170,7 +171,7 @@ pub async fn refresh_profile(
         let base_config = build_base_config_from_settings(&app_settings.mihomo);
 
         let runtime_config = workspace
-            .activate_profile(&id, &base_config)
+            .activate_profile(&id, &base_config, Some(app_settings.use_jsdelivr))
             .map_err(|e| e.to_string())?;
 
         state
@@ -217,6 +218,41 @@ pub async fn preview_remote_config(url: String) -> Result<ProfileConfig, String>
         .map_err(|e| e.to_string())
 }
 
+/// 从路径中提取文件名，生成规则源相对路径 ./ruleset/{filename}
+/// 如果提取不到文件名，生成 uuid.yaml 或 uuid.txt
+fn to_ruleset_path(path: &str, format: &str) -> String {
+    let filename = extract_filename(path, format);
+    format!("./ruleset/{}", filename)
+}
+
+/// 从路径中提取文件名，生成代理源相对路径 ./proxyset/{filename}
+/// 如果提取不到文件名，生成 uuid.yaml
+fn to_proxyset_path(path: &str) -> String {
+    let filename = extract_filename(path, "yaml");
+    format!("./proxyset/{}", filename)
+}
+
+/// 从路径中提取文件名，提取不到则生成 UUID 文件名
+fn extract_filename(path: &str, format: &str) -> String {
+    // 尝试从路径中提取文件名
+    let path_obj = std::path::Path::new(path);
+    if let Some(name) = path_obj.file_name() {
+        let name_str = name.to_string_lossy();
+        if !name_str.is_empty() && name_str.contains('.') {
+            // 去掉原有后缀，使用我们的后缀
+            let base = name_str
+                .rsplit_once('.')
+                .map(|(b, _)| b)
+                .unwrap_or(&name_str);
+            let ext = if format == "text" { "txt" } else { "yaml" };
+            return format!("{}.{}", base, ext);
+        }
+    }
+    // 提取不到有效文件名，生成 UUID
+    let ext = if format == "text" { "txt" } else { "yaml" };
+    format!("{}.{}", uuid::Uuid::new_v4(), ext)
+}
+
 /// 导出 Profile 配置到指定路径（导出运行时完整配置）
 #[tauri::command]
 pub async fn export_profile_config(
@@ -245,7 +281,7 @@ pub async fn export_profile_config(
             .map_err(|e| e.to_string())?;
         let base_config = build_base_config_from_settings(&app_settings.mihomo);
         workspace
-            .generate_runtime_config(&id, &base_config)
+            .generate_runtime_config(&id, &base_config, Some(app_settings.use_jsdelivr))
             .map_err(|e| e.to_string())?
     };
 
@@ -426,6 +462,13 @@ pub async fn add_rule_provider_to_profile(
         .get_profile(&profile_id)
         .map_err(|e| e.to_string())?;
 
+    // 转换路径为相对路径后存储
+    let mut provider = provider;
+    if let Some(path) = &provider.path {
+        let format = provider.format.as_deref().unwrap_or("yaml");
+        provider.path = Some(to_ruleset_path(path, format));
+    }
+
     // 支持 upsert：如果已存在则更新，否则添加
     config.rule_providers.insert(name, provider);
     workspace
@@ -504,6 +547,12 @@ pub async fn add_proxy_provider_to_profile(
         .get_profile(&profile_id)
         .map_err(|e| e.to_string())?;
 
+    // 转换路径为相对路径后存储
+    let mut provider = provider;
+    if let Some(path) = &provider.path {
+        provider.path = Some(to_proxyset_path(path));
+    }
+
     // 支持 upsert：如果已存在则更新，否则添加
     config.proxy_providers.insert(name, provider);
     workspace
@@ -529,6 +578,12 @@ pub async fn update_proxy_provider_in_profile(
 
     if !config.proxy_providers.contains_key(&name) {
         return Err(format!("Proxy provider not found: {}", name));
+    }
+
+    // 转换路径为相对路径后存储
+    let mut provider = provider;
+    if let Some(path) = &provider.path {
+        provider.path = Some(to_proxyset_path(path));
     }
 
     config.proxy_providers.insert(name, provider);
@@ -584,6 +639,13 @@ pub async fn update_rule_provider_in_profile(
         return Err(format!("Rule provider not found: {}", name));
     }
 
+    // 转换路径为相对路径后存储
+    let mut provider = provider;
+    if let Some(path) = &provider.path {
+        let format = provider.format.as_deref().unwrap_or("yaml");
+        provider.path = Some(to_ruleset_path(path, format));
+    }
+
     config.rule_providers.insert(name, provider);
     workspace
         .update_config(&profile_id, &config)
@@ -620,6 +682,13 @@ pub async fn rename_rule_provider_in_profile(
     // 检查新名称是否已存在
     if config.rule_providers.contains_key(&new_name) {
         return Err(format!("Rule provider already exists: {}", new_name));
+    }
+
+    // 转换路径为相对路径后存储
+    let mut provider = provider;
+    if let Some(path) = &provider.path {
+        let format = provider.format.as_deref().unwrap_or("yaml");
+        provider.path = Some(to_ruleset_path(path, format));
     }
 
     // 1. 删除旧的 provider，添加新的
@@ -684,6 +753,12 @@ pub async fn rename_proxy_provider_in_profile(
     // 检查新名称是否已存在
     if config.proxy_providers.contains_key(&new_name) {
         return Err(format!("Proxy provider already exists: {}", new_name));
+    }
+
+    // 转换路径为相对路径后存储
+    let mut provider = provider;
+    if let Some(path) = &provider.path {
+        provider.path = Some(to_proxyset_path(path));
     }
 
     // 1. 删除旧的 provider，添加新的
@@ -804,7 +879,6 @@ pub async fn rename_proxy_group_in_profile(
 /// Profile 变更后的统一处理
 ///
 /// - 如果是活跃 Profile，重载配置
-/// - 触发 WebDAV 自动同步
 async fn on_profile_changed(
     state: Option<&State<'_, AppState>>,
     is_active: bool,
@@ -845,14 +919,14 @@ async fn reload_active_profile_internal(state: &State<'_, AppState>) -> Result<(
     let base_config = build_base_config_from_settings(&app_settings.mihomo);
 
     let runtime_config = workspace
-        .activate_profile(&active_id, &base_config)
+        .activate_profile(&active_id, &base_config, Some(app_settings.use_jsdelivr))
         .map_err(|e| e.to_string())?;
     state
         .config_manager
         .save_mihomo_config(&runtime_config)
         .map_err(|e| e.to_string())?;
 
-    // 使用统一的重载机制（内部会触发 auto_upload，但我们在 on_profile_changed 中统一处理）
+    // 使用统一的重载机制
     let options = ReloadOptions::safe();
     if let Err(e) = reload_config(None, &options).await {
         // 重载失败，尝试回滚

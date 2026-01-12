@@ -70,12 +70,6 @@ pub struct MihomoConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dns: Option<DnsConfig>,
 
-    #[serde(default, alias = "Proxy")]
-    pub proxies: Vec<ProxyConfig>,
-
-    #[serde(rename = "proxy-groups", default, alias = "Proxy Group")]
-    pub proxy_groups: Vec<ProxyGroupConfig>,
-
     #[serde(
         rename = "proxy-providers",
         default,
@@ -91,6 +85,12 @@ pub struct MihomoConfig {
         skip_serializing_if = "std::collections::HashMap::is_empty"
     )]
     pub rule_providers: std::collections::HashMap<String, RuleProvider>,
+
+    #[serde(default, alias = "Proxy", skip_serializing_if = "Vec::is_empty")]
+    pub proxies: Vec<ProxyConfig>,
+
+    #[serde(rename = "proxy-groups", default, alias = "Proxy Group")]
+    pub proxy_groups: Vec<ProxyGroupConfig>,
 
     #[serde(default, alias = "Rule")]
     pub rules: Vec<String>,
@@ -787,6 +787,10 @@ pub struct AppSettings {
     #[serde(rename = "closeToTray", default = "default_close_to_tray")]
     pub close_to_tray: bool,
 
+    /// 使用 JsDelivr 加速 GitHub 资源
+    #[serde(rename = "useJsdelivr", default)]
+    pub use_jsdelivr: bool,
+
     #[serde(rename = "ruleDatabases", default)]
     pub rule_databases: Vec<RuleDatabaseItem>,
 
@@ -813,6 +817,7 @@ impl Default for AppSettings {
             auto_start: false,
             system_proxy: false,
             close_to_tray: default_close_to_tray(),
+            use_jsdelivr: false,
             rule_databases: vec![],
             webdav: WebDavConfig::default(),
             mihomo: MihomoSettings::default(),

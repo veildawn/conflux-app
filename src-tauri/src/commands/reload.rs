@@ -17,7 +17,6 @@ use crate::commands::proxy::get_proxy_status;
 use crate::commands::{get_app_state_or_err, try_get_app_state, AppState};
 use crate::models::MihomoConfig;
 use crate::tray_menu::TrayMenuState;
-use crate::webdav::SyncManager;
 
 /// 配置重载选项
 #[derive(Clone)]
@@ -226,9 +225,6 @@ pub async fn reload_config(app: Option<&AppHandle>, options: &ReloadOptions) -> 
                         sync_proxy_status(app).await;
                     }
                 }
-
-                // 触发 WebDAV 自动上传（如果启用）
-                trigger_auto_upload().await;
 
                 return Ok(());
             }
@@ -582,45 +578,4 @@ pub async fn check_mihomo_healthy() -> bool {
             false
         }
     }
-}
-
-/// 触发 WebDAV 自动上传（如果启用）
-pub async fn trigger_auto_upload() {
-    let Some(state) = try_get_app_state() else {
-        return;
-    };
-
-    // 加载应用设置，检查是否启用了自动上传
-    let settings = match state.config_manager.load_app_settings() {
-        Ok(s) => s,
-        Err(e) => {
-            log::debug!("Failed to load app settings for auto upload: {}", e);
-            return;
-        }
-    };
-
-    // 检查 WebDAV 是否启用且开启了自动上传
-    if !settings.webdav.enabled || !settings.webdav.auto_upload {
-        return;
-    }
-
-    log::info!("Triggering WebDAV auto upload...");
-
-    // 异步执行上传，不阻塞主流程
-    let webdav_config = settings.webdav.clone();
-    tokio::spawn(async move {
-        let sync_manager = SyncManager::new(webdav_config);
-        match sync_manager.upload_all().await {
-            Ok(result) => {
-                if result.success {
-                    log::info!("WebDAV auto upload completed: {}", result.message);
-                } else {
-                    log::warn!("WebDAV auto upload failed: {}", result.message);
-                }
-            }
-            Err(e) => {
-                log::warn!("WebDAV auto upload error: {}", e);
-            }
-        }
-    });
 }

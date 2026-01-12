@@ -207,12 +207,26 @@ pub async fn download_resource(
     let target_dir = crate::utils::get_app_data_dir().map_err(|e| e.to_string())?;
     let target_path = target_dir.join(&file_name);
 
+    // 检查是否启用 JsDelivr 加速
+    let use_jsdelivr = get_app_state_or_err()
+        .ok()
+        .and_then(|state| state.config_manager.load_app_settings().ok())
+        .map(|settings| settings.use_jsdelivr)
+        .unwrap_or(false);
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(300)) // 5分钟超时，因为文件可能较大
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-    let mut download_url = url;
+    // 如果启用 JsDelivr 且是 GitHub URL，进行转换
+    let mut download_url = if use_jsdelivr && crate::utils::is_github_resource_url(&url) {
+        let converted = crate::utils::convert_github_to_jsdelivr(&url);
+        log::info!("JsDelivr accelerated URL: {} -> {}", url, converted);
+        converted
+    } else {
+        url
+    };
     let mut resolved_etag = None;
     let mut resolved_modified = None;
 

@@ -1,4 +1,4 @@
-import { Globe, Info, Power, ExternalLink, RefreshCw } from 'lucide-react';
+import { Globe, Info, Power, ExternalLink, RefreshCw, Zap } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,6 +16,8 @@ interface GeneralSectionProps {
   coreVersion: string;
   autostart: boolean;
   onAutostartChange: (checked: boolean) => void;
+  useJsdelivr: boolean;
+  onUseJsdelivrChange: (checked: boolean) => void;
   updateStatus: 'idle' | 'checking' | 'available' | 'latest' | 'error';
   latestVersion: string;
   updateUrl: string;
@@ -27,6 +29,8 @@ export function GeneralSection({
   coreVersion,
   autostart,
   onAutostartChange,
+  useJsdelivr,
+  onUseJsdelivrChange,
   updateStatus,
   latestVersion,
   updateUrl,
@@ -99,6 +103,21 @@ export function GeneralSection({
               <Switch
                 checked={autostart}
                 onCheckedChange={onAutostartChange}
+                className="scale-90"
+              />
+            }
+          />
+          <Divider />
+          <SettingItem
+            icon={Zap}
+            iconBgColor="bg-amber-50 dark:bg-amber-500/10"
+            iconColor="text-amber-500"
+            title="JsDelivr 加速"
+            description="使用 JsDelivr CDN 加速获取 GitHub 资源"
+            action={
+              <Switch
+                checked={useJsdelivr}
+                onCheckedChange={onUseJsdelivrChange}
                 className="scale-90"
               />
             }

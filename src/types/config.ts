@@ -478,6 +478,8 @@ export interface AppSettings {
   autoStart: boolean;
   systemProxy: boolean;
   closeToTray: boolean;
+  /** 使用 JsDelivr 加速 GitHub 资源 */
+  useJsdelivr?: boolean;
   ruleDatabases: RuleDatabaseItem[];
   /** WebDAV 同步配置 */
   webdav?: WebDavConfig;
