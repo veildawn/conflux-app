@@ -71,30 +71,43 @@ impl Composer {
             return Ok(config);
         }
 
-        // 提取 proxies
-        if let Some(proxies) = raw.get("proxies") {
+        // 提取 proxies (支持别名 Proxy)
+        if let Some(proxies) = raw.get("proxies").or_else(|| raw.get("Proxy")) {
             config.proxies = Self::parse_proxies(proxies)?;
         }
 
-        // 提取 proxy-groups
-        if let Some(groups) = raw.get("proxy-groups") {
+        // 提取 proxy-groups (支持别名 Proxy Group)
+        if let Some(groups) = raw.get("proxy-groups").or_else(|| raw.get("Proxy Group")) {
             config.proxy_groups = Self::parse_proxy_groups(groups)?;
         }
 
-        // 提取 proxy-providers
-        if let Some(providers) = raw.get("proxy-providers") {
+        // 提取 proxy-providers (支持别名 proxy-provider)
+        if let Some(providers) = raw
+            .get("proxy-providers")
+            .or_else(|| raw.get("proxy-provider"))
+        {
             config.proxy_providers = Self::parse_proxy_providers(providers)?;
         }
 
-        // 提取 rule-providers（处理 YAML 锚点）
-        if let Some(providers) = raw.get("rule-providers") {
+        // 提取 rule-providers（处理 YAML 锚点）(支持别名 rule-provider)
+        if let Some(providers) = raw
+            .get("rule-providers")
+            .or_else(|| raw.get("rule-provider"))
+        {
             config.rule_providers = Self::parse_rule_providers(providers)?;
         }
 
-        // 提取 rules
-        if let Some(rules) = raw.get("rules") {
+        // 提取 rules (支持别名 Rule)
+        if let Some(rules) = raw.get("rules").or_else(|| raw.get("Rule")) {
             config.rules = Self::parse_rules(rules)?;
         }
+
+        log::debug!(
+            "Extracted config: {} proxies, {} groups, {} rules",
+            config.proxies.len(),
+            config.proxy_groups.len(),
+            config.rules.len()
+        );
 
         Ok(config)
     }

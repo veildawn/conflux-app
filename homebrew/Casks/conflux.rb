@@ -6,19 +6,19 @@ cask "conflux" do
 
   on_intel do
     sha256 "INTEL_SHA256_PLACEHOLDER"
-    url "https://github.com/Ashbaer/conflux-app/releases/download/v#{version}/Conflux_#{version}_x64.dmg",
-        verified: "github.com/Ashbaer/conflux-app/"
+    url "https://github.com/veildawn/conflux-app/releases/download/v#{version}/Conflux_#{version}_x64.dmg",
+        verified: "github.com/veildawn/conflux-app/"
   end
 
   on_arm do
     sha256 "ARM64_SHA256_PLACEHOLDER"
-    url "https://github.com/Ashbaer/conflux-app/releases/download/v#{version}/Conflux_#{version}_aarch64.dmg",
-        verified: "github.com/Ashbaer/conflux-app/"
+    url "https://github.com/veildawn/conflux-app/releases/download/v#{version}/Conflux_#{version}_aarch64.dmg",
+        verified: "github.com/veildawn/conflux-app/"
   end
 
   name "Conflux"
   desc "Modern proxy management app based on MiHomo"
-  homepage "https://github.com/Ashbaer/conflux-app"
+  homepage "https://github.com/veildawn/conflux-app"
 
   livecheck do
     url :url

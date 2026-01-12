@@ -113,7 +113,7 @@ export function GeneralSection({
             action={
               <Button variant="ghost" size="sm" asChild className="h-7 rounded-full text-xs">
                 <a
-                  href="https://github.com/Ashbaer/conflux-app"
+                  href="https://github.com/veildawn/conflux-app"
                   target="_blank"
                   rel="noopener noreferrer"
                 >

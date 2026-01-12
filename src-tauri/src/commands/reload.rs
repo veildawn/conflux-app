@@ -32,6 +32,8 @@ pub struct ReloadOptions {
     pub sync_status: bool,
     /// 是否等待健康检查
     pub wait_for_healthy: bool,
+    /// 健康检查等待时间（毫秒）
+    pub health_check_delay_ms: u64,
 }
 
 impl Default for ReloadOptions {
@@ -42,6 +44,7 @@ impl Default for ReloadOptions {
             rollback_on_failure: true,
             sync_status: true,
             wait_for_healthy: true,
+            health_check_delay_ms: 200,
         }
     }
 }
@@ -55,6 +58,7 @@ impl ReloadOptions {
             rollback_on_failure: false,
             sync_status: true,
             wait_for_healthy: false,
+            health_check_delay_ms: 0,
         }
     }
 
@@ -66,6 +70,7 @@ impl ReloadOptions {
             rollback_on_failure: true,
             sync_status: true,
             wait_for_healthy: true,
+            health_check_delay_ms: 50, // 优化：减少等待时间，从 200ms 降至 50ms
         }
     }
 }
@@ -184,17 +189,16 @@ pub async fn reload_config(app: Option<&AppHandle>, options: &ReloadOptions) -> 
         return Ok(());
     }
 
-    // 等待 API 就绪（处理核心正在启动的情况）
-    // 这是关键：不要在 API 未就绪时盲目发送请求
-    log::debug!("Waiting for API to be ready before reload...");
-    wait_for_api_ready(10).await?;
+    // 优化：不再无条件等待 API 就绪。
+    // 如果 API 尚未就绪，第一次 reload_configs 会失败（网络错误），
+    // 此时再进入 wait_for_api_ready 流程。
 
     let config_path = state.config_manager.mihomo_config_path();
     let config_path_str = config_path.to_str().unwrap_or("");
 
     // API 已就绪，执行配置重载（带少量重试处理瞬时错误）
     let mut last_error = String::new();
-    let reload_retries = options.max_retries.min(5); // 限制重载重试次数，因为 API 已就绪
+    let reload_retries = options.max_retries.min(5); // 限制重载重试次数
 
     for attempt in 1..=reload_retries {
         log::debug!("Config reload attempt {}/{}", attempt, reload_retries);
@@ -205,7 +209,9 @@ pub async fn reload_config(app: Option<&AppHandle>, options: &ReloadOptions) -> 
 
                 // 等待配置生效并验证
                 if options.wait_for_healthy {
-                    sleep(Duration::from_millis(200)).await;
+                    if options.health_check_delay_ms > 0 {
+                        sleep(Duration::from_millis(options.health_check_delay_ms)).await;
+                    }
 
                     // 检查 mihomo 是否仍在运行（配置可能导致崩溃）
                     if !state.mihomo_manager.is_running().await {
@@ -228,6 +234,20 @@ pub async fn reload_config(app: Option<&AppHandle>, options: &ReloadOptions) -> 
             }
             Err(e) => {
                 last_error = e.to_string();
+
+                // 如果是第一次尝试且是网络错误（可能是 API 未就绪），尝试等待
+                if attempt == 1
+                    && (last_error.contains("connect") || last_error.contains("connection"))
+                {
+                    log::debug!("Reload failed with connection error, waiting for API ready...");
+                    // 等待最多 5 秒
+                    if let Err(wait_err) = wait_for_api_ready(5).await {
+                        log::warn!("Wait for API ready failed: {}", wait_err);
+                    }
+                    // 等待后重试
+                    continue;
+                }
+
                 log::warn!(
                     "Config reload failed on attempt {}: {}",
                     attempt,

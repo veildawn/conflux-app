@@ -501,7 +501,7 @@ Conflux 的配置文件存储在：
 
 1. 📖 查看本手册的「常见问题」部分
 2. 📜 检查「日志」页面的错误信息
-3. 🐛 在 [GitHub Issues](https://github.com/Ashbaer/conflux-app/issues) 提交问题
+3. 🐛 在 [GitHub Issues](https://github.com/veildawn/conflux-app/issues) 提交问题
 4. 💬 加入社区讨论
 
 ---
