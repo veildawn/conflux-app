@@ -266,7 +266,7 @@ pub async fn export_profile_config(
     let (metadata, _) = workspace.get_profile(&id).map_err(|e| e.to_string())?;
 
     // 获取运行时完整配置
-    let runtime_config = if metadata.active {
+    let mut runtime_config = if metadata.active {
         // 如果是当前激活的 Profile，直接读取运行时配置
         state
             .config_manager
@@ -284,6 +284,37 @@ pub async fn export_profile_config(
             .generate_runtime_config(&id, &base_config, Some(app_settings.use_jsdelivr))
             .map_err(|e| e.to_string())?
     };
+
+    // 导出前将绝对路径转换为相对路径
+    let data_dir = crate::utils::get_app_data_dir().map_err(|e| e.to_string())?;
+    let data_dir_str = data_dir.to_string_lossy();
+
+    // 转换 rule_providers 的路径
+    for (_name, provider) in runtime_config.rule_providers.iter_mut() {
+        if let Some(path) = &provider.path {
+            if path.starts_with(data_dir_str.as_ref()) {
+                // 将绝对路径转换为相对路径 (./ruleset/xxx.yaml)
+                let relative = path
+                    .strip_prefix(data_dir_str.as_ref())
+                    .unwrap_or(path)
+                    .trim_start_matches(['/', '\\']);
+                provider.path = Some(format!("./{}", relative));
+            }
+        }
+    }
+
+    // 转换 proxy_providers 的路径
+    for (_name, provider) in runtime_config.proxy_providers.iter_mut() {
+        if let Some(path) = &provider.path {
+            if path.starts_with(data_dir_str.as_ref()) {
+                let relative = path
+                    .strip_prefix(data_dir_str.as_ref())
+                    .unwrap_or(path)
+                    .trim_start_matches(['/', '\\']);
+                provider.path = Some(format!("./{}", relative));
+            }
+        }
+    }
 
     let yaml = serde_yaml::to_string(&runtime_config).map_err(|e| e.to_string())?;
     let target = Path::new(&target_path);
