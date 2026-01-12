@@ -754,6 +754,14 @@ pub struct MihomoSettings {
     /// DNS 配置
     #[serde(default)]
     pub dns: DnsConfig,
+
+    /// API 密钥（应用层管理，不随 profile 变化）
+    #[serde(default)]
+    pub secret: String,
+
+    /// 外部控制器地址（应用层管理）
+    #[serde(default = "default_external_controller")]
+    pub external_controller: String,
 }
 
 impl Default for MihomoSettings {
@@ -768,6 +776,8 @@ impl Default for MihomoSettings {
             find_process_mode: default_find_process_mode(),
             tun: TunConfig::default(),
             dns: DnsConfig::default(),
+            secret: String::new(),
+            external_controller: default_external_controller(),
         }
     }
 }

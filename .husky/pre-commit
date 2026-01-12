@@ -5,12 +5,13 @@ pnpm lint-staged
 
 # Run Rust formatting check
 echo "🦀 Checking Rust formatting..."
-cd src-tauri
 
 # Check if any Rust files are staged
 if git diff --cached --name-only | grep -q '\.rs$'; then
+  cd src-tauri
   # Format the code
   cargo fmt --all
+  cd ..
 
   # Add any formatted files back to staging
   git diff --name-only | grep '\.rs$' | xargs -r git add

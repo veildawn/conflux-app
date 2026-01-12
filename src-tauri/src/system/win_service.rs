@@ -1,10 +1,16 @@
 //! Windows Service Mode Support
 //!
 //! Manages the Conflux TUN Service for running mihomo with elevated privileges.
+//!
+//! 优化：
+//! - 减少 HTTP 客户端超时时间
+//! - 使用连接池复用连接
+//! - 更短的服务状态等待间隔
 
 #![cfg(target_os = "windows")]
 
 use anyhow::{anyhow, Result};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 use std::time::Duration;
@@ -14,6 +20,18 @@ const SERVICE_PORT: u16 = 33211;
 
 /// Service name
 const SERVICE_NAME: &str = "ConfluxService";
+
+/// 共享的 HTTP 客户端（连接池复用）
+/// 优化：使用全局客户端避免每次请求都创建新连接
+static SERVICE_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(2)) // 总超时 2 秒（服务本地通信应该很快）
+        .connect_timeout(Duration::from_millis(200)) // 连接超时 200ms（本地连接）
+        .pool_idle_timeout(Duration::from_secs(30)) // 连接池空闲超时
+        .pool_max_idle_per_host(2) // 每个主机最多 2 个空闲连接
+        .build()
+        .expect("Failed to create HTTP client")
+});
 
 /// Service status
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,12 +121,9 @@ impl WinServiceManager {
     }
 
     /// Query mihomo status from service
+    /// 优化：使用共享客户端，减少连接开销
     async fn query_mihomo_status() -> Result<StatusResponse> {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
-            .build()?;
-
-        let resp = client
+        let resp = SERVICE_CLIENT
             .get(format!("http://127.0.0.1:{}/status", SERVICE_PORT))
             .send()
             .await
@@ -232,11 +247,12 @@ impl WinServiceManager {
             ));
         }
 
-        // Wait for service to start
-        for _ in 0..10 {
-            std::thread::sleep(Duration::from_millis(500));
+        // 优化：使用更短的检测间隔，更快响应
+        // 100ms 间隔检测，最多等待 3 秒
+        for i in 0..30 {
+            std::thread::sleep(Duration::from_millis(100));
             if Self::is_running()? {
-                log::info!("Service started");
+                log::info!("Service started after {} ms", (i + 1) * 100);
                 return Ok(());
             }
         }
@@ -292,11 +308,12 @@ impl WinServiceManager {
             ));
         }
 
-        // Wait for service to actually stop
-        for _ in 0..10 {
-            std::thread::sleep(Duration::from_millis(300));
+        // 优化：使用更短的检测间隔，更快响应
+        // 100ms 间隔检测，最多等待 2 秒
+        for i in 0..20 {
+            std::thread::sleep(Duration::from_millis(100));
             if !Self::is_running()? {
-                log::info!("Service stopped");
+                log::info!("Service stopped after {} ms", (i + 1) * 100);
                 return Ok(());
             }
         }
@@ -307,23 +324,22 @@ impl WinServiceManager {
     }
 
     /// Restart the service
+    /// 优化：减少停止后的等待时间
     pub fn restart() -> Result<()> {
         Self::stop()?;
-        std::thread::sleep(Duration::from_secs(1));
+        // 优化：从 1 秒降至 200ms
+        std::thread::sleep(Duration::from_millis(200));
         Self::start()
     }
 
     /// Start mihomo via service
+    /// 优化：使用共享客户端，减少连接开销
     pub async fn start_mihomo(
         mihomo_path: &str,
         config_dir: &str,
         config_path: &str,
     ) -> Result<u32> {
         log::info!("Starting mihomo via service...");
-
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .build()?;
 
         #[derive(Serialize)]
         struct StartRequest {
@@ -332,7 +348,7 @@ impl WinServiceManager {
             config_path: String,
         }
 
-        let resp = client
+        let resp = SERVICE_CLIENT
             .post(format!("http://127.0.0.1:{}/start", SERVICE_PORT))
             .json(&StartRequest {
                 mihomo_path: mihomo_path.to_string(),
@@ -356,14 +372,11 @@ impl WinServiceManager {
     }
 
     /// Stop mihomo via service
+    /// 优化：使用共享客户端，减少连接开销
     pub async fn stop_mihomo() -> Result<()> {
         log::info!("Stopping mihomo via service...");
 
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .build()?;
-
-        let resp = client
+        let resp = SERVICE_CLIENT
             .post(format!("http://127.0.0.1:{}/stop", SERVICE_PORT))
             .send()
             .await
@@ -492,8 +505,8 @@ impl WinServiceManager {
         let exit_code = output.status.code().unwrap_or(-1);
         log::info!("Elevated sc command exit code: {}", exit_code);
 
-        // 等待服务状态更新
-        std::thread::sleep(Duration::from_secs(1));
+        // 优化：减少等待时间，从 1 秒降至 300ms
+        std::thread::sleep(Duration::from_millis(300));
 
         // 检查服务状态来确认操作成功
         match action {

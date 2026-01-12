@@ -1,5 +1,5 @@
 use std::path::Path;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 use crate::commands::AppState;
 use crate::config::Workspace;
@@ -85,52 +85,173 @@ pub async fn rename_profile(id: String, new_name: String) -> Result<ProfileMetad
 
 /// 激活 Profile
 ///
-/// 从 settings.json 读取用户设置（ports/DNS/TUN 等），
+/// 从 settings.json 读取用户设置（ports/DNS/TUN/secret 等），
 /// 合并 profile 内容（proxies/rules 等），生成完整的运行时配置。
+///
+/// 优化：保存配置后立即返回，异步执行重载，通过事件通知完成状态。
+/// 这样用户体验更流畅，无需等待 MiHomo 核心重载完成。
 #[tauri::command]
-pub async fn activate_profile(id: String, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn activate_profile(
+    app: AppHandle,
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     use crate::commands::reload::{
-        build_base_config_from_settings, reload_config, ConfigBackup, ReloadOptions,
+        build_base_config_from_settings, detect_config_change_type, reload_config,
+        sync_proxy_status, ConfigChangeType, ReloadOptions,
     };
 
-    let workspace = Workspace::new().map_err(|e| e.to_string())?;
+    // 如果 MiHomo 未运行，只保存配置
+    let is_running = state.mihomo_manager.is_running().await;
 
-    // 创建配置备份
-    let backup = ConfigBackup::create(&state).map_err(|e| e.to_string())?;
+    // 加载当前配置（用于变更类型检测）
+    let old_config = state
+        .config_manager
+        .load_mihomo_config()
+        .map_err(|e| e.to_string())?;
 
-    // 从 settings.json 构建基础配置（包含用户设置：ports/DNS/TUN 等）
+    // 从 settings.json 构建基础配置（包含 ports/DNS/TUN 等）
     let app_settings = state
         .config_manager
         .load_app_settings()
         .map_err(|e| e.to_string())?;
-    let base_config = build_base_config_from_settings(&app_settings.mihomo);
+    let mut base_config = build_base_config_from_settings(&app_settings.mihomo);
 
-    // 生成运行时配置（合并 profile 内容：proxies/rules 等）
-    // 传入 use_jsdelivr 设置，避免重复读取配置文件
-    let runtime_config = workspace
+    // 使用 AppState 中的 api_secret，确保与 MihomoApi 客户端一致
+    // 这避免了 settings.json 中 secret 被意外清空导致的认证失败
+    base_config.secret = state.api_secret.clone();
+
+    // 生成运行时配置（合并 profile 内容）
+    let workspace = Workspace::new().map_err(|e| e.to_string())?;
+    let mut runtime_config = workspace
         .activate_profile(&id, &base_config, Some(app_settings.use_jsdelivr))
         .map_err(|e| e.to_string())?;
 
-    // 保存运行时配置
+    // 确保 runtime_config 中的 secret 也是正确的
+    runtime_config.secret = state.api_secret.clone();
+
+    // 保存配置
     state
         .config_manager
         .save_mihomo_config(&runtime_config)
         .map_err(|e| e.to_string())?;
 
-    // 如果 MiHomo 正在运行，重新加载配置
-    let options = ReloadOptions::safe();
-    if let Err(e) = reload_config(None, &options).await {
-        // 重载失败，回滚配置
-        log::error!("Profile activation failed, rolling back: {}", e);
-        if let Err(rollback_err) = backup.rollback() {
-            log::error!("Failed to rollback config: {}", rollback_err);
-        } else {
-            let _ = reload_config(None, &ReloadOptions::quick()).await;
-        }
-        return Err(format!("激活配置失败: {}", e));
+    // 如果 MiHomo 未运行，直接发送完成事件并返回
+    if !is_running {
+        log::warn!("[Profile] MiHomo 未运行，配置已保存");
+        let _ = app.emit(
+            "profile-reload-complete",
+            serde_json::json!({
+                "profile_id": id,
+                "success": true,
+                "restarted": false,
+                "restart_reason": null,
+            }),
+        );
+        return Ok(());
     }
 
-    backup.cleanup();
+    // 检测变更类型
+    let change_result = detect_config_change_type(&old_config, &runtime_config);
+    let change_type = change_result.change_type;
+    let restart_reason = change_result.reason.clone();
+
+    log::warn!(
+        "[Profile] 切换配置 '{}': {:?}, 原因: {:?}",
+        id,
+        change_type,
+        restart_reason
+    );
+
+    // 克隆需要在异步任务中使用的数据
+    let mihomo_manager = state.mihomo_manager.clone();
+    let profile_id = id.clone();
+
+    // 记录本次请求的 Profile ID
+    {
+        let mut pending = state.pending_profile_id.lock().await;
+        *pending = Some(id.clone());
+    }
+
+    let switch_lock = state.profile_switch_lock.clone();
+    let pending_state = state.pending_profile_id.clone();
+
+    // 异步执行重载，立即返回给前端
+    // 重载完成后通过事件通知前端
+    tokio::spawn(async move {
+        // 获取锁，确保同一时间只有一个重载任务在执行
+        // 这解决了快速切换 Profile 导致的并发冲突和网络错误
+        let _guard = switch_lock.lock().await;
+
+        // 再次检查是否是最新的请求
+        {
+            let pending = pending_state.lock().await;
+            if let Some(pending_id) = pending.as_ref() {
+                if pending_id != &profile_id {
+                    log::info!(
+                        "[Profile] Switch to '{}' superseded by '{}', skipping reload",
+                        profile_id,
+                        pending_id
+                    );
+                    return;
+                }
+            }
+        }
+
+        let result = match change_type {
+            ConfigChangeType::HotReload => {
+                log::warn!("[Profile] 执行热重载");
+                reload_config(Some(&app), &ReloadOptions::quick()).await
+            }
+            ConfigChangeType::RequiresRestart => {
+                log::warn!("[Profile] 执行核心重启");
+                mihomo_manager.restart().await.map_err(|e| e.to_string())
+            }
+        };
+
+        // 无论成功失败都同步状态
+        sync_proxy_status(&app).await;
+
+        // 发送事件通知前端
+        match &result {
+            Ok(_) => {
+                log::warn!("[Profile] 配置应用成功");
+                let _ = app.emit(
+                    "profile-reload-complete",
+                    serde_json::json!({
+                        "profile_id": profile_id,
+                        "success": true,
+                        "restarted": matches!(change_type, ConfigChangeType::RequiresRestart),
+                        "restart_reason": restart_reason,
+                    }),
+                );
+            }
+            Err(e) => {
+                log::error!("[Profile] 配置应用失败: {}", e);
+
+                // 发送错误日志到 Logs 页面
+                let _ = app.emit(
+                    "log-entry",
+                    serde_json::json!({
+                        "type": "error",
+                        "payload": format!("[Profile] 配置应用失败: {}", e)
+                    }),
+                );
+
+                let _ = app.emit(
+                    "profile-reload-complete",
+                    serde_json::json!({
+                        "profile_id": profile_id,
+                        "success": false,
+                        "error": e,
+                        "restarted": matches!(change_type, ConfigChangeType::RequiresRestart),
+                        "restart_reason": restart_reason,
+                    }),
+                );
+            }
+        }
+    });
+
     Ok(())
 }
 
@@ -141,7 +262,8 @@ pub async fn refresh_profile(
     state: State<'_, AppState>,
 ) -> Result<ProfileMetadata, String> {
     use crate::commands::reload::{
-        build_base_config_from_settings, reload_config, ConfigBackup, ReloadOptions,
+        build_base_config_from_settings, detect_config_change_type, reload_config,
+        ConfigChangeType, ReloadOptions,
     };
 
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
@@ -158,42 +280,46 @@ pub async fn refresh_profile(
         .await
         .map_err(|e| e.to_string())?;
 
-    // 如果是活跃 Profile，重新激活以应用更新
-    if is_active {
-        // 创建配置备份
-        let backup = ConfigBackup::create(&state).map_err(|e| e.to_string())?;
+    // 如果是活跃 Profile，重新应用配置
+    if is_active && state.mihomo_manager.is_running().await {
+        let old_config = state
+            .config_manager
+            .load_mihomo_config()
+            .map_err(|e| e.to_string())?;
 
-        // 从 settings.json 构建基础配置
         let app_settings = state
             .config_manager
             .load_app_settings()
             .map_err(|e| e.to_string())?;
-        let base_config = build_base_config_from_settings(&app_settings.mihomo);
+        let mut base_config = build_base_config_from_settings(&app_settings.mihomo);
 
-        let runtime_config = workspace
+        // 使用 AppState 中的 api_secret，确保与 MihomoApi 客户端一致
+        base_config.secret = state.api_secret.clone();
+
+        let mut runtime_config = workspace
             .activate_profile(&id, &base_config, Some(app_settings.use_jsdelivr))
             .map_err(|e| e.to_string())?;
+
+        // 确保 runtime_config 中的 secret 也是正确的
+        runtime_config.secret = state.api_secret.clone();
 
         state
             .config_manager
             .save_mihomo_config(&runtime_config)
             .map_err(|e| e.to_string())?;
 
-        // 使用统一的重载机制
-        let options = ReloadOptions::safe();
-        if let Err(e) = reload_config(None, &options).await {
-            // 重载失败，回滚配置（但保留已刷新的远程配置）
-            log::warn!("Config reload failed after profile refresh: {}", e);
-            if let Err(rollback_err) = backup.rollback() {
-                log::error!("Failed to rollback config: {}", rollback_err);
-            } else {
-                let _ = reload_config(None, &ReloadOptions::quick()).await;
-            }
-            // 不返回错误，因为远程配置已成功刷新，只是重载失败
-            log::warn!("Profile refreshed but config reload failed, may need to restart proxy");
-        } else {
-            backup.cleanup();
-        }
+        // 检测变更类型并应用
+        let change_result = detect_config_change_type(&old_config, &runtime_config);
+        log::debug!("Profile refresh change type: {:?}", change_result);
+
+        let _ = match change_result.change_type {
+            ConfigChangeType::HotReload => reload_config(None, &ReloadOptions::safe()).await,
+            ConfigChangeType::RequiresRestart => state
+                .mihomo_manager
+                .restart()
+                .await
+                .map_err(|e| e.to_string()),
+        };
     }
 
     Ok(metadata)
@@ -279,10 +405,18 @@ pub async fn export_profile_config(
             .config_manager
             .load_app_settings()
             .map_err(|e| e.to_string())?;
-        let base_config = build_base_config_from_settings(&app_settings.mihomo);
-        workspace
+        let mut base_config = build_base_config_from_settings(&app_settings.mihomo);
+
+        // 使用 AppState 中的 api_secret，确保与 MihomoApi 客户端一致
+        base_config.secret = state.api_secret.clone();
+
+        let mut config = workspace
             .generate_runtime_config(&id, &base_config, Some(app_settings.use_jsdelivr))
-            .map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?;
+
+        // 确保 runtime_config 中的 secret 也是正确的
+        config.secret = state.api_secret.clone();
+        config
     };
 
     // 导出前将绝对路径转换为相对路径
@@ -947,11 +1081,18 @@ async fn reload_active_profile_internal(state: &State<'_, AppState>) -> Result<(
         .config_manager
         .load_app_settings()
         .map_err(|e| e.to_string())?;
-    let base_config = build_base_config_from_settings(&app_settings.mihomo);
+    let mut base_config = build_base_config_from_settings(&app_settings.mihomo);
 
-    let runtime_config = workspace
+    // 使用 AppState 中的 api_secret，确保与 MihomoApi 客户端一致
+    base_config.secret = state.api_secret.clone();
+
+    let mut runtime_config = workspace
         .activate_profile(&active_id, &base_config, Some(app_settings.use_jsdelivr))
         .map_err(|e| e.to_string())?;
+
+    // 确保 runtime_config 中的 secret 也是正确的
+    runtime_config.secret = state.api_secret.clone();
+
     state
         .config_manager
         .save_mihomo_config(&runtime_config)

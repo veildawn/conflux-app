@@ -5,6 +5,7 @@
 //! - 配置备份和回滚
 //! - 健康检查
 //! - 状态同步
+//! - 智能重载策略（区分热重载和需要重启的配置变更）
 
 use anyhow::Result;
 use std::fs;
@@ -17,6 +18,95 @@ use crate::commands::proxy::get_proxy_status;
 use crate::commands::{get_app_state_or_err, try_get_app_state, AppState};
 use crate::models::MihomoConfig;
 use crate::tray_menu::TrayMenuState;
+
+/// 配置变更类型
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigChangeType {
+    /// 可以热重载的配置变更（无需重启进程）
+    HotReload,
+    /// 需要重启进程的配置变更
+    RequiresRestart,
+}
+
+/// 检测配置变更结果
+#[derive(Debug, Clone)]
+pub struct ConfigChangeResult {
+    pub change_type: ConfigChangeType,
+    /// 如果需要重启，这里包含原因
+    pub reason: Option<String>,
+}
+
+/// 检测两个配置之间的变更类型
+///
+/// 返回 `HotReload` 如果变更可以通过 API 热重载
+/// 返回 `RequiresRestart` 如果变更需要重启进程
+pub fn detect_config_change_type(old: &MihomoConfig, new: &MihomoConfig) -> ConfigChangeResult {
+    // 端口变更需要重启
+    if old.port != new.port || old.socks_port != new.socks_port || old.mixed_port != new.mixed_port
+    {
+        let reason = format!(
+            "端口变更 (HTTP: {:?}->{:?}, SOCKS: {:?}->{:?}, Mixed: {:?}->{:?})",
+            old.port, new.port, old.socks_port, new.socks_port, old.mixed_port, new.mixed_port
+        );
+        log::warn!("[ConfigChange] {}", reason);
+        return ConfigChangeResult {
+            change_type: ConfigChangeType::RequiresRestart,
+            reason: Some(reason),
+        };
+    }
+
+    // TUN 模式变更需要重启
+    let old_tun_enabled = old.tun.as_ref().map(|t| t.enable).unwrap_or(false);
+    let new_tun_enabled = new.tun.as_ref().map(|t| t.enable).unwrap_or(false);
+    if old_tun_enabled != new_tun_enabled {
+        let reason = format!(
+            "TUN 模式变更 ({} -> {})",
+            if old_tun_enabled { "开启" } else { "关闭" },
+            if new_tun_enabled { "开启" } else { "关闭" }
+        );
+        log::warn!("[ConfigChange] {}", reason);
+        return ConfigChangeResult {
+            change_type: ConfigChangeType::RequiresRestart,
+            reason: Some(reason),
+        };
+    }
+
+    // TUN 栈变更需要重启
+    let old_tun_stack = old.tun.as_ref().and_then(|t| t.stack.as_ref());
+    let new_tun_stack = new.tun.as_ref().and_then(|t| t.stack.as_ref());
+    if old_tun_enabled && old_tun_stack != new_tun_stack {
+        let reason = format!(
+            "TUN 栈变更 ({:?} -> {:?})",
+            old_tun_stack.unwrap_or(&"无".to_string()),
+            new_tun_stack.unwrap_or(&"无".to_string())
+        );
+        log::warn!("[ConfigChange] {}", reason);
+        return ConfigChangeResult {
+            change_type: ConfigChangeType::RequiresRestart,
+            reason: Some(reason),
+        };
+    }
+
+    // external-controller 变更需要重启
+    if old.external_controller != new.external_controller {
+        let reason = format!(
+            "External Controller 变更 ({} -> {})",
+            old.external_controller, new.external_controller
+        );
+        log::warn!("[ConfigChange] {}", reason);
+        return ConfigChangeResult {
+            change_type: ConfigChangeType::RequiresRestart,
+            reason: Some(reason),
+        };
+    }
+
+    // 其他变更可以热重载
+    log::warn!("[ConfigChange] 配置变更可以热重载，无需重启核心");
+    ConfigChangeResult {
+        change_type: ConfigChangeType::HotReload,
+        reason: None,
+    }
+}
 
 /// 配置重载选项
 #[derive(Clone)]
@@ -39,20 +129,20 @@ impl Default for ReloadOptions {
     fn default() -> Self {
         Self {
             max_retries: 3,
-            retry_interval_ms: 500,
+            retry_interval_ms: 200, // 优化：从 500ms 降至 200ms
             rollback_on_failure: true,
             sync_status: true,
             wait_for_healthy: true,
-            health_check_delay_ms: 200,
+            health_check_delay_ms: 50, // 优化：从 200ms 降至 50ms
         }
     }
 }
 
 impl ReloadOptions {
-    /// 创建快速重载选项（不重试，不回滚）
+    /// 创建快速重载选项（少量重试，不回滚）
     pub fn quick() -> Self {
         Self {
-            max_retries: 1,
+            max_retries: 3, // 增加重试次数，处理瞬时网络问题
             retry_interval_ms: 100,
             rollback_on_failure: false,
             sync_status: true,
@@ -140,15 +230,21 @@ impl Drop for ConfigBackup {
 ///
 /// 在核心启动过程中，进程可能已存在但 API 尚未就绪。
 /// 此函数会等待 API 能够正常响应，避免后续操作失败。
+/// 使用指数退避策略，初始间隔 100ms
 async fn wait_for_api_ready(timeout_secs: u64) -> Result<(), String> {
     let state = get_app_state_or_err()?;
-    let max_attempts = timeout_secs * 2; // 每 500ms 检查一次
+    let max_total_wait = Duration::from_secs(timeout_secs);
+    let mut total_waited = Duration::ZERO;
+    let mut current_interval = Duration::from_millis(100);
+    let max_interval = Duration::from_millis(500);
+    let mut attempt = 0;
 
-    for attempt in 1..=max_attempts {
+    while total_waited < max_total_wait {
+        attempt += 1;
         match state.mihomo_api.get_version().await {
             Ok(_) => {
                 if attempt > 1 {
-                    log::info!("API ready after {} attempts", attempt);
+                    log::info!("API ready after {} attempts ({:?})", attempt, total_waited);
                 }
                 return Ok(());
             }
@@ -158,12 +254,20 @@ async fn wait_for_api_ready(timeout_secs: u64) -> Result<(), String> {
                     return Err("代理核心已停止运行".to_string());
                 }
 
-                if attempt == max_attempts {
+                if total_waited + current_interval >= max_total_wait {
                     return Err(format!("等待 API 就绪超时: {}", e));
                 }
 
-                log::debug!("Waiting for API ready (attempt {}): {}", attempt, e);
-                sleep(Duration::from_millis(500)).await;
+                log::debug!(
+                    "Waiting for API ready (attempt {}, {:?}): {}",
+                    attempt,
+                    total_waited,
+                    e
+                );
+                sleep(current_interval).await;
+                total_waited += current_interval;
+                // 指数退避
+                current_interval = std::cmp::min(current_interval * 2, max_interval);
             }
         }
     }
@@ -223,6 +327,14 @@ pub async fn reload_config(app: Option<&AppHandle>, options: &ReloadOptions) -> 
                 if options.sync_status {
                     if let Some(app) = app {
                         sync_proxy_status(app).await;
+                        // 记录成功日志
+                        let _ = app.emit(
+                            "log-entry",
+                            serde_json::json!({
+                                "type": "info",
+                                "payload": "[Config] 配置重载成功"
+                            }),
+                        );
                     }
                 }
 
@@ -231,16 +343,20 @@ pub async fn reload_config(app: Option<&AppHandle>, options: &ReloadOptions) -> 
             Err(e) => {
                 last_error = e.to_string();
 
-                // 如果是第一次尝试且是网络错误（可能是 API 未就绪），尝试等待
-                if attempt == 1
-                    && (last_error.contains("connect") || last_error.contains("connection"))
+                // 如果是网络错误（可能是 API 未就绪或核心正忙），尝试等待
+                if last_error.contains("connect")
+                    || last_error.contains("connection")
+                    || last_error.contains("sending request")
                 {
-                    log::debug!("Reload failed with connection error, waiting for API ready...");
-                    // 等待最多 5 秒
-                    if let Err(wait_err) = wait_for_api_ready(5).await {
+                    log::warn!(
+                        "Config reload failed on attempt {} with network error: {}",
+                        attempt,
+                        last_error
+                    );
+                    // 等待 API 就绪后重试
+                    if let Err(wait_err) = wait_for_api_ready(3).await {
                         log::warn!("Wait for API ready failed: {}", wait_err);
                     }
-                    // 等待后重试
                     continue;
                 }
 
@@ -270,6 +386,17 @@ pub async fn reload_config(app: Option<&AppHandle>, options: &ReloadOptions) -> 
                 }
             }
         }
+    }
+
+    // 记录最终失败日志到前端
+    if let Some(app) = app {
+        let _ = app.emit(
+            "log-entry",
+            serde_json::json!({
+                "type": "error",
+                "payload": format!("[Config] 配置重载失败: {}", last_error)
+            }),
+        );
     }
 
     Err(format!("配置重载失败: {}", last_error))
@@ -445,6 +572,9 @@ pub fn apply_settings_to_config(
     config.find_process_mode = settings.find_process_mode.clone();
     config.tun = Some(settings.tun.clone());
     config.dns = Some(settings.dns.clone());
+    // API 认证配置（应用层管理）
+    config.secret = settings.secret.clone();
+    config.external_controller = settings.external_controller.clone();
 }
 
 /// 从 MihomoSettings 构建基础配置
@@ -501,21 +631,36 @@ pub async fn safe_restart_proxy(app: &AppHandle) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
 
-    // 额外等待一小段时间让 mihomo 完全稳定
-    // 这对于 TUN 模式切换特别重要，因为网络栈需要时间初始化
-    sleep(Duration::from_millis(300)).await;
+    // 优化：减少等待时间，从 300ms 降至 100ms
+    // TUN 模式初始化已经在 restart() 的健康检查中处理
+    sleep(Duration::from_millis(100)).await;
 
     // 使用 API 健康检查而不是进程检测，因为 API 检查更可靠
-    // 进程检测可能因为 tasklist 延迟或进程名匹配问题而失败
-    let healthy = match state.mihomo_api.get_version().await {
-        Ok(_) => true,
-        Err(e) => {
-            log::warn!("API health check failed after restart: {}, retrying...", e);
-            // 如果第一次检查失败，等待更长时间后重试
-            sleep(Duration::from_millis(1000)).await;
-            state.mihomo_api.get_version().await.is_ok()
+    // 使用指数退避策略进行重试
+    let mut healthy = false;
+    let mut retry_interval = Duration::from_millis(100);
+    let max_retry_interval = Duration::from_millis(500);
+    let max_total_wait = Duration::from_secs(3);
+    let mut total_waited = Duration::ZERO;
+
+    while total_waited < max_total_wait {
+        match state.mihomo_api.get_version().await {
+            Ok(_) => {
+                healthy = true;
+                break;
+            }
+            Err(e) => {
+                log::debug!(
+                    "API health check failed after restart ({:?}): {}",
+                    total_waited,
+                    e
+                );
+                sleep(retry_interval).await;
+                total_waited += retry_interval;
+                retry_interval = std::cmp::min(retry_interval * 2, max_retry_interval);
+            }
         }
-    };
+    }
 
     if !healthy {
         return Err("代理核心重启后 API 未能正常响应".to_string());

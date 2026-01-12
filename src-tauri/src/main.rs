@@ -377,7 +377,8 @@ async fn run_tray_traffic_loop(app_handle: AppHandle) {
 async fn run_tray_traffic_loop(_app_handle: AppHandle) {}
 
 fn main() {
-    env_logger::init();
+    // 设置默认日志级别为 warn，可通过 RUST_LOG 环境变量覆盖
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
