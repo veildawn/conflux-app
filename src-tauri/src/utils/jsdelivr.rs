@@ -37,9 +37,8 @@ pub fn convert_github_to_jsdelivr(url: &str) -> String {
 /// 尝试转换 raw.githubusercontent.com URL
 fn try_convert_raw_githubusercontent(url: &str) -> Option<String> {
     // 匹配: https://raw.githubusercontent.com/user/repo/branch/path...
-    let re = Regex::new(
-        r"^https?://raw\.githubusercontent\.com/([^/]+)/([^/]+)/([^/]+)/(.+)$"
-    ).ok()?;
+    let re =
+        Regex::new(r"^https?://raw\.githubusercontent\.com/([^/]+)/([^/]+)/([^/]+)/(.+)$").ok()?;
 
     let caps = re.captures(url)?;
     let user = caps.get(1)?.as_str();
@@ -56,9 +55,7 @@ fn try_convert_raw_githubusercontent(url: &str) -> Option<String> {
 /// 尝试转换 github.com/.../raw/... URL
 fn try_convert_github_raw(url: &str) -> Option<String> {
     // 匹配: https://github.com/user/repo/raw/branch/path...
-    let re = Regex::new(
-        r"^https?://github\.com/([^/]+)/([^/]+)/raw/([^/]+)/(.+)$"
-    ).ok()?;
+    let re = Regex::new(r"^https?://github\.com/([^/]+)/([^/]+)/raw/([^/]+)/(.+)$").ok()?;
 
     let caps = re.captures(url)?;
     let user = caps.get(1)?.as_str();
@@ -105,8 +102,12 @@ mod tests {
 
     #[test]
     fn test_is_github_resource_url() {
-        assert!(is_github_resource_url("https://raw.githubusercontent.com/user/repo/main/file"));
-        assert!(is_github_resource_url("https://github.com/user/repo/raw/main/file"));
+        assert!(is_github_resource_url(
+            "https://raw.githubusercontent.com/user/repo/main/file"
+        ));
+        assert!(is_github_resource_url(
+            "https://github.com/user/repo/raw/main/file"
+        ));
         assert!(!is_github_resource_url("https://example.com/file"));
         assert!(!is_github_resource_url("https://github.com/user/repo"));
     }
