@@ -365,7 +365,7 @@ function PublicIpCard({ className }: { className?: string }) {
       // 避免刷新时清空已有数据导致 UI 闪烁
       setLoading(true);
       setError((prev) => (data ? prev : null));
-    try {
+      try {
         const res = await Promise.race([
           ipc.getPublicIpInfo(),
           new Promise<PublicIpInfo | null>((_, reject) =>
@@ -379,14 +379,14 @@ function PublicIpCard({ className }: { className?: string }) {
         } else if (!data) {
           setError('获取失败');
         }
-    } catch (e) {
+      } catch (e) {
         if (mySeq !== reqSeqRef.current) return;
         // 有旧数据时失败不覆盖，避免闪烁
         if (!data) setData(null);
         if (!data) setError(e instanceof Error ? e.message : '获取失败');
-    } finally {
+      } finally {
         if (mySeq === reqSeqRef.current) setLoading(false);
-    }
+      }
     };
 
     void run();
