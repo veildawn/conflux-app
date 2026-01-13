@@ -1,6 +1,6 @@
 {
   "name": "conflux",
-  "version": "0.2.7",
+  "version": "0.3.0",
   "description": "基于 Tauri 2 + MiHomo 的现代化代理管理桌面应用",
   "type": "module",
   "scripts": {
