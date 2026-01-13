@@ -2,6 +2,8 @@
 
 <p align="center">
   <img src="https://img.shields.io/github/v/release/veildawn/conflux-app?style=for-the-badge&logo=github&color=007AFF" alt="release">
+  <img src="https://img.shields.io/github/downloads/veildawn/conflux-app/total?style=for-the-badge&logo=github&color=2ea44f" alt="downloads">
+  <img src="https://img.shields.io/github/stars/veildawn/conflux-app?style=for-the-badge&logo=github" alt="stars">
   <img src="https://img.shields.io/github/actions/workflow/status/veildawn/conflux-app/ci.yml?branch=main&style=for-the-badge&logo=github&label=build" alt="build status">
   <img src="https://img.shields.io/github/license/veildawn/conflux-app?style=for-the-badge&color=orange" alt="license">
 </p>
