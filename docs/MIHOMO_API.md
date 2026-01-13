@@ -35,16 +35,17 @@ curl -H 'Authorization: Bearer ${secret}' http://${controller-api}/configs?force
 
 ### 参数说明
 
-| 参数 | 说明 |
-|------|------|
-| `${secret}` | 配置文件中设置的 API 密钥 |
-| `${controller-api}` | 配置文件中设置的 API 监听地址（默认：`127.0.0.1:9090`）|
-| `?force=true` | 携带参数，部分请求需要 |
-| `{"path": "", "payload": ""}` | 要更新的资源数据 |
+| 参数                          | 说明                                                    |
+| ----------------------------- | ------------------------------------------------------- |
+| `${secret}`                   | 配置文件中设置的 API 密钥                               |
+| `${controller-api}`           | 配置文件中设置的 API 监听地址（默认：`127.0.0.1:9090`） |
+| `?force=true`                 | 携带参数，部分请求需要                                  |
+| `{"path": "", "payload": ""}` | 要更新的资源数据                                        |
 
 ### 认证方式
 
 请求头需要添加：
+
 ```
 Authorization: Bearer <secret>
 ```
@@ -60,6 +61,7 @@ Authorization: Bearer <secret>
 获取实时日志（WebSocket 连接）
 
 **响应示例**：
+
 ```json
 {
   "type": "info",
@@ -85,6 +87,7 @@ Authorization: Bearer <secret>
 获取实时流量（WebSocket 连接）
 
 **响应示例**：
+
 ```json
 {
   "up": 1024,
@@ -103,6 +106,7 @@ Authorization: Bearer <secret>
 获取实时内存占用（WebSocket 连接）
 
 **响应示例**：
+
 ```json
 {
   "inuse": 102400,
@@ -121,6 +125,7 @@ Authorization: Bearer <secret>
 获取 Mihomo 版本信息
 
 **响应示例**：
+
 ```json
 {
   "meta": true,
@@ -147,6 +152,7 @@ Authorization: Bearer <secret>
 获取基本配置
 
 **响应示例**：
+
 ```json
 {
   "port": 7890,
@@ -168,10 +174,12 @@ Authorization: Bearer <secret>
 重新加载基本配置
 
 **请求参数**：
+
 - URL 需携带 `?force=true` 强制执行
 - 必须发送数据
 
 **请求体**：
+
 ```json
 {
   "path": "/path/to/config.yaml",
@@ -184,6 +192,7 @@ Authorization: Bearer <secret>
 更新基本配置（部分更新）
 
 **请求体示例**：
+
 ```json
 {
   "mixed-port": 7890,
@@ -237,6 +246,7 @@ Authorization: Bearer <secret>
 获取所有策略组信息
 
 **响应示例**：
+
 ```json
 {
   "proxies": {
@@ -274,11 +284,13 @@ Authorization: Bearer <secret>
 | `timeout` | 超时时间（毫秒）| `5000` |
 
 **请求示例**：
+
 ```
 GET /group/PROXY/delay?url=http://www.gstatic.com/generate_204&timeout=5000
 ```
 
 **响应示例**：
+
 ```json
 {
   "节点1": 120,
@@ -298,6 +310,7 @@ GET /group/PROXY/delay?url=http://www.gstatic.com/generate_204&timeout=5000
 获取所有代理信息
 
 **响应示例**：
+
 ```json
 {
   "proxies": {
@@ -339,6 +352,7 @@ GET /group/PROXY/delay?url=http://www.gstatic.com/generate_204&timeout=5000
 选择特定的代理（用于 Selector 类型的策略组）
 
 **请求体**：
+
 ```json
 {
   "name": "节点名称"
@@ -346,6 +360,7 @@ GET /group/PROXY/delay?url=http://www.gstatic.com/generate_204&timeout=5000
 ```
 
 **示例**：
+
 ```bash
 curl -X PUT -H 'Authorization: Bearer secret' \
   -H 'Content-Type: application/json' \
@@ -364,11 +379,13 @@ curl -X PUT -H 'Authorization: Bearer secret' \
 | `timeout` | 超时时间（毫秒）| `5000` |
 
 **请求示例**：
+
 ```
 GET /proxies/节点1/delay?url=http://www.gstatic.com/generate_204&timeout=5000
 ```
 
 **响应示例**：
+
 ```json
 {
   "delay": 120
@@ -384,6 +401,7 @@ GET /proxies/节点1/delay?url=http://www.gstatic.com/generate_204&timeout=5000
 获取所有代理集合的信息
 
 **响应示例**：
+
 ```json
 {
   "providers": {
@@ -435,6 +453,7 @@ GET /proxies/节点1/delay?url=http://www.gstatic.com/generate_204&timeout=5000
 获取所有规则信息
 
 **响应示例**：
+
 ```json
 {
   "rules": [
@@ -461,6 +480,7 @@ GET /proxies/节点1/delay?url=http://www.gstatic.com/generate_204&timeout=5000
 获取所有规则集合的信息
 
 **响应示例**：
+
 ```json
 {
   "providers": {
@@ -489,6 +509,7 @@ GET /proxies/节点1/delay?url=http://www.gstatic.com/generate_204&timeout=5000
 获取所有连接信息
 
 **响应示例**：
+
 ```json
 {
   "downloadTotal": 1024000,
@@ -546,11 +567,13 @@ GET /proxies/节点1/delay?url=http://www.gstatic.com/generate_204&timeout=5000
 | `type` | 记录类型 | `A`、`AAAA`、`MX`、`TXT` 等 |
 
 **请求示例**：
+
 ```
 GET /dns/query?name=example.com&type=A
 ```
 
 **响应示例**：
+
 ```json
 {
   "Status": 0,
@@ -588,24 +611,27 @@ GET /dns/query?name=example.com&type=A
 
 浏览器打开 `http://${controller-api}/debug/pprof` 可查看：
 
-| 端点 | 说明 |
-|------|------|
+| 端点     | 说明                                                           |
+| -------- | -------------------------------------------------------------- |
 | `allocs` | 每个函数调用的内存分配情况，包括堆栈和堆上分配的内存大小及次数 |
-| `heap` | 堆上使用的内存详细信息，包括被分配的内存块的大小、数量和地址 |
+| `heap`   | 堆上使用的内存详细信息，包括被分配的内存块的大小、数量和地址   |
 
 #### 使用 Graphviz 查看图形化报告
 
 **查看 Heap 报告**：
+
 ```bash
 go tool pprof -http=:8080 http://127.0.0.1:9090/debug/pprof/heap
 ```
 
 **查看 Allocs 报告**：
+
 ```bash
 go tool pprof -http=:8080 http://127.0.0.1:9090/debug/pprof/allocs
 ```
 
 **下载报告文件**：
+
 ```
 http://${controller-api}/debug/pprof/heap?raw=true
 ```
@@ -621,7 +647,7 @@ http://${controller-api}/debug/pprof/heap?raw=true
 external-controller: 127.0.0.1:9090
 
 # API 密钥（可选）
-secret: "your-secret-key"
+secret: 'your-secret-key'
 
 # 外部 UI 路径（可选）
 external-ui: /path/to/ui
@@ -633,4 +659,3 @@ external-ui: /path/to/ui
 
 - 官方文档：https://wiki.metacubex.one/api/
 - GitHub 仓库：https://github.com/MetaCubeX/mihomo
-
