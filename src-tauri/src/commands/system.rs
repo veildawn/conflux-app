@@ -137,7 +137,8 @@ pub async fn open_network_extension_settings() -> Result<(), String> {
 #[serde(rename_all = "camelCase")]
 pub struct PublicIpInfo {
     pub ip: String,
-    pub country_code: String,
+    /// 国家或地区编码（如 CN, US, TW, HK 等）
+    pub region_code: String,
     pub source: String,
 }
 
@@ -239,7 +240,7 @@ pub async fn get_public_ip_info() -> Result<Option<PublicIpInfo>, String> {
             }
             Some(PublicIpInfo {
                 ip,
-                country_code: cc,
+                region_code: cc,
                 source: source.to_string(),
             })
         });

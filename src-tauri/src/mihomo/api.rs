@@ -97,8 +97,34 @@ impl MihomoApi {
         let url = format!("{}/connections", self.base_url);
         let request = self.client.get(&url);
         let response = self.auth_header(request).send().await?;
-        let connections = response.json().await?;
-        Ok(connections)
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!(
+                "MiHomo /connections failed: status={}, body={}",
+                status,
+                body
+            ));
+        }
+
+        // 用 text + serde_json 解析，确保能把真实的反序列化错误（以及响应片段）带出来
+        let text = response.text().await?;
+        match serde_json::from_str::<ConnectionsResponse>(&text) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                let snippet = if text.len() > 800 {
+                    &text[..800]
+                } else {
+                    &text
+                };
+                Err(anyhow::anyhow!(
+                    "Failed to parse MiHomo /connections response: {}. body_snippet={}",
+                    e,
+                    snippet
+                ))
+            }
+        }
     }
 
     /// 关闭指定连接

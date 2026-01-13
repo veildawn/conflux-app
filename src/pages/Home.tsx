@@ -320,9 +320,10 @@ function DiagnosticCard({ className }: { className?: string }) {
 // Public IP + LAN IP Cards (FlClash-like)
 // -----------------------------------------------------------------------------
 
-function countryCodeToFlagEmoji(countryCode: string) {
-  const code = (countryCode || '').trim().toUpperCase();
-  if (code.length !== 2) return countryCode || '--';
+/** 将国家/地区编码转换为对应的旗帜 emoji */
+function regionToEmoji(regionCode: string) {
+  const code = (regionCode || '').trim().toUpperCase();
+  if (code.length !== 2) return regionCode || '--';
   const A = 0x41;
   const REGIONAL_A = 0x1f1e6;
   const first = code.codePointAt(0)! - A + REGIONAL_A;
@@ -426,7 +427,7 @@ function PublicIpCard({ className }: { className?: string }) {
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-white/70 dark:bg-zinc-900/60 border border-emerald-100/70 dark:border-emerald-900/30 flex items-center justify-center shrink-0">
             <span className="text-2xl leading-none">
-              {data ? countryCodeToFlagEmoji(data.countryCode) : '🌐'}
+              {data ? regionToEmoji(data.regionCode) : '🌐'}
             </span>
           </div>
           <div className="min-w-0">
@@ -451,10 +452,10 @@ function PublicIpCard({ className }: { className?: string }) {
             )}
           </div>
         </div>
-        {data?.countryCode && (
+        {data?.regionCode && (
           <div className="shrink-0">
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100/70 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/20">
-              {data.countryCode.toUpperCase()}
+              {data.regionCode.toUpperCase()}
             </span>
           </div>
         )}

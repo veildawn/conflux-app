@@ -1,6 +1,7 @@
 export interface PublicIpInfo {
   ip: string;
-  countryCode: string;
+  /** 国家或地区编码（如 CN, US, TW, HK 等） */
+  regionCode: string;
   source: string;
 }
 

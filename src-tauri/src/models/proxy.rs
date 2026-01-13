@@ -1,3 +1,4 @@
+use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -76,15 +77,18 @@ pub struct Connection {
     pub upload: u64,
     pub download: u64,
     pub start: String,
+    #[serde(default)]
     pub chains: Vec<String>,
+    #[serde(default)]
     pub rule: String,
-    #[serde(rename = "rulePayload")]
+    #[serde(default, rename = "rulePayload")]
     pub rule_payload: String,
 }
 
 /// 连接元数据
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionMetadata {
+    #[serde(default)]
     pub network: String,
     #[serde(rename = "type")]
     pub conn_type: String,
@@ -93,15 +97,51 @@ pub struct ConnectionMetadata {
     #[serde(rename = "destinationIP")]
     pub destination_ip: String,
     #[serde(rename = "sourcePort")]
+    #[serde(deserialize_with = "de_string_or_number")]
     pub source_port: String,
     #[serde(rename = "destinationPort")]
+    #[serde(deserialize_with = "de_string_or_number")]
     pub destination_port: String,
+    #[serde(default)]
     pub host: String,
     #[serde(rename = "dnsMode")]
+    #[serde(default)]
     pub dns_mode: String,
     pub process: Option<String>,
     #[serde(rename = "processPath")]
     pub process_path: Option<String>,
+}
+
+fn de_string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrNumber {
+        Str(String),
+        Num(u64),
+        NumI(i64),
+        Float(f64),
+        Bool(bool),
+        Null,
+    }
+
+    let v = StringOrNumber::deserialize(deserializer)?;
+    Ok(match v {
+        StringOrNumber::Str(s) => s,
+        StringOrNumber::Num(n) => n.to_string(),
+        StringOrNumber::NumI(n) => n.to_string(),
+        StringOrNumber::Float(n) => {
+            if n.fract() == 0.0 {
+                (n as i64).to_string()
+            } else {
+                n.to_string()
+            }
+        }
+        StringOrNumber::Bool(b) => b.to_string(),
+        StringOrNumber::Null => String::new(),
+    })
 }
 
 /// 连接列表响应
