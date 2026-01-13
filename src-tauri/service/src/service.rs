@@ -151,7 +151,46 @@ fn run_service_main() -> windows_service::Result<()> {
 
     let status_handle = service_control_handler::register(SERVICE_NAME, event_handler)?;
 
-    // Report running status
+    // Report START_PENDING status while we initialize IPC
+    status_handle.set_service_status(ServiceStatus {
+        service_type: ServiceType::OWN_PROCESS,
+        current_state: ServiceState::StartPending,
+        controls_accepted: ServiceControlAccept::empty(),
+        exit_code: ServiceExitCode::Win32(0),
+        checkpoint: 1,
+        wait_hint: Duration::from_secs(10),
+        process_id: None,
+    })?;
+
+    log::info!("Conflux Service starting, initializing IPC server...");
+
+    // Create channel for IPC ready signal
+    let (ipc_ready_tx, ipc_ready_rx) = std::sync::mpsc::channel();
+
+    // Start IPC server in a separate thread with ready signal
+    let _ = std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
+        rt.block_on(async {
+            if let Err(e) = crate::ipc::start_ipc_server_with_ready_signal(ipc_ready_tx).await {
+                log::error!("IPC server error: {}", e);
+            }
+        });
+    });
+
+    // Wait for IPC server to be ready (max 5 seconds)
+    match ipc_ready_rx.recv_timeout(Duration::from_secs(5)) {
+        Ok(_) => {
+            log::info!("IPC server ready, reporting service as running");
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            log::warn!("IPC ready timeout after 5 seconds, continuing anyway");
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            log::error!("IPC ready channel disconnected, IPC server may have failed");
+        }
+    }
+
+    // Now report RUNNING status - IPC is ready (or we timed out)
     status_handle.set_service_status(ServiceStatus {
         service_type: ServiceType::OWN_PROCESS,
         current_state: ServiceState::Running,
@@ -162,17 +201,7 @@ fn run_service_main() -> windows_service::Result<()> {
         process_id: None,
     })?;
 
-    log::info!("Conflux Service started");
-
-    // Start IPC server in a separate thread
-    let _ = std::thread::spawn(|| {
-        let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
-        rt.block_on(async {
-            if let Err(e) = crate::ipc::start_ipc_server().await {
-                log::error!("IPC server error: {}", e);
-            }
-        });
-    });
+    log::info!("Conflux Service started and ready");
 
     // Wait for shutdown signal
     let _ = shutdown_rx.recv();

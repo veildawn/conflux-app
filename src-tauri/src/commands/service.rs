@@ -93,14 +93,7 @@ pub async fn uninstall_service(app: tauri::AppHandle) -> Result<(), String> {
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     }
 
-    // 3. 重置 mihomo_manager 的内部状态
-    log::info!("Resetting mihomo manager state...");
-    {
-        let mut service_mode = state.mihomo_manager.service_mode_flag().lock().await;
-        *service_mode = false;
-    }
-
-    // 4. 清理可能的残留进程
+    // 3. 清理可能的残留进程
     crate::mihomo::MihomoManager::cleanup_stale_processes();
 
     // 5. 使用提权方式卸载服务（会触发 UAC）
@@ -234,14 +227,7 @@ pub async fn stop_service(app: tauri::AppHandle) -> Result<(), String> {
     // 3. 等待服务完全停止
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    // 4. 重置 mihomo_manager 的内部状态
-    log::info!("Resetting mihomo manager state...");
-    {
-        let mut service_mode = state.mihomo_manager.service_mode_flag().lock().await;
-        *service_mode = false;
-    }
-
-    // 5. 清理可能的残留进程
+    // 4. 清理可能的残留进程
     crate::mihomo::MihomoManager::cleanup_stale_processes();
 
     // 6. 以普通模式启动 mihomo

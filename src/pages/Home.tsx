@@ -746,24 +746,42 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="flex flex-col justify-between items-end">
-              <div
-                className={cn(
-                  'flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-colors duration-200',
-                  status.running
-                    ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/20 text-red-600 dark:text-red-400'
+            <div className="flex flex-col justify-between items-end gap-1.5">
+              <div className="flex items-center gap-1.5">
+                {/* 运行模式标签 */}
+                {status.running && status.run_mode && status.run_mode !== 'normal' && (
+                  <div
+                    className={cn(
+                      'flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-medium',
+                      status.run_mode === 'service'
+                        ? 'bg-blue-50 dark:bg-blue-500/10 border-blue-100 dark:border-blue-500/20 text-blue-600 dark:text-blue-400'
+                        : 'bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20 text-amber-600 dark:text-amber-400'
+                    )}
+                  >
+                    {status.run_mode === 'service' && '服务模式'}
+                    {status.run_mode === 'elevated_win' && 'UAC提权'}
+                    {status.run_mode === 'elevated_mac' && 'Mac提权'}
+                  </div>
                 )}
-              >
+                {/* 运行状态标签 */}
                 <div
                   className={cn(
-                    'w-1.5 h-1.5 rounded-full',
-                    status.running ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                    'flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-colors duration-200',
+                    status.running
+                      ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/20 text-red-600 dark:text-red-400'
                   )}
-                />
-                <span className="text-[11px] font-medium">
-                  {status.running ? '核心运行中' : '核心已停止'}
-                </span>
+                >
+                  <div
+                    className={cn(
+                      'w-1.5 h-1.5 rounded-full',
+                      status.running ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                    )}
+                  />
+                  <span className="text-[11px] font-medium">
+                    {status.running ? '核心运行中' : '核心已停止'}
+                  </span>
+                </div>
               </div>
 
               <button

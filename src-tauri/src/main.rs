@@ -276,8 +276,38 @@ async fn run_tray_traffic_loop(app_handle: AppHandle) {
 async fn run_tray_traffic_loop(_app_handle: AppHandle) {}
 
 fn main() {
-    // 设置默认日志级别为 warn，可通过 RUST_LOG 环境变量覆盖
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
+    // 设置默认日志级别为 info，可通过 RUST_LOG 环境变量覆盖
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
+    // Windows: 设置 AppUserModelId，让所有 WebView2 进程在任务管理器中显示为应用子进程
+    #[cfg(windows)]
+    {
+        use std::ffi::OsStr;
+        use std::os::windows::ffi::OsStrExt;
+
+        const APP_USER_MODEL_ID: &str = "com.conflux.desktop";
+
+        // 1. 设置主进程的 AUMID
+        #[link(name = "shell32")]
+        extern "system" {
+            fn SetCurrentProcessExplicitAppUserModelID(app_id: *const u16) -> i32;
+        }
+
+        let app_id: Vec<u16> = OsStr::new(APP_USER_MODEL_ID)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+
+        unsafe {
+            SetCurrentProcessExplicitAppUserModelID(app_id.as_ptr());
+        }
+
+        // 2. 设置 WebView2 子进程的 AUMID（通过环境变量）
+        std::env::set_var(
+            "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+            format!("--app-user-model-id={}", APP_USER_MODEL_ID),
+        );
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -453,15 +483,23 @@ fn main() {
                         // 将状态注册到 Tauri
                         app_handle.manage(app_state);
 
-                        if let Ok(status) = commands::proxy::get_proxy_status().await {
-                            app_handle
-                                .state::<TrayMenuState>()
-                                .sync_from_status(&status);
+                        // 获取当前状态，同步到托盘菜单
+                        let initial_status = commands::proxy::get_proxy_status().await.ok();
+                        if let Some(ref status) = initial_status {
+                            app_handle.state::<TrayMenuState>().sync_from_status(status);
                         }
 
                         // 通知前端后端已准备就绪
                         log::info!("Backend initialized, emitting backend-ready event");
                         let _ = app_handle.emit("backend-ready", ());
+
+                        // 短暂延迟后发送状态事件，确保前端监听器已注册
+                        // 这解决了前端 useEffect 中事件监听器异步注册导致的竞态问题
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        if let Some(status) = initial_status {
+                            log::info!("Emitting initial proxy status: running={}", status.running);
+                            let _ = app_handle.emit("proxy-status-changed", &status);
+                        }
 
                         run_tray_traffic_loop(app_handle).await;
                     }
@@ -713,21 +751,16 @@ fn main() {
                             let _ = system::SystemProxy::clear_proxy();
                         }
 
-                        // 2. 清理 Sub-Store 进程
+                        // 2. 清理 Sub-Store 进程（使用 PID 文件，跨平台）
                         log::info!("Stopping Sub-Store service...");
                         if let Ok(manager) = app_state.substore_manager.try_lock() {
                             manager.stop_sync();
-                            log::info!("Sub-Store stopped successfully");
                         } else {
-                            log::warn!("Could not acquire Sub-Store lock, using pkill fallback");
-                            // 使用 pkill 作为后备方案
-                            #[cfg(unix)]
-                            {
-                                let _ = std::process::Command::new("pkill")
-                                    .args(["-9", "-f", "run-substore.js"])
-                                    .output();
-                            }
+                            // 无法获取锁时，通过 PID 文件清理
+                            log::warn!("Could not acquire Sub-Store lock, using PID file cleanup");
+                            substore::SubStoreManager::cleanup_stale_processes(0);
                         }
+                        log::info!("Sub-Store cleanup completed");
 
                         // 3. 清理 MiHomo 进程（包括服务模式）
                         log::info!("Stopping MiHomo service...");

@@ -136,6 +136,9 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
         }
     }
 
+    // 检测运行模式
+    let run_mode = detect_run_mode(running, enhanced_mode).await;
+
     Ok(ProxyStatus {
         running,
         mode: config.mode,
@@ -147,7 +150,58 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
         allow_lan: config.allow_lan,
         ipv6: config.ipv6,
         tcp_concurrent: config.tcp_concurrent,
+        run_mode,
     })
+}
+
+/// 检测当前运行模式
+async fn detect_run_mode(running: bool, enhanced_mode: bool) -> crate::models::RunMode {
+    use crate::models::RunMode;
+
+    if !running {
+        return RunMode::Normal;
+    }
+
+    // Windows: 优先检测服务模式（不依赖 enhanced_mode，因为配置文件可能不准确）
+    #[cfg(target_os = "windows")]
+    {
+        use crate::system::WinServiceManager;
+
+        // 检查是否通过服务运行
+        if let Ok(status) = WinServiceManager::get_status().await {
+            if status.running && status.mihomo_running {
+                log::debug!(
+                    "detect_run_mode: Service mode (mihomo_pid={:?})",
+                    status.mihomo_pid
+                );
+                return RunMode::Service;
+            }
+        }
+
+        // 如果启用了 TUN 但不是服务模式，是 UAC 提权模式
+        if enhanced_mode {
+            log::debug!("detect_run_mode: ElevatedWin (TUN enabled, not via service)");
+            return RunMode::ElevatedWin;
+        }
+
+        // 普通模式
+        return RunMode::Normal;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // macOS TUN 模式需要提权
+        if enhanced_mode {
+            log::debug!("detect_run_mode: ElevatedMac");
+            return RunMode::ElevatedMac;
+        }
+        return RunMode::Normal;
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        RunMode::Normal
+    }
 }
 
 /// 设置 LAN 访问开关
@@ -396,13 +450,11 @@ pub async fn get_connections() -> Result<ConnectionsResponse, String> {
         .await
         .map_err(|e| e.to_string())?;
 
-    // Debug log for connections
-    if !connections.connections.is_empty() {
+    // Debug log for first connection (only when connections exist, avoid spam)
+    if log::log_enabled!(log::Level::Debug) && !connections.connections.is_empty() {
         if let Some(first) = connections.connections.first() {
-            log::info!("First connection metadata: {:?}", first.metadata);
+            log::debug!("First connection metadata: {:?}", first.metadata);
         }
-    } else {
-        log::info!("No connections found");
     }
 
     Ok(connections)

@@ -138,15 +138,20 @@ export default function AppLayout() {
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
-    listen<ProxyStatus>('proxy-status-changed', (event) => {
-      applyStatus(event.payload);
-    })
-      .then((handler) => {
-        unlisten = handler;
-      })
-      .catch((error) => {
+
+    const setup = async () => {
+      try {
+        unlisten = await listen<ProxyStatus>('proxy-status-changed', (event) => {
+          logger.log('AppLayout: Received proxy-status-changed event:', event.payload);
+          applyStatus(event.payload);
+        });
+        logger.log('AppLayout: proxy-status-changed listener registered');
+      } catch (error) {
         logger.error('Failed to listen proxy status events:', error);
-      });
+      }
+    };
+
+    setup();
 
     return () => {
       if (unlisten) {

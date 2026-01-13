@@ -1,4 +1,6 @@
 use anyhow::{anyhow, Result};
+use std::fs;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::AppHandle;
@@ -7,12 +9,118 @@ use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::Mutex;
 
+use crate::utils::get_app_data_dir;
+
 /// Sub-Store 进程管理器
 pub struct SubStoreManager {
     app_handle: Option<AppHandle>,
     process: Arc<Mutex<Option<CommandChild>>>,
     api_url: String,
     api_port: u16,
+}
+
+impl SubStoreManager {
+    /// 获取 PID 文件路径
+    fn get_pid_file_path() -> Result<PathBuf> {
+        let data_dir = get_app_data_dir()?;
+        Ok(data_dir.join("substore.pid"))
+    }
+
+    /// 保存 PID 到文件
+    fn save_pid(pid: u32) -> Result<()> {
+        let pid_file = Self::get_pid_file_path()?;
+        let mut file = fs::File::create(&pid_file)?;
+        file.write_all(pid.to_string().as_bytes())?;
+        log::info!("Saved Sub-Store PID {} to {:?}", pid, pid_file);
+        Ok(())
+    }
+
+    /// 从文件读取 PID
+    fn load_pid() -> Option<u32> {
+        let pid_file = Self::get_pid_file_path().ok()?;
+        if !pid_file.exists() {
+            return None;
+        }
+        let mut file = fs::File::open(&pid_file).ok()?;
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).ok()?;
+        contents.trim().parse().ok()
+    }
+
+    /// 删除 PID 文件
+    fn remove_pid_file() {
+        if let Ok(pid_file) = Self::get_pid_file_path() {
+            let _ = fs::remove_file(&pid_file);
+        }
+    }
+
+    /// 通过 PID 杀死进程（跨平台）
+    fn kill_process_by_pid(pid: u32) {
+        log::info!("Killing Sub-Store process by PID: {}", pid);
+
+        #[cfg(unix)]
+        {
+            unsafe {
+                // 先发送 SIGTERM
+                if libc::kill(pid as i32, libc::SIGTERM) == 0 {
+                    log::info!("Sent SIGTERM to Sub-Store process {}", pid);
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    // 再发送 SIGKILL 确保终止
+                    libc::kill(pid as i32, libc::SIGKILL);
+                    log::info!("Sent SIGKILL to Sub-Store process {}", pid);
+                }
+            }
+        }
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            use std::process::Command;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+            let _ = Command::new("taskkill")
+                .args(["/F", "/PID", &pid.to_string()])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output();
+            log::info!("Sent taskkill to Sub-Store process {}", pid);
+        }
+    }
+
+    /// 检查 PID 是否仍在运行
+    fn is_pid_running(pid: u32) -> bool {
+        #[cfg(unix)]
+        {
+            unsafe { libc::kill(pid as i32, 0) == 0 }
+        }
+
+        #[cfg(windows)]
+        {
+            const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+            const STILL_ACTIVE: u32 = 259;
+
+            extern "system" {
+                fn OpenProcess(
+                    dwDesiredAccess: u32,
+                    bInheritHandle: i32,
+                    dwProcessId: u32,
+                ) -> *mut std::ffi::c_void;
+                fn GetExitCodeProcess(hProcess: *mut std::ffi::c_void, lpExitCode: *mut u32)
+                    -> i32;
+                fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
+            }
+
+            unsafe {
+                let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+                if handle.is_null() {
+                    return false;
+                }
+                let mut exit_code: u32 = 0;
+                let result = GetExitCodeProcess(handle, &mut exit_code);
+                CloseHandle(handle);
+                result != 0 && exit_code == STILL_ACTIVE
+            }
+        }
+    }
 }
 
 impl SubStoreManager {
@@ -207,74 +315,21 @@ impl SubStoreManager {
 
     /// 清理残留的 Sub-Store 进程
     /// 在启动新进程前调用，确保没有孤儿进程（例如热重载后遗留的进程）
-    pub fn cleanup_stale_processes(port: u16) {
+    pub fn cleanup_stale_processes(_port: u16) {
         log::info!("Cleaning up stale Sub-Store processes...");
-        // 非 Windows 平台不会用到端口，显式忽略以避免 unused 参数告警
-        let _ = port;
 
-        #[cfg(unix)]
-        {
-            use std::process::Command;
-            // 杀死所有 run-substore.js 相关进程
-            let _ = Command::new("pkill")
-                .args(["-9", "-f", "run-substore.js"])
-                .output();
-            log::info!("Killed stale Sub-Store processes via pkill");
-        }
-
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            use std::process::Command;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-            // 1. 尝试通过端口杀死进程 (更可靠)
-            log::info!("Attempting to kill process on port {}", port);
-            let cmd = format!("Get-NetTCPConnection -LocalPort {} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess", port);
-            if let Ok(output) = Command::new("powershell")
-                .args(["-NoProfile", "-Command", &cmd])
-                .creation_flags(CREATE_NO_WINDOW)
-                .output()
-            {
-                if let Ok(stdout) = String::from_utf8(output.stdout) {
-                    for line in stdout.lines() {
-                        if let Ok(pid) = line.trim().parse::<u32>() {
-                            log::info!("Killing process on port {} with PID: {}", port, pid);
-                            let _ = Command::new("taskkill")
-                                .args(["/F", "/PID", &pid.to_string()])
-                                .creation_flags(CREATE_NO_WINDOW)
-                                .output();
-                        }
-                    }
-                }
-            }
-
-            // 2. Windows 上使用 wmic 精确匹配命令行中包含 run-substore.js 的 node 进程 (备用)
-            // 先查找 PID
-            if let Ok(output) = Command::new("wmic")
-                .args([
-                    "process",
-                    "where",
-                    "commandline like '%run-substore.js%'",
-                    "get",
-                    "processid",
-                ])
-                .creation_flags(CREATE_NO_WINDOW)
-                .output()
-            {
-                if let Ok(stdout) = String::from_utf8(output.stdout) {
-                    for line in stdout.lines() {
-                        if let Ok(pid) = line.trim().parse::<u32>() {
-                            log::info!("Killing stale Sub-Store process with PID: {}", pid);
-                            let _ = Command::new("taskkill")
-                                .args(["/F", "/PID", &pid.to_string()])
-                                .creation_flags(CREATE_NO_WINDOW)
-                                .output();
-                        }
-                    }
-                }
+        // 1. 优先通过 PID 文件清理（最可靠）
+        if let Some(pid) = Self::load_pid() {
+            log::info!("Found old PID file with PID: {}", pid);
+            if Self::is_pid_running(pid) {
+                Self::kill_process_by_pid(pid);
+                // 等待进程退出
+                std::thread::sleep(std::time::Duration::from_millis(100));
             }
         }
+
+        // 2. 删除 PID 文件
+        Self::remove_pid_file();
 
         log::info!("Sub-Store cleanup completed");
     }
@@ -400,6 +455,11 @@ impl SubStoreManager {
             }
         });
 
+        // 保存 PID 到文件（用于异常退出后的清理）
+        if let Err(e) = Self::save_pid(pid) {
+            log::warn!("Failed to save Sub-Store PID file: {}", e);
+        }
+
         // 存储进程句柄和 app_handle
         *process_guard = Some(child);
         self.app_handle = Some(app_handle);
@@ -418,29 +478,53 @@ impl SubStoreManager {
 
             // 使用 Tauri sidecar 的 kill 方法
             if let Err(e) = child.kill() {
-                log::warn!("Failed to kill Sub-Store process via sidecar API: {}", e);
+                log::warn!(
+                    "Failed to kill Sub-Store process via sidecar API: {}, trying by PID",
+                    e
+                );
+                // 后备方案：通过 PID 直接杀死
+                Self::kill_process_by_pid(pid);
             }
 
             log::info!("Sub-Store stopped");
+        } else if let Some(pid) = Self::load_pid() {
+            // 没有进程句柄但有 PID 文件，尝试通过 PID 清理
+            log::info!("Stopping Sub-Store process by PID file (PID: {})", pid);
+            if Self::is_pid_running(pid) {
+                Self::kill_process_by_pid(pid);
+            }
         } else {
             log::info!("Sub-Store is not running");
         }
 
+        // 删除 PID 文件
+        Self::remove_pid_file();
         self.app_handle = None;
         Ok(())
     }
 
     /// 同步停止进程（用于应用退出时）
     pub fn stop_sync(&self) {
+        // 1. 尝试通过进程句柄停止
         if let Ok(mut process_guard) = self.process.try_lock() {
             if let Some(child) = process_guard.take() {
                 let pid = child.pid();
                 log::info!("Synchronously stopping Sub-Store process (PID: {})...", pid);
                 let _ = child.kill();
-                log::info!("Sub-Store process killed (PID: {})", pid);
+                log::info!("Sub-Store process killed via handle (PID: {})", pid);
+                Self::remove_pid_file();
+                return;
             }
-        } else {
-            log::warn!("Could not acquire Sub-Store process lock for sync shutdown");
+        }
+
+        // 2. 无法获取锁或没有句柄，通过 PID 文件清理
+        if let Some(pid) = Self::load_pid() {
+            log::info!("Stopping Sub-Store by PID file (PID: {})...", pid);
+            if Self::is_pid_running(pid) {
+                Self::kill_process_by_pid(pid);
+                log::info!("Sub-Store process killed via PID file (PID: {})", pid);
+            }
+            Self::remove_pid_file();
         }
     }
 

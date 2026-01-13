@@ -1,4 +1,9 @@
 /**
+ * 运行模式
+ */
+export type RunMode = 'normal' | 'service' | 'elevated_win' | 'elevated_mac';
+
+/**
  * 代理状态
  */
 export interface ProxyStatus {
@@ -12,6 +17,7 @@ export interface ProxyStatus {
   allow_lan?: boolean;
   ipv6?: boolean;
   tcp_concurrent?: boolean;
+  run_mode?: RunMode;
 }
 
 /**

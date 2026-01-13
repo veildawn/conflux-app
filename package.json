@@ -11,6 +11,7 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "dev:clean": "powershell -ExecutionPolicy Bypass -File scripts/dev-cleanup.ps1",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,md}\"",

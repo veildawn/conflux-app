@@ -2,6 +2,29 @@ use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// 运行模式
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum RunMode {
+    /// 普通模式（无 TUN）
+    #[serde(rename = "normal")]
+    Normal,
+    /// Windows 服务模式
+    #[serde(rename = "service")]
+    Service,
+    /// Windows UAC 提权模式
+    #[serde(rename = "elevated_win")]
+    ElevatedWin,
+    /// macOS 提权模式
+    #[serde(rename = "elevated_mac")]
+    ElevatedMac,
+}
+
+impl Default for RunMode {
+    fn default() -> Self {
+        Self::Normal
+    }
+}
+
 /// 代理状态
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProxyStatus {
@@ -15,6 +38,8 @@ pub struct ProxyStatus {
     pub allow_lan: bool,
     pub ipv6: bool,
     pub tcp_concurrent: bool,
+    /// 运行模式（普通/服务/提权等）
+    pub run_mode: RunMode,
 }
 
 impl Default for ProxyStatus {
@@ -30,6 +55,7 @@ impl Default for ProxyStatus {
             allow_lan: true,
             ipv6: false,
             tcp_concurrent: true,
+            run_mode: RunMode::default(),
         }
     }
 }
