@@ -41,11 +41,10 @@ brew install --cask conflux
 
 前往 [Releases](https://github.com/veildawn/conflux-app/releases) 下载对应平台安装包。
 
-| 平台    | 格式                 |
-| ------- | -------------------- |
-| macOS   | `.dmg`               |
-| Windows | `.msi` / `.exe`      |
-| Linux   | `.AppImage` / `.deb` |
+| 平台    | 格式            |
+| ------- | --------------- |
+| macOS   | `.dmg`          |
+| Windows | `.msi` / `.exe` |
 
 ## 开发
 
