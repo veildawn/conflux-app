@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState, useCallback, memo } from 'react';
+import { useMemo, useEffect, useState, useCallback, memo, useRef } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -8,6 +8,8 @@ import {
   Network,
   Globe,
   Loader2,
+  Wifi,
+  Terminal,
 } from 'lucide-react';
 import { useProxyStore } from '@/stores/proxyStore';
 import { formatSpeed, formatBytes } from '@/utils/format';
@@ -16,6 +18,8 @@ import logger from '@/utils/logger';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { ipc } from '@/services/ipc';
 import type { VersionInfo } from '@/types/proxy';
+import type { LocalIpInfo, PublicIpInfo } from '@/types/network';
+import { useToast } from '@/hooks/useToast';
 import {
   GoogleIcon,
   YouTubeIcon,
@@ -307,6 +311,297 @@ function DiagnosticCard({ className }: { className?: string }) {
             </div>
           );
         })}
+      </div>
+    </BentoCard>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Public IP + LAN IP Cards (FlClash-like)
+// -----------------------------------------------------------------------------
+
+function countryCodeToFlagEmoji(countryCode: string) {
+  const code = (countryCode || '').trim().toUpperCase();
+  if (code.length !== 2) return countryCode || '--';
+  const A = 0x41;
+  const REGIONAL_A = 0x1f1e6;
+  const first = code.codePointAt(0)! - A + REGIONAL_A;
+  const second = code.codePointAt(1)! - A + REGIONAL_A;
+  return String.fromCodePoint(first) + String.fromCodePoint(second);
+}
+
+function PublicIpCard({ className }: { className?: string }) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<PublicIpInfo | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const reqSeqRef = useRef(0);
+
+  const copy = useCallback(
+    async (text: string) => {
+      try {
+        await ipc.copyToClipboard(text);
+        toast({ title: '已复制', description: text });
+      } catch (e) {
+        toast({
+          title: '复制失败',
+          description: e instanceof Error ? e.message : '无法写入剪贴板',
+          variant: 'destructive',
+        });
+      }
+    },
+    [toast]
+  );
+
+  const refresh = useCallback(() => {
+    setRefreshTick((t) => t + 1);
+  }, []);
+
+  useEffect(() => {
+    const mySeq = ++reqSeqRef.current;
+
+    const run = async () => {
+      // 避免刷新时清空已有数据导致 UI 闪烁
+      setLoading(true);
+      setError((prev) => (data ? prev : null));
+    try {
+        const res = await Promise.race([
+          ipc.getPublicIpInfo(),
+          new Promise<PublicIpInfo | null>((_, reject) =>
+            setTimeout(() => reject(new Error('超时')), 12_000)
+          ),
+        ]);
+        if (mySeq !== reqSeqRef.current) return;
+        if (res) {
+          setData(res);
+          setError(null);
+        } else if (!data) {
+          setError('获取失败');
+        }
+    } catch (e) {
+        if (mySeq !== reqSeqRef.current) return;
+        // 有旧数据时失败不覆盖，避免闪烁
+        if (!data) setData(null);
+        if (!data) setError(e instanceof Error ? e.message : '获取失败');
+    } finally {
+        if (mySeq === reqSeqRef.current) setLoading(false);
+    }
+    };
+
+    void run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTick]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return (
+    <BentoCard
+      title="公网 IP"
+      icon={Globe}
+      iconColor="text-emerald-500"
+      className={cn(
+        'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/20',
+        className
+      )}
+      action={
+        <button
+          onClick={refresh}
+          disabled={loading}
+          className={cn(
+            'p-1.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95',
+            !loading
+              ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/30'
+              : 'bg-gray-100 dark:bg-zinc-800 text-gray-400 cursor-not-allowed'
+          )}
+          title="刷新"
+        >
+          <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+        </button>
+      }
+    >
+      <div className="flex items-center justify-between gap-3 h-full">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-white/70 dark:bg-zinc-900/60 border border-emerald-100/70 dark:border-emerald-900/30 flex items-center justify-center shrink-0">
+            <span className="text-2xl leading-none">
+              {data ? countryCodeToFlagEmoji(data.countryCode) : '🌐'}
+            </span>
+          </div>
+          <div className="min-w-0">
+            <button
+              type="button"
+              disabled={!data?.ip}
+              onClick={() => data?.ip && copy(data.ip)}
+              className={cn(
+                'text-left text-base font-mono font-semibold truncate',
+                data?.ip
+                  ? 'text-gray-900 dark:text-white hover:underline underline-offset-2 cursor-pointer'
+                  : 'text-gray-900 dark:text-white cursor-default'
+              )}
+              title={data?.ip ? '点击复制' : undefined}
+            >
+              {data?.ip || (loading ? '获取中...' : '--')}
+            </button>
+            {!data && error && (
+              <div className="text-[10px] font-medium text-red-500/80 dark:text-red-400/80 truncate mt-0.5">
+                {error}
+              </div>
+            )}
+          </div>
+        </div>
+        {data?.countryCode && (
+          <div className="shrink-0">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100/70 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-500/20">
+              {data.countryCode.toUpperCase()}
+            </span>
+          </div>
+        )}
+      </div>
+    </BentoCard>
+  );
+}
+
+function LanIpCard({ className }: { className?: string }) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<LocalIpInfo | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const reqSeqRef = useRef(0);
+
+  const copy = useCallback(
+    async (text: string) => {
+      try {
+        await ipc.copyToClipboard(text);
+        toast({ title: '已复制', description: text });
+      } catch (e) {
+        toast({
+          title: '复制失败',
+          description: e instanceof Error ? e.message : '无法写入剪贴板',
+          variant: 'destructive',
+        });
+      }
+    },
+    [toast]
+  );
+
+  const refresh = useCallback(() => {
+    setRefreshTick((t) => t + 1);
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    const mySeq = ++reqSeqRef.current;
+
+    const run = async () => {
+      setLoading(true);
+      setError((prev) => (data ? prev : null));
+      try {
+        const res = await Promise.race([
+          ipc.getLocalIpInfo(),
+          new Promise<LocalIpInfo>((_, reject) =>
+            setTimeout(() => reject(new Error('超时')), 12_000)
+          ),
+        ]);
+        if (mySeq !== reqSeqRef.current) return;
+        setData(res);
+        if (!res.preferredIpv4 && res.ipv4.length === 0 && res.ipv6.length === 0) {
+          setError('未发现网卡地址');
+        }
+      } catch (e) {
+        if (mySeq !== reqSeqRef.current) return;
+        if (!data) setData(null);
+        if (!data) setError(e instanceof Error ? e.message : '获取失败');
+      } finally {
+        if (mySeq === reqSeqRef.current) setLoading(false);
+      }
+    };
+
+    void run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTick]);
+
+  const primary = data?.preferredIpv4 || data?.ipv4?.[0] || data?.ipv6?.[0] || null;
+
+  return (
+    <BentoCard
+      title="局域网 IP"
+      icon={Wifi}
+      iconColor="text-sky-500"
+      className={cn(
+        'bg-sky-50/50 dark:bg-sky-900/10 border-sky-100 dark:border-sky-900/20',
+        className
+      )}
+      action={
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={async () => {
+              try {
+                const cmd = await ipc.copyTerminalProxyCommand();
+                toast({ title: '已复制终端代理命令', description: cmd });
+              } catch (e) {
+                toast({
+                  title: '复制失败',
+                  description: e instanceof Error ? e.message : '无法写入剪贴板',
+                  variant: 'destructive',
+                });
+              }
+            }}
+            className={cn(
+              'p-1.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95',
+              'bg-sky-100 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 hover:bg-sky-200 dark:hover:bg-sky-500/30'
+            )}
+            title="复制终端代理命令"
+          >
+            <Terminal className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className={cn(
+              'p-1.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95',
+              !loading
+                ? 'bg-sky-100 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 hover:bg-sky-200 dark:hover:bg-sky-500/30'
+                : 'bg-gray-100 dark:bg-zinc-800 text-gray-400 cursor-not-allowed'
+            )}
+            title="刷新"
+          >
+            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+          </button>
+        </div>
+      }
+    >
+      <div className="flex flex-col h-full justify-between">
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            disabled={!primary}
+            onClick={() => primary && copy(primary)}
+            className={cn(
+              'text-left text-base font-mono font-semibold truncate',
+              primary
+                ? 'text-gray-900 dark:text-white hover:underline underline-offset-2 cursor-pointer'
+                : 'text-gray-900 dark:text-white cursor-default'
+            )}
+            title={primary ? '点击复制' : undefined}
+          >
+            {primary || (loading ? '获取中...' : '--')}
+          </button>
+        </div>
+        {!primary && error ? (
+          <div className="text-[10px] font-medium text-red-500/80 dark:text-red-400/80 mt-1 truncate">
+            {error}
+          </div>
+        ) : data ? (
+          <div className="text-[10px] font-medium text-gray-400 dark:text-gray-500 mt-1">
+            {`${data.ipv4.length} 个 IPv4 / ${data.ipv6.length} 个 IPv6`}
+          </div>
+        ) : null}
       </div>
     </BentoCard>
   );
@@ -607,8 +902,14 @@ export default function Home() {
           </div>
         </BentoCard>
 
+        {/* Public IP */}
+        <PublicIpCard />
+
+        {/* LAN IP */}
+        <LanIpCard />
+
         {/* Diagnostic Card */}
-        <DiagnosticCard className="col-span-1 md:col-span-2" />
+        <DiagnosticCard className="col-span-1 md:col-span-2 lg:col-span-4" />
       </div>
     </div>
   );

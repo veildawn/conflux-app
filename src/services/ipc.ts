@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import type { NetworkExtensionStatus } from '@/types/network';
 import type {
   ProxyStatus,
   ProxyGroup,
@@ -8,6 +9,7 @@ import type {
   VersionInfo,
   ProxyServerInfo,
 } from '@/types/proxy';
+import type { LocalIpInfo, PublicIpInfo } from '@/types/network';
 import type {
   MihomoConfig,
   AppSettings,
@@ -196,6 +198,20 @@ export const ipc = {
     return invoke('setup_tun_permission');
   },
 
+  /**
+   * 获取 macOS Network Extension 状态（占位：用于增强模式引导）
+   */
+  async getNetworkExtensionStatus(): Promise<NetworkExtensionStatus> {
+    return invoke('get_network_extension_status');
+  },
+
+  /**
+   * 打开系统设置中的 Network Extension 面板（尽力而为）
+   */
+  async openNetworkExtensionSettings(): Promise<void> {
+    return invoke('open_network_extension_settings');
+  },
+
   // ============= 配置命令 =============
 
   /**
@@ -345,6 +361,41 @@ export const ipc = {
    */
   async getSystemProxyStatus(): Promise<boolean> {
     return invoke('get_system_proxy_status');
+  },
+
+  /**
+   * 获取公网 IP 信息（IP + 国家代码）
+   */
+  async getPublicIpInfo(): Promise<PublicIpInfo | null> {
+    return invoke('get_public_ip_info');
+  },
+
+  /**
+   * 获取本机局域网 IP 信息（枚举网卡地址）
+   */
+  async getLocalIpInfo(): Promise<LocalIpInfo> {
+    return invoke('get_local_ip_info');
+  },
+
+  /**
+   * 获取终端代理命令（export / PowerShell env）
+   */
+  async getTerminalProxyCommand(): Promise<string> {
+    return invoke('get_terminal_proxy_command');
+  },
+  /**
+   * 复制文本到系统剪贴板（后端执行，避免 WebView 权限限制）
+   */
+  async copyToClipboard(text: string): Promise<void> {
+    return invoke('copy_to_clipboard', { text });
+  },
+
+  /**
+   * 复制终端代理命令到系统剪贴板（后端执行）
+   * @returns 返回复制的命令文本
+   */
+  async copyTerminalProxyCommand(): Promise<string> {
+    return invoke('copy_terminal_proxy_command');
   },
 
   // ============= Provider 命令 =============

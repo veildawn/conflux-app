@@ -31,7 +31,7 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    items: [{ path: '/', icon: ConnectionIcon, label: '连接' }],
+    items: [{ path: '/', icon: ConnectionIcon, label: '活动' }],
   },
   {
     title: '配置',

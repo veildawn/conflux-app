@@ -5,7 +5,7 @@ interface IconProps {
   strokeWidth?: number;
 }
 
-// 连接 - 实时数据流动
+// 活动 - 监控面板 + 波动折线
 export function ConnectionIcon({ className, strokeWidth = 2 }: IconProps) {
   return (
     <svg
@@ -17,15 +17,13 @@ export function ConnectionIcon({ className, strokeWidth = 2 }: IconProps) {
       strokeLinejoin="round"
       className={cn('w-5 h-5', className)}
     >
-      {/* 左侧策略 */}
-      <circle cx="5" cy="12" r="2" />
-      {/* 右侧策略 */}
-      <circle cx="19" cy="12" r="2" />
-      {/* 连接线带数据流动感 */}
-      <path d="M7 12h3" />
-      <path d="M14 12h3" />
-      {/* 中间的数据包 */}
-      <rect x="10" y="10" width="4" height="4" rx="1" />
+      {/* 面板外框（表示“监控/仪表盘”语义） */}
+      <rect x="3" y="4" width="18" height="16" rx="3" />
+      {/* 折线趋势（表示“活动/波动”） */}
+      <path d="M6.8 15.5l3.2-4.2 2.7 2.5 4.3-6.1 2.2 1.8" />
+      {/* 关键点 */}
+      <circle cx="10" cy="11.3" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="15.7" cy="7.7" r="0.9" fill="currentColor" stroke="none" />
     </svg>
   );
 }
