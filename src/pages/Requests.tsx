@@ -135,28 +135,28 @@ export default function Requests() {
 
         <div className="flex items-center gap-2">
           <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleClear}
-            disabled={requestHistory.length === 0}
-            className="h-9 shadow-sm"
+            variant="ghost"
+            size="icon"
+            onClick={() => setAutoScrollToTop((v) => !v)}
+            className={cn(
+              'rounded-full h-9 w-9',
+              autoScrollToTop && 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
+            )}
+            title={autoScrollToTop ? '自动置顶已开启' : '自动置顶已关闭'}
           >
-            <Trash2 className="w-4 h-4 mr-2" />
-            清空记录
+            <ArrowDownToLine
+              className={cn('w-4 h-4 transition-transform', autoScrollToTop ? 'rotate-180' : '')}
+            />
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setAutoScrollToTop((v) => !v)}
-            className="h-9 shadow-sm"
+            onClick={handleClear}
+            disabled={requestHistory.length === 0}
+            className="rounded-full gap-2 h-9 px-4 bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
           >
-            <ArrowDownToLine
-              className={cn(
-                'w-4 h-4 mr-2 transition-transform',
-                autoScrollToTop ? 'rotate-180' : ''
-              )}
-            />
-            {autoScrollToTop ? '自动置顶' : '手动浏览'}
+            <Trash2 className="w-4 h-4" />
+            清空记录
           </Button>
         </div>
       </div>

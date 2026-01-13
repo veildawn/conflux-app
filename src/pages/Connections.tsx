@@ -142,27 +142,26 @@ export default function Connections() {
 
         <div className="flex items-center gap-2">
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon"
             onClick={refresh}
             disabled={loading || !status.running}
-            className="h-9 shadow-sm"
+            className="rounded-full h-9 w-9"
           >
             {loading ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <RefreshCw className="w-4 h-4 mr-2" />
+              <RefreshCw className="w-4 h-4" />
             )}
-            刷新
           </Button>
           <Button
-            variant="destructive"
+            variant="outline"
             size="sm"
             onClick={handleCloseAll}
             disabled={loading || !status.running || connections.length === 0}
-            className="h-9 shadow-sm"
+            className="rounded-full gap-2 h-9 px-4 bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
           >
-            <Trash2 className="w-4 h-4 mr-2" />
+            <Trash2 className="w-4 h-4" />
             关闭全部
           </Button>
         </div>

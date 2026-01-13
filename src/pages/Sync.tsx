@@ -651,18 +651,22 @@ export default function Sync() {
               description="智能检测变化，只同步有改动的文件"
               action={
                 <Button
+                  variant="outline"
                   onClick={handleSync}
                   disabled={syncing || !config.enabled}
                   size="sm"
-                  className="h-8 px-4"
+                  className="rounded-full gap-2 h-9 px-4 bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
                 >
                   {syncing ? (
                     <>
-                      <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin" />
                       同步中...
                     </>
                   ) : (
-                    '开始同步'
+                    <>
+                      <ArrowUpDown className="w-4 h-4" />
+                      开始同步
+                    </>
                   )}
                 </Button>
               }
