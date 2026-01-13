@@ -6,9 +6,9 @@
       {
         "title": "Conflux",
         "width": 960,
-        "height": 730,
+        "height": 780,
         "minWidth": 960,
-        "minHeight": 730,
+        "minHeight": 780,
         "resizable": true,
         "fullscreen": false,
         "center": true,

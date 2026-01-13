@@ -14,7 +14,7 @@ pub struct TunPermission;
 
 impl TunPermission {
     /// 检查 mihomo 是否具有 TUN 所需的权限
-    /// 在 macOS 上，需要 root 所有权和 setuid bit
+    /// 在 macOS 上，legacy 方案使用 root 所有权 + setuid bit
     #[cfg(target_os = "macos")]
     pub fn check_permission() -> Result<bool> {
         let mihomo_path = get_mihomo_binary_path()?;

@@ -209,6 +209,8 @@ impl SubStoreManager {
     /// 在启动新进程前调用，确保没有孤儿进程（例如热重载后遗留的进程）
     pub fn cleanup_stale_processes(port: u16) {
         log::info!("Cleaning up stale Sub-Store processes...");
+        // 非 Windows 平台不会用到端口，显式忽略以避免 unused 参数告警
+        let _ = port;
 
         #[cfg(unix)]
         {

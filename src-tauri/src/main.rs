@@ -44,107 +44,6 @@ fn load_tray_icon() -> Option<Image<'static>> {
     }
 }
 
-fn build_terminal_proxy_command() -> Result<String, String> {
-    let config_manager = crate::config::ConfigManager::new().map_err(|e| e.to_string())?;
-    let config = config_manager
-        .load_mihomo_config()
-        .map_err(|e| e.to_string())?;
-    let http = format!("http://127.0.0.1:{}", config.port.unwrap_or(7890));
-    let socks = format!("socks5://127.0.0.1:{}", config.socks_port.unwrap_or(7891));
-
-    #[cfg(target_os = "windows")]
-    {
-        // PowerShell 格式
-        Ok(format!(
-            "$env:http_proxy=\"{http}\"; $env:https_proxy=\"{http}\"; $env:all_proxy=\"{socks}\""
-        ))
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        // Unix/Linux/macOS 格式
-        Ok(format!(
-            "export http_proxy={http} https_proxy={http} all_proxy={socks}"
-        ))
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn copy_to_clipboard(text: &str) -> Result<(), String> {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-
-    let mut child = Command::new("pbcopy")
-        .stdin(Stdio::piped())
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    {
-        let stdin = child.stdin.as_mut().ok_or("Failed to open pbcopy stdin")?;
-        stdin
-            .write_all(text.as_bytes())
-            .map_err(|e| e.to_string())?;
-    }
-    child.wait().map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[cfg(target_os = "windows")]
-fn copy_to_clipboard(text: &str) -> Result<(), String> {
-    use std::io::Write;
-    use std::os::windows::process::CommandExt;
-    use std::process::{Command, Stdio};
-
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-    let mut child = Command::new("cmd")
-        .args(["/C", "clip"])
-        .stdin(Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    {
-        let stdin = child.stdin.as_mut().ok_or("Failed to open clip stdin")?;
-        stdin
-            .write_all(text.as_bytes())
-            .map_err(|e| e.to_string())?;
-    }
-    child.wait().map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[cfg(target_os = "linux")]
-fn copy_to_clipboard(text: &str) -> Result<(), String> {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-
-    // 尝试 xclip，如果失败则尝试 xsel
-    let result = Command::new("xclip")
-        .args(["-selection", "clipboard"])
-        .stdin(Stdio::piped())
-        .spawn();
-
-    let mut child = match result {
-        Ok(child) => child,
-        Err(_) => Command::new("xsel")
-            .args(["--clipboard", "--input"])
-            .stdin(Stdio::piped())
-            .spawn()
-            .map_err(|e| e.to_string())?,
-    };
-
-    {
-        let stdin = child
-            .stdin
-            .as_mut()
-            .ok_or("Failed to open clipboard stdin")?;
-        stdin
-            .write_all(text.as_bytes())
-            .map_err(|e| e.to_string())?;
-    }
-    child.wait().map_err(|e| e.to_string())?;
-    Ok(())
-}
-
 #[cfg(target_os = "macos")]
 fn build_fontdb() -> Arc<resvg::usvg::fontdb::Database> {
     let mut fontdb = resvg::usvg::fontdb::Database::new();
@@ -390,7 +289,9 @@ fn main() {
         ))
         .setup(|app| {
             if let Err(err) = crate::utils::ensure_mihomo_in_data_dir() {
-                log::warn!("Failed to initialize MiHomo binary in data dir: {}", err);
+                // macOS legacy TUN 模式下，mihomo 可能被设置为 root-owned + setuid，
+                // 普通用户进程无法覆盖/chmod，这里不应当刷屏 warn。
+                log::debug!("MiHomo binary init skipped/failed: {}", err);
             }
 
             // 创建系统托盘
@@ -525,9 +426,9 @@ fn main() {
                     }
                     "copy_terminal_proxy" => {
                         tauri::async_runtime::spawn(async move {
-                            match build_terminal_proxy_command() {
+                            match crate::utils::build_terminal_proxy_command() {
                                 Ok(command) => {
-                                    if let Err(err) = copy_to_clipboard(&command) {
+                                    if let Err(err) = crate::utils::copy_to_clipboard(&command) {
                                         log::warn!("Failed to copy command: {}", err);
                                     }
                                 }
@@ -600,6 +501,15 @@ fn main() {
             commands::system::get_system_proxy_status,
             commands::system::get_autostart_enabled,
             commands::system::set_autostart_enabled,
+            // 首页网络信息
+            commands::system::get_public_ip_info,
+            commands::system::get_local_ip_info,
+            commands::system::get_terminal_proxy_command,
+            commands::system::copy_to_clipboard,
+            commands::system::copy_terminal_proxy_command,
+            // macOS Network Extension（占位，用于增强模式引导）
+            commands::system::get_network_extension_status,
+            commands::system::open_network_extension_settings,
             // 流量命令
             commands::proxy::get_traffic,
             // 连接命令

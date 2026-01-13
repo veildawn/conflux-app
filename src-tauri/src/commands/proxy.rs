@@ -488,8 +488,10 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
 
         if !has_permission {
             log::info!("TUN permission not set, requesting setup...");
-            crate::system::TunPermission::setup_permission()
-                .map_err(|e| format!("设置 TUN 权限失败: {}", e))?;
+            crate::system::TunPermission::setup_permission().map_err(|e| {
+                // macOS 上我们已切换到 Network Extension 流程（若未集成则会给出明确引导信息）
+                format!("增强模式需要额外系统权限/组件：{}", e)
+            })?;
         }
 
         // Windows: 检查是否需要 UAC 权限，不需要预先确认，直接由 safe_restart_proxy 触发提权

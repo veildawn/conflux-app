@@ -148,29 +148,40 @@ pub fn ensure_mihomo_in_data_dir() -> Result<PathBuf> {
     if user_binary_path.exists() {
         if let Some(ref source_path) = source_path {
             if should_refresh_binary(source_path, &user_binary_path)? {
-                std::fs::copy(source_path, &user_binary_path)?;
-                // 设置执行权限 (macOS/Linux)
-                #[cfg(unix)]
-                set_executable_permission(&user_binary_path)?;
-                log::info!("Refreshed MiHomo in data dir from {:?}", source_path);
+                // 如果用户已经通过 TUN 授权把 mihomo 设为 root-owned + setuid，
+                // 普通用户进程将无法覆盖该文件（EPERM）。这种情况下跳过刷新即可。
+                if let Err(e) = std::fs::copy(source_path, &user_binary_path) {
+                    if e.kind() == std::io::ErrorKind::PermissionDenied {
+                        log::warn!(
+                            "MiHomo in data dir is not writable (likely root-owned for TUN), skip refresh: {}",
+                            e
+                        );
+                    } else {
+                        return Err(e.into());
+                    }
+                } else {
+                    // 规范化执行权限 (macOS/Linux)：
+                    // - 统一设置为 755
+                    // - 清除潜在的 setuid/setgid 位，避免后续产生 root-owned 文件导致“无权限覆盖”
+                    #[cfg(unix)]
+                    normalize_mihomo_permissions(&user_binary_path)?;
+                    log::info!("Refreshed MiHomo in data dir from {:?}", source_path);
+                }
             }
         }
-        // 确保现有文件有执行权限
+        // 确保现有文件权限合理（不仅仅是“可执行”）
         #[cfg(unix)]
         {
-            if !has_executable_permission(&user_binary_path) {
-                set_executable_permission(&user_binary_path)?;
-                log::info!("Fixed executable permission for {:?}", user_binary_path);
-            }
+            normalize_mihomo_permissions(&user_binary_path)?;
         }
         return Ok(user_binary_path);
     }
 
     if let Some(source_path) = source_path {
         std::fs::copy(&source_path, &user_binary_path)?;
-        // 设置执行权限 (macOS/Linux)
+        // 规范化执行权限 (macOS/Linux)
         #[cfg(unix)]
-        set_executable_permission(&user_binary_path)?;
+        normalize_mihomo_permissions(&user_binary_path)?;
         log::info!("Copied MiHomo to data dir from {:?}", source_path);
         return Ok(user_binary_path);
     }
@@ -180,29 +191,38 @@ pub fn ensure_mihomo_in_data_dir() -> Result<PathBuf> {
     ))
 }
 
-/// 设置文件的执行权限 (Unix only)
 #[cfg(unix)]
-fn set_executable_permission(path: &PathBuf) -> Result<()> {
+fn normalize_mihomo_permissions(path: &PathBuf) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
     let metadata = std::fs::metadata(path)?;
+    let current_mode = metadata.permissions().mode();
     let mut permissions = metadata.permissions();
-    // 设置 755 权限 (rwxr-xr-x)
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(path, permissions)?;
-    log::debug!("Set executable permission (755) for {:?}", path);
-    Ok(())
-}
-
-/// 检查文件是否有执行权限 (Unix only)
-#[cfg(unix)]
-fn has_executable_permission(path: &PathBuf) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    if let Ok(metadata) = std::fs::metadata(path) {
-        let mode = metadata.permissions().mode();
-        // 检查所有者执行位
-        return (mode & 0o100) != 0;
+    // 统一确保可执行权限为 755 (rwxr-xr-x)
+    //
+    // 注意：macOS legacy TUN 模式依赖 setuid(root)，这里需要保留 special bits，
+    // 否则应用启动时会把 setuid 清掉导致 TUN 无法启用。
+    let special_bits = current_mode & 0o7000;
+    permissions.set_mode(0o755 | special_bits);
+    if let Err(e) = std::fs::set_permissions(path, permissions) {
+        // 如果 mihomo 已经被设置为 root-owned（TUN legacy 方案），普通用户无法再 chmod。
+        // 这不应阻塞应用启动：直接跳过即可。
+        if e.kind() == std::io::ErrorKind::PermissionDenied {
+            log::debug!(
+                "Skip normalizing MiHomo permissions for {:?} due to PermissionDenied: {}",
+                path,
+                e
+            );
+            return Ok(());
+        }
+        return Err(e.into());
     }
-    false
+    log::debug!(
+        "Normalized MiHomo permissions for {:?} (mode {:o} -> {:o})",
+        path,
+        current_mode,
+        0o755 | special_bits
+    );
+    Ok(())
 }
 
 /// 查找 Sidecar 二进制文件路径
