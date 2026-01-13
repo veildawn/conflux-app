@@ -1,5 +1,7 @@
 use crate::commands::get_app_state_or_err;
 use crate::models::{AppSettings, MihomoConfig};
+#[cfg(unix)]
+use std::os::unix::{ffi::OsStrExt, fs::MetadataExt};
 
 #[derive(serde::Deserialize)]
 struct GithubRelease {
@@ -12,6 +14,34 @@ struct GithubRelease {
 struct GithubAsset {
     name: String,
     browser_download_url: String,
+}
+
+/// 最佳努力修复 root-owned 资源文件：
+/// - 仅在 Unix 且当前进程具备权限（euid==0）时尝试
+/// - 将目标文件 chown 为其父目录的属主（通常是数据目录的用户）
+#[cfg(unix)]
+fn try_fix_root_owned_file(target_path: &std::path::Path) -> bool {
+    if unsafe { libc::geteuid() } != 0 {
+        return false;
+    }
+
+    let Some(parent) = target_path.parent() else {
+        return false;
+    };
+
+    let Ok(parent_meta) = std::fs::metadata(parent) else {
+        return false;
+    };
+
+    let uid = parent_meta.uid();
+    let gid = parent_meta.gid();
+
+    let Ok(c_path) = std::ffi::CString::new(target_path.as_os_str().as_bytes()) else {
+        return false;
+    };
+
+    let rc = unsafe { libc::chown(c_path.as_ptr(), uid, gid) };
+    rc == 0
 }
 
 /// 获取 MiHomo 配置
@@ -397,7 +427,91 @@ pub async fn download_resource(
         .await
         .map_err(|e| format!("Failed to read response body: {}", e))?;
 
-    std::fs::write(&target_path, &content).map_err(|e| format!("Failed to write file: {}", e))?;
+    // 确保目标目录存在
+    if let Some(parent) = target_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create target dir {:?}: {}", parent, e))?;
+    }
+
+    // 采用“写入临时文件 -> 原子替换”的方式，避免写到一半留下损坏文件
+    let tmp_path = target_path.with_extension("download.tmp");
+    if tmp_path.exists() {
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+
+    if let Err(e) = std::fs::write(&tmp_path, &content) {
+        // 给出更可操作的提示，尤其是 macOS 上 root-owned 文件导致无法覆盖的情况
+        if e.kind() == std::io::ErrorKind::PermissionDenied {
+            return Err(format!(
+                "没有权限写入资源文件：{:?}\n\
+可能原因：该文件/目录曾被 root 创建（例如 mihomo 带 setuid 或以管理员权限运行过），导致当前用户无法覆盖。\n\
+建议修复（macOS）：\n\
+  sudo chown -R $(whoami) \"{}\"\n\
+  sudo chmod u-s \"{}\"  # 去掉 mihomo 的 setuid 位（若存在）\n\
+然后重启应用再试。",
+                tmp_path,
+                crate::utils::get_app_data_dir()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| "<Conflux 数据目录>".to_string()),
+                crate::utils::get_app_data_dir()
+                    .map(|p| p.join(crate::utils::get_mihomo_binary_name()).to_string_lossy().to_string())
+                    .unwrap_or_else(|_| "<Conflux/mihomo>".to_string()),
+            ));
+        }
+        return Err(format!("Failed to write temp file: {}", e));
+    }
+
+    // Unix: 固定资源文件权限为 644，避免被意外改成只读/可执行
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = std::fs::metadata(&tmp_path) {
+            let mut perms = meta.permissions();
+            perms.set_mode(0o644);
+            let _ = std::fs::set_permissions(&tmp_path, perms);
+        }
+    }
+
+    // 替换目标文件（尽量先删后改名，兼容部分平台的 rename 行为）
+    if target_path.exists() {
+        if let Err(e) = std::fs::remove_file(&target_path) {
+            if e.kind() == std::io::ErrorKind::PermissionDenied {
+                // 最佳努力：若进程具备权限，尝试修复 root-owned 文件归属后再删除
+                #[cfg(unix)]
+                {
+                    if try_fix_root_owned_file(&target_path) {
+                        if std::fs::remove_file(&target_path).is_ok() {
+                            // retry succeeded
+                        } else {
+                            return Err(format!(
+                                "没有权限覆盖已有文件：{:?}\n\
+该文件可能属于 root（例如曾以管理员运行过 mihomo），请先修复文件归属后再下载。",
+                                target_path
+                            ));
+                        }
+                    } else {
+                        return Err(format!(
+                            "没有权限覆盖已有文件：{:?}\n\
+该文件可能属于 root（例如曾以管理员运行过 mihomo），请先修复文件归属后再下载。",
+                            target_path
+                        ));
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    return Err(format!(
+                        "没有权限覆盖已有文件：{:?}\n\
+该文件可能属于 root（例如曾以管理员运行过 mihomo），请先修复文件归属后再下载。",
+                        target_path
+                    ));
+                }
+            }
+            return Err(format!("Failed to remove old file: {}", e));
+        }
+    }
+
+    std::fs::rename(&tmp_path, &target_path)
+        .map_err(|e| format!("Failed to replace file {:?}: {}", target_path, e))?;
 
     log::info!(
         "Resource downloaded successfully: {:?} ({} bytes)",
@@ -405,49 +519,20 @@ pub async fn download_resource(
         content.len()
     );
 
-    // 如果 mihomo 正在运行，立即重新加载 GEO 数据库
+    // 如果 mihomo 正在运行，立即重载配置以使其重新读取本地 GEO 资源。
+    //
+    // 注意：这里刻意不调用 core 的 update_geo 接口，避免核心在某些实现下触发网络下载。
+    // GEO 资源由 Conflux 统一下载到数据目录，并通过 reload_configs 触发重载即可。
     let state = get_app_state_or_err()?;
     if state.mihomo_manager.is_running().await {
-        // 判断是否是 GEO 相关文件
-        let is_geo_file = file_name.contains("geoip")
-            || file_name.contains("geosite")
-            || file_name.contains("GeoLite")
-            || file_name.ends_with(".dat")
-            || file_name.ends_with(".metadb")
-            || file_name.ends_with(".mmdb");
-
-        if is_geo_file {
-            // 调用 update_geo API 重新加载 GEO 数据库
-            match state.mihomo_api.update_geo().await {
-                Ok(_) => log::info!("GEO database reloaded successfully"),
-                Err(e) => {
-                    log::warn!(
-                        "Failed to reload GEO via API: {}, trying config reload...",
-                        e
-                    );
-                    // 如果 update_geo 失败，尝试重载配置
-                    let config_path = state.config_manager.mihomo_config_path();
-                    match state
-                        .mihomo_api
-                        .reload_configs(config_path.to_str().unwrap_or(""), true)
-                        .await
-                    {
-                        Ok(_) => log::info!("Config reloaded after resource download"),
-                        Err(e) => log::warn!("Failed to reload config: {}", e),
-                    }
-                }
-            }
-        } else {
-            // 非 GEO 文件，尝试重载配置
-            let config_path = state.config_manager.mihomo_config_path();
-            match state
-                .mihomo_api
-                .reload_configs(config_path.to_str().unwrap_or(""), true)
-                .await
-            {
-                Ok(_) => log::info!("Config reloaded after resource download"),
-                Err(e) => log::warn!("Failed to reload config: {}", e),
-            }
+        let config_path = state.config_manager.mihomo_config_path();
+        match state
+            .mihomo_api
+            .reload_configs(config_path.to_str().unwrap_or(""), true)
+            .await
+        {
+            Ok(_) => log::info!("Config reloaded after resource download"),
+            Err(e) => log::warn!("Failed to reload config: {}", e),
         }
     }
 
@@ -469,13 +554,15 @@ pub async fn reload_geo_database() -> Result<(), String> {
         return Err("Mihomo is not running".to_string());
     }
 
+    // 只重载配置，避免触发核心网络下载（GEO 资源由 Conflux 管理）
+    let config_path = state.config_manager.mihomo_config_path();
     state
         .mihomo_api
-        .update_geo()
+        .reload_configs(config_path.to_str().unwrap_or(""), true)
         .await
-        .map_err(|e| format!("Failed to reload GEO database: {}", e))?;
+        .map_err(|e| format!("Failed to reload config: {}", e))?;
 
-    log::info!("GEO database reloaded successfully");
+    log::info!("Config reloaded (GEO resources refreshed)");
     Ok(())
 }
 

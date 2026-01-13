@@ -201,20 +201,6 @@ impl MihomoApi {
         Ok(rules)
     }
 
-    /// 更新 GEO 数据库（重新加载 geoip/geosite 文件）
-    pub async fn update_geo(&self) -> Result<()> {
-        let url = format!("{}/configs/geo", self.base_url);
-        let request = self.client.post(&url).json(&serde_json::json!({}));
-        let response = self.auth_header(request).send().await?;
-
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            let error_text = response.text().await.unwrap_or_default();
-            Err(anyhow::anyhow!("Failed to update GEO: {}", error_text))
-        }
-    }
-
     /// 获取代理 Provider 列表
     pub async fn get_proxy_providers(&self) -> Result<ProxyProvidersResponse> {
         let url = format!("{}/providers/proxies", self.base_url);

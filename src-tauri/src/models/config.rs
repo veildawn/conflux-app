@@ -828,7 +828,55 @@ impl Default for AppSettings {
             system_proxy: false,
             close_to_tray: default_close_to_tray(),
             use_jsdelivr: false,
-            rule_databases: vec![],
+            // A 体系（geodata .dat）：必需资源
+            // - geoip.dat (GeoIP)
+            // - geosite.dat (GeoSite)
+            // - GeoLite2-ASN.mmdb (ASN)
+            rule_databases: vec![
+                RuleDatabaseItem {
+                    id: "geoip".to_string(),
+                    name: "GeoIP".to_string(),
+                    url: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.dat"
+                        .to_string(),
+                    // A 体系核心常用文件名：GeoIP.dat（落盘用大写，asset 仍为 geoip.dat）
+                    file_name: "GeoIP.dat".to_string(),
+                    updated_at: None,
+                    auto_update: true,
+                    update_source_type: Some("github-release".to_string()),
+                    github_repo: Some("MetaCubeX/meta-rules-dat".to_string()),
+                    asset_name: Some("geoip.dat".to_string()),
+                    etag: None,
+                    remote_modified: None,
+                },
+                RuleDatabaseItem {
+                    id: "geosite".to_string(),
+                    name: "GeoSite".to_string(),
+                    url: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat"
+                        .to_string(),
+                    file_name: "geosite.dat".to_string(),
+                    updated_at: None,
+                    auto_update: true,
+                    update_source_type: Some("github-release".to_string()),
+                    github_repo: Some("MetaCubeX/meta-rules-dat".to_string()),
+                    asset_name: Some("geosite.dat".to_string()),
+                    etag: None,
+                    remote_modified: None,
+                },
+                RuleDatabaseItem {
+                    id: "geolite2-asn".to_string(),
+                    name: "GeoLite2 ASN".to_string(),
+                    url: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/GeoLite2-ASN.mmdb"
+                        .to_string(),
+                    file_name: "GeoLite2-ASN.mmdb".to_string(),
+                    updated_at: None,
+                    auto_update: true,
+                    update_source_type: Some("github-release".to_string()),
+                    github_repo: Some("MetaCubeX/meta-rules-dat".to_string()),
+                    asset_name: Some("GeoLite2-ASN.mmdb".to_string()),
+                    etag: None,
+                    remote_modified: None,
+                },
+            ],
             webdav: WebDavConfig::default(),
             mihomo: MihomoSettings::default(),
         }

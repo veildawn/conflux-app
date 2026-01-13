@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/utils/cn';
 import { toast } from '@/hooks/useToast';
@@ -240,14 +239,6 @@ export default function RuleDatabase() {
     );
   };
 
-  const handleAutoUpdateToggle = async (id: string, checked: boolean) => {
-    await updateRuleDatabase(id, { autoUpdate: checked });
-    toast({
-      title: checked ? '自动更新已开启' : '自动更新已关闭',
-      description: checked ? '该数据库将自动保持最新' : '该数据库将不再自动更新',
-    });
-  };
-
   const updateCount = Object.values(ruleDatabaseUpdateStatus).filter(
     (s) => s.hasUpdate && !s.checking
   ).length;
@@ -417,15 +408,8 @@ export default function RuleDatabase() {
                     </span>
                   </div>
 
-                  {/* Actions (Auto Update + Button) */}
-                  <div className="flex items-center justify-end gap-3">
-                    <div title="自动更新">
-                      <Switch
-                        checked={database.autoUpdate}
-                        onCheckedChange={(checked) => handleAutoUpdateToggle(database.id, checked)}
-                        className="scale-75 data-[state=checked]:bg-blue-500"
-                      />
-                    </div>
+                  {/* Actions */}
+                  <div className="flex items-center justify-end">
                     <Button
                       variant={hasUpdate ? 'default' : 'secondary'}
                       size="icon"

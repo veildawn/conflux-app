@@ -550,14 +550,16 @@ export interface ResourceUpdateCheckResult {
 
 export const DEFAULT_RULE_DATABASES: RuleDatabaseItem[] = [
   {
-    id: 'geoip-lite',
-    name: 'GeoIP Lite',
-    url: 'https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip-lite.dat',
-    fileName: 'geoip-lite.dat',
+    id: 'geoip',
+    name: 'GeoIP',
+    url: 'https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.dat',
+    // A 体系（geodata-mode: true）核心常用文件名：GeoIP.dat
+    // 注意：release asset 名是 geoip.dat（小写），但我们落盘使用 GeoIP.dat 以匹配核心默认查找
+    fileName: 'GeoIP.dat',
     autoUpdate: true,
     updateSourceType: 'github-release',
     githubRepo: 'MetaCubeX/meta-rules-dat',
-    assetName: 'geoip-lite.dat',
+    assetName: 'geoip.dat',
   },
   {
     id: 'geosite',
@@ -568,16 +570,6 @@ export const DEFAULT_RULE_DATABASES: RuleDatabaseItem[] = [
     updateSourceType: 'github-release',
     githubRepo: 'MetaCubeX/meta-rules-dat',
     assetName: 'geosite.dat',
-  },
-  {
-    id: 'geoip-metadb',
-    name: 'GeoIP MetaDB',
-    url: 'https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb',
-    fileName: 'geoip.metadb',
-    autoUpdate: true,
-    updateSourceType: 'github-release',
-    githubRepo: 'MetaCubeX/meta-rules-dat',
-    assetName: 'geoip.metadb',
   },
   {
     id: 'geolite2-asn',

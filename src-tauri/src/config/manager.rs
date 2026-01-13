@@ -60,6 +60,31 @@ impl ConfigManager {
             changed = true;
         }
 
+        // ============================================================================
+        // 禁用 MiHomo 核心自动下载 GEO 资源（由 Conflux 统一管理）
+        //
+        // 目标：
+        // - 禁止核心在任何平台/模式下自行从网络拉取 GeoIP/GeoSite/MMDB/ASN
+        // - 避免权限/路径差异导致核心写入失败或不可控更新
+        //
+        // Conflux 会在应用数据目录下载这些文件，并通过 reload_configs 触发核心重载。
+        // ============================================================================
+        if config.geo_auto_update {
+            log::info!("Disabling geo-auto-update (managed by Conflux)");
+            config.geo_auto_update = false;
+            changed = true;
+        }
+        if config.geox_url.is_some() {
+            log::info!("Removing geox-url (managed by Conflux)");
+            config.geox_url = None;
+            changed = true;
+        }
+        if config.geo_update_interval.is_some() {
+            // 禁用自动更新时 interval 无意义，清空避免误解
+            config.geo_update_interval = None;
+            changed = true;
+        }
+
         // 自动修正规则提供者行为
         if !config.rule_providers.is_empty() {
             for (name, provider) in config.rule_providers.iter_mut() {
@@ -254,7 +279,58 @@ impl ConfigManager {
         }
 
         let content = fs::read_to_string(&self.app_settings_path)?;
-        let settings: AppSettings = serde_json::from_str(&content)?;
+        let mut settings: AppSettings = serde_json::from_str(&content)?;
+
+        // 迁移：A 体系默认必需资源仅保留 geoip.dat / geosite.dat / GeoLite2-ASN.mmdb。
+        // 删除旧的 geoip-lite.dat / geoip.metadb，并补齐缺失的默认项。
+        let mut changed = false;
+
+        if !settings.rule_databases.is_empty() {
+            let deprecated = std::collections::HashSet::from([
+                "geoip-lite.dat".to_string(),
+                "geoip.metadb".to_string(),
+            ]);
+            let before = settings.rule_databases.len();
+            settings
+                .rule_databases
+                .retain(|r| !deprecated.contains(&r.file_name));
+            if settings.rule_databases.len() != before {
+                changed = true;
+            }
+
+            // 统一 GeoIP 文件名为 GeoIP.dat（与核心 geodata-mode 默认一致）
+            for r in settings.rule_databases.iter_mut() {
+                if r.id == "geoip" && r.file_name != "GeoIP.dat" {
+                    r.file_name = "GeoIP.dat".to_string();
+                    // 确保 assetName 为 geoip.dat
+                    if r.asset_name.is_none() {
+                        r.asset_name = Some("geoip.dat".to_string());
+                    }
+                    changed = true;
+                }
+            }
+        }
+
+        // 合并默认必需资源（按 id）
+        let defaults = AppSettings::default().rule_databases;
+        let existing_ids: std::collections::HashSet<String> = settings
+            .rule_databases
+            .iter()
+            .map(|r| r.id.clone())
+            .collect();
+        for d in defaults {
+            if !existing_ids.contains(&d.id) {
+                settings.rule_databases.push(d);
+                changed = true;
+            }
+        }
+
+        if changed {
+            if let Err(e) = self.save_app_settings(&settings) {
+                log::warn!("Failed to persist migrated app settings: {}", e);
+            }
+        }
+
         Ok(settings)
     }
 
@@ -286,6 +362,16 @@ impl ConfigManager {
 
         tun.enable = enabled;
         if enabled {
+            // macOS legacy(setuid) TUN 模式下，禁止核心自动下载 GEO 数据，
+            // 由应用负责下载并触发 reload，避免 root 自动写入导致权限问题。
+            #[cfg(target_os = "macos")]
+            {
+                if config.geo_auto_update {
+                    log::warn!("Disabling geo-auto-update for macOS TUN legacy mode");
+                }
+                config.geo_auto_update = false;
+            }
+
             if tun.stack.is_none() {
                 tun.stack = Some("system".to_string());
             }

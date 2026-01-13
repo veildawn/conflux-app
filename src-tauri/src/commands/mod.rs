@@ -18,6 +18,7 @@ use crate::config::{ConfigManager, Workspace};
 use crate::mihomo::{LogStreamer, MihomoApi, MihomoManager};
 use crate::substore::SubStoreManager;
 use crate::utils::generate_api_secret;
+use crate::utils::get_app_data_dir;
 
 /// 应用状态
 #[derive(Clone)]
@@ -161,15 +162,13 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     let current_system_proxy = crate::system::SystemProxy::get_proxy_status().unwrap_or(false);
     log::info!("Detected system proxy status: {}", current_system_proxy);
 
-    // 优化：并行执行多个异步检查
-    // 1. 检查 mihomo 是否运行
-    // 2. Windows: 检查服务状态
-    let is_running = mihomo_manager.is_running().await;
-
     // Windows: 检查服务状态，如果服务正在运行但 mihomo 没有启动，则通过服务启动
     #[cfg(target_os = "windows")]
     {
         use crate::system::WinServiceManager;
+
+        // 检查 mihomo 是否运行（仅 Windows 需要与服务状态联动）
+        let is_running = mihomo_manager.is_running().await;
 
         // 优化：只检查服务是否运行，不查询 mihomo 状态（节省一次 HTTP 请求）
         let service_running = WinServiceManager::is_running().unwrap_or(false);
@@ -269,6 +268,85 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     // 也保存到全局状态，用于非命令的地方访问
     let _ = APP_STATE.set(state.clone());
 
+    // 后台确保规则数据库资源存在（不阻塞核心启动/重启）：
+    // - 若资源缺失且开启自动更新，则由应用下载到数据目录
+    // - 下载完成后触发 reload_configs，使运行中的核心立即加载本地资源
+    // - 若资源已存在且核心正在运行，触发一次 reload_configs 确保生效
+    tokio::spawn({
+        let state = state.clone();
+        async move {
+            if let Err(e) = ensure_rule_databases_ready_background(&state).await {
+                log::warn!("Rule database background ensure failed: {}", e);
+            }
+        }
+    });
+
     log::info!("App state initialized");
     Ok(state)
+}
+
+/// 后台确保规则数据库资源就绪（不阻塞核心启动）
+async fn ensure_rule_databases_ready_background(state: &AppState) -> anyhow::Result<()> {
+    let app_settings = state.config_manager.load_app_settings()?;
+    if app_settings.rule_databases.is_empty() {
+        return Ok(());
+    }
+
+    // 如果核心已经在运行（例如 Windows 服务模式），触发一次 reload_configs，
+    // 确保它能读取到已存在的本地 GEO 资源。
+    if state.mihomo_manager.is_running().await {
+        let config_path = state.config_manager.mihomo_config_path();
+        if let Err(e) = state
+            .mihomo_api
+            .reload_configs(config_path.to_str().unwrap_or(""), true)
+            .await
+        {
+            log::debug!("Initial config reload skipped/failed: {}", e);
+        }
+    }
+
+    let data_dir = get_app_data_dir()?;
+
+    // 规则数据库资源为必需资源：缺失则下载（不阻塞核心启动）
+    for db in app_settings.rule_databases {
+        let file_name = db.file_name.clone();
+        let path = data_dir.join(&file_name);
+        if path.exists() {
+            continue;
+        }
+
+        log::info!(
+            "Rule database missing, downloading in background: {} -> {:?}",
+            file_name,
+            path
+        );
+
+        // 强制下载（缺失必下），下载完成后 download_resource 内部会触发 reload_configs
+        // 注意：download_resource 使用 settings.json 的 useJsdelivr 自动加速 GitHub 资源
+        match crate::commands::config::download_resource(
+            db.url,
+            file_name.clone(),
+            db.etag,
+            db.remote_modified,
+            Some(true),
+            db.update_source_type,
+            db.github_repo,
+            db.asset_name,
+        )
+        .await
+        {
+            Ok(_) => {
+                // download_resource 内部会在核心运行时触发 reload_configs
+            }
+            Err(e) => {
+                log::warn!(
+                    "Failed to download required rule database '{}' in background: {}",
+                    file_name,
+                    e
+                );
+            }
+        }
+    }
+
+    Ok(())
 }

@@ -44,6 +44,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!settings.ruleDatabases || settings.ruleDatabases.length === 0) {
         settings.ruleDatabases = DEFAULT_RULE_DATABASES;
       } else {
+        // 迁移：移除旧的 GeoIP 资源（A 体系只需要 geoip.dat）
+        const deprecatedFileNames = new Set(['geoip-lite.dat', 'geoip.metadb']);
+        settings.ruleDatabases = settings.ruleDatabases.filter(
+          (r) => !deprecatedFileNames.has(r.fileName)
+        );
+
+        // 迁移：统一 GeoIP 文件名为 GeoIP.dat（与核心 geodata-mode 默认一致）
+        settings.ruleDatabases = settings.ruleDatabases.map((r) =>
+          r.id === 'geoip'
+            ? { ...r, fileName: 'GeoIP.dat', assetName: r.assetName ?? 'geoip.dat' }
+            : r
+        );
+
         // 确保所有默认数据库都在，如果有新的默认数据库加入，这里可以合并
         const currentIds = new Set(settings.ruleDatabases.map((r) => r.id));
         const missingDatabases = DEFAULT_RULE_DATABASES.filter((r) => !currentIds.has(r.id));
