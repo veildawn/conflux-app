@@ -555,7 +555,7 @@ fn get_process_icon_data_url_macos(
 
     let mut bundles = exec_path
         .as_ref()
-        .map(find_app_bundles_from_exec)
+        .map(|p| find_app_bundles_from_exec(p))
         .unwrap_or_default();
 
     // 如果还没找到 .app，尝试通过进程名或可执行名在 /Applications / ~/Applications 中匹配
@@ -637,57 +637,7 @@ fn get_process_icon_data_url_macos(
         }
     }
 
-    let app_bundle = preferred.or_else(|| {
-        // Fallback: try to find app bundle by name in /Applications
-        let name_stem = exec_path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or_default()
-            .to_lowercase();
-
-        let needle = name_stem
-            .strip_suffix("-service")
-            .or_else(|| name_stem.strip_suffix("service"))
-            .or_else(|| name_stem.strip_suffix("d"))
-            .unwrap_or(&name_stem);
-
-        if needle.is_empty() || needle.len() < 3 {
-            return None;
-        }
-
-        let dirs = [
-            PathBuf::from("/Applications"),
-            dirs::home_dir()
-                .map(|h| h.join("Applications"))
-                .unwrap_or_else(|| PathBuf::from("/nonexistent")),
-        ];
-
-        for dir in dirs {
-            if !dir.exists() {
-                continue;
-            }
-            if let Ok(entries) = std::fs::read_dir(dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.extension().and_then(|s| s.to_str()) != Some("app") {
-                        continue;
-                    }
-                    let stem = path
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or_default()
-                        .to_lowercase();
-
-                    // Allow partial match if safe? No, exact match of stripped name is better.
-                    // e.g. "corplink" == "corplink" (from CorpLink.app)
-                    if stem == needle {
-                        return Some(path);
-                    }
-                }
-            }
-        }
-        None
-    })?;
+    let app_bundle = preferred?;
     let icns = pick_icns_path(&app_bundle)?;
 
     let cache_key = format!("bundle={};icns={}", app_bundle.display(), icns.display());
