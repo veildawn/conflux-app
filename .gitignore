@@ -25,6 +25,10 @@ src-tauri/resources/sub-store/
 *.swp
 *.swo
 
+# AI Assistant
+.claude/
+CLAUDE.md
+
 # OS
 .DS_Store
 Thumbs.db
