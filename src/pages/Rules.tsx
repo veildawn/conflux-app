@@ -56,6 +56,7 @@ import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
 import { useToast } from '@/hooks/useToast';
 import { RULE_TYPES, parseRule, type ProfileConfig } from '@/types/config';
+import { TextWithFlag } from '@/components/ui/RegionFlag';
 
 // -----------------------------------------------------------------------------
 // Constants
@@ -736,7 +737,7 @@ const SortableRuleRow = memo(function SortableRuleRow({
             getPolicyStyle(policy)
           )}
         >
-          {policy}
+          <TextWithFlag text={policy} />
         </span>
       </div>
 

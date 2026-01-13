@@ -26,6 +26,7 @@ import { formatDelay } from '@/utils/format';
 import { cn } from '@/utils/cn';
 import { ipc } from '@/services/ipc';
 import type { ProxyMode, ProxyServerInfo, ProxyGroup } from '@/types/proxy';
+import { TextWithFlag } from '@/components/ui/RegionFlag';
 
 const MANUAL_SELECT_TYPES = new Set(['selector']);
 const CARD_BG_STORAGE_KEY = 'proxy-group-card-backgrounds';
@@ -267,7 +268,7 @@ export default function Proxy() {
                       : 'text-gray-700 dark:text-gray-200'
                   )}
                 >
-                  {policyName}
+                  <TextWithFlag text={policyName} />
                 </span>
                 {isSelected && <span className="text-[10px] text-blue-500">当前</span>}
               </div>
@@ -318,8 +319,12 @@ export default function Proxy() {
         )}
       >
         <div className="text-xs text-gray-400">{getGroupTypeLabel(group)}</div>
-        <div className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{group.name}</div>
-        <div className="mt-6 text-sm text-gray-400">{currentName}</div>
+        <div className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
+          <TextWithFlag text={group.name} />
+        </div>
+        <div className="mt-6 text-sm text-gray-400">
+          <TextWithFlag text={currentName} />
+        </div>
       </button>
     );
   };
@@ -445,7 +450,9 @@ export default function Proxy() {
           {activeGroup && (
             <div className="space-y-4">
               <DialogHeader className="text-left">
-                <DialogTitle>{activeGroup.name}</DialogTitle>
+                <DialogTitle>
+                  <TextWithFlag text={activeGroup.name} />
+                </DialogTitle>
                 <DialogDescription>
                   {getGroupTypeLabel(activeGroup)}
                   {!isManualSelectableGroup(activeGroup) && ' · 自动选择，无法手动切换'}
@@ -453,7 +460,7 @@ export default function Proxy() {
               </DialogHeader>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">
-                  当前选择: {activeGroup.now || '未选择'}
+                  当前选择: <TextWithFlag text={activeGroup.now || '未选择'} />
                 </span>
                 <Button
                   variant="outline"

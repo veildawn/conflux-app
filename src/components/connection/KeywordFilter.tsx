@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { TextWithFlag } from '@/components/ui/RegionFlag';
 
 interface KeywordFilterProps {
   keywords: string[];
@@ -22,7 +23,9 @@ export function KeywordFilter({ keywords, onRemove, onClearAll }: KeywordFilterP
           onClick={() => onRemove(k)}
           title="点击移除关键词"
         >
-          <span className="max-w-[180px] truncate font-medium">{k}</span>
+          <span className="max-w-[180px] truncate font-medium">
+            <TextWithFlag text={k} />
+          </span>
           <X className="w-3 h-3 opacity-60 hover:opacity-100" />
         </button>
       ))}

@@ -36,6 +36,8 @@ import {
   type DeleteValidationResult,
 } from '@/utils/deleteValidation';
 
+import { TextWithFlag } from '@/components/ui/RegionFlag';
+
 // AddServerMenu component
 const AddServerMenu = ({
   hasActiveProfile,
@@ -480,7 +482,7 @@ export default function ProxyServers() {
 
                   <div className="z-10">
                     <div className="font-medium text-xs text-gray-700 dark:text-gray-300 line-clamp-1 mb-0.5">
-                      {server.name}
+                      <TextWithFlag text={server.name} />
                     </div>
                     <div className="text-[10px] text-gray-400 font-mono truncate opacity-60">
                       {server.server}:{server.port}

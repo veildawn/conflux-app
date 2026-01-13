@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ProxyGroupConfig } from '@/types/config';
 import { cn } from '@/utils/cn';
 import { GROUP_TYPE_OPTIONS } from './utils';
+import { TextWithFlag } from '@/components/ui/RegionFlag';
 
 const getGroupIcon = (type: string) => {
   switch (type) {
@@ -63,7 +64,7 @@ export function ProxyGroupListItem({
           {React.createElement(Icon, { className: 'h-[18px] w-[18px]', strokeWidth: 2.5 })}
         </div>
         <span className="text-[15px] font-medium tracking-[-0.2px] text-[#1D1D1F] dark:text-gray-100">
-          {group.name}
+          <TextWithFlag text={group.name} />
         </span>
       </div>
 

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ProcessIcon } from './ProcessIcon';
 import type { Connection } from '@/types/proxy';
+import { TextWithFlag } from '@/components/ui/RegionFlag';
 
 interface ConnectionRowProps {
   connection: Connection;
@@ -137,22 +138,28 @@ export function ConnectionRow({
               <div className="flex items-center gap-1 overflow-hidden">
                 {c.chains.length > 0 ? (
                   enableKeywordFilter ? (
-                    c.chains.map((ch, i) => (
-                      <div key={i} className="flex items-center">
-                        {i > 0 && <span className="text-gray-300 mx-1">→</span>}
-                        <button
-                          type="button"
-                          className={cn('truncate max-w-[150px]', clickableClass)}
-                          onClick={() => handleKeywordClick(ch)}
-                          title="点击筛选此节点"
-                        >
-                          {ch}
-                        </button>
-                      </div>
-                    ))
+                    c.chains
+                      .slice()
+                      .reverse()
+                      .map((ch, i) => (
+                        <div key={i} className="flex items-center">
+                          {i > 0 && <span className="text-gray-300 mx-1">←</span>}
+                          <button
+                            type="button"
+                            className={cn('truncate max-w-[150px]', clickableClass)}
+                            onClick={() => handleKeywordClick(ch)}
+                            title="点击筛选此节点"
+                          >
+                            <TextWithFlag text={ch} />
+                          </button>
+                        </div>
+                      ))
                   ) : (
-                    <span className="truncate max-w-[300px]" title={c.chains.join(' → ')}>
-                      {c.chains.join(' → ')}
+                    <span
+                      className="truncate max-w-[300px]"
+                      title={c.chains.slice().reverse().join(' ← ')}
+                    >
+                      <TextWithFlag text={c.chains.slice().reverse().join(' ← ')} />
                     </span>
                   )
                 ) : (

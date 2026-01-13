@@ -28,6 +28,7 @@ import {
   TwitterIcon,
   OpenAIIcon,
 } from '@/components/icons/SiteIcons';
+import { RegionFlag } from '@/components/ui/RegionFlag';
 
 // -----------------------------------------------------------------------------
 // UI Components
@@ -320,17 +321,6 @@ function DiagnosticCard({ className }: { className?: string }) {
 // Public IP + LAN IP Cards (FlClash-like)
 // -----------------------------------------------------------------------------
 
-/** 将国家/地区编码转换为对应的旗帜 emoji */
-function regionToEmoji(regionCode: string) {
-  const code = (regionCode || '').trim().toUpperCase();
-  if (code.length !== 2) return regionCode || '--';
-  const A = 0x41;
-  const REGIONAL_A = 0x1f1e6;
-  const first = code.codePointAt(0)! - A + REGIONAL_A;
-  const second = code.codePointAt(1)! - A + REGIONAL_A;
-  return String.fromCodePoint(first) + String.fromCodePoint(second);
-}
-
 function PublicIpCard({ className }: { className?: string }) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -426,9 +416,11 @@ function PublicIpCard({ className }: { className?: string }) {
       <div className="flex items-center justify-between gap-3 h-full">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-white/70 dark:bg-zinc-900/60 border border-emerald-100/70 dark:border-emerald-900/30 flex items-center justify-center shrink-0">
-            <span className="text-2xl leading-none">
-              {data ? regionToEmoji(data.regionCode) : '🌐'}
-            </span>
+            {data ? (
+              <RegionFlag code={data.regionCode} />
+            ) : (
+              <span className="text-2xl leading-none">🌐</span>
+            )}
           </div>
           <div className="min-w-0">
             <button
