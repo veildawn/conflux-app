@@ -551,9 +551,73 @@ fn get_process_icon_data_url_macos(
     } else {
         None
     }
-    .or_else(|| process_name.and_then(resolve_exec_path_by_process_name))?;
+    .or_else(|| process_name.and_then(resolve_exec_path_by_process_name));
 
-    let bundles = find_app_bundles_from_exec(&exec_path);
+    let mut bundles = exec_path
+        .as_ref()
+        .map(find_app_bundles_from_exec)
+        .unwrap_or_default();
+
+    // 如果还没找到 .app，尝试通过进程名或可执行名在 /Applications / ~/Applications 中匹配
+    if bundles.is_empty() {
+        let needle = {
+            let from_exec = exec_path.as_ref().and_then(|p| {
+                p.file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.to_lowercase())
+            });
+            let from_name = process_name.map(|n| normalize_process_name_macos(n).to_lowercase());
+
+            let base = from_exec.filter(|s| !s.is_empty()).or(from_name).map(|s| {
+                s.strip_suffix("-service")
+                    .or_else(|| s.strip_suffix("service"))
+                    .or_else(|| s.strip_suffix('d'))
+                    .unwrap_or(&s)
+                    .trim()
+                    .to_string()
+            });
+
+            base.filter(|s| s.len() >= 3)
+        };
+
+        if let Some(needle) = needle {
+            let dirs = [
+                PathBuf::from("/Applications"),
+                dirs::home_dir()
+                    .map(|h| h.join("Applications"))
+                    .unwrap_or_else(|| PathBuf::from("/nonexistent")),
+            ];
+
+            for dir in dirs {
+                if !dir.exists() {
+                    continue;
+                }
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.extension().and_then(|s| s.to_str()) != Some("app") {
+                            continue;
+                        }
+                        let stem = path
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or_default()
+                            .to_lowercase();
+
+                        // 允许等于或包含（兼容大小写差异或前后缀差异）
+                        if stem == needle || stem.contains(&needle) || needle.contains(&stem) {
+                            bundles.push(path);
+                            break;
+                        }
+                    }
+                }
+                if !bundles.is_empty() {
+                    break;
+                }
+            }
+        }
+    }
+
     if bundles.is_empty() {
         return None;
     }
