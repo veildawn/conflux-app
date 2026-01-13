@@ -573,7 +573,57 @@ fn get_process_icon_data_url_macos(
         }
     }
 
-    let app_bundle = preferred?;
+    let app_bundle = preferred.or_else(|| {
+        // Fallback: try to find app bundle by name in /Applications
+        let name_stem = exec_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_lowercase();
+
+        let needle = name_stem
+            .strip_suffix("-service")
+            .or_else(|| name_stem.strip_suffix("service"))
+            .or_else(|| name_stem.strip_suffix("d"))
+            .unwrap_or(&name_stem);
+
+        if needle.is_empty() || needle.len() < 3 {
+            return None;
+        }
+
+        let dirs = [
+            PathBuf::from("/Applications"),
+            dirs::home_dir()
+                .map(|h| h.join("Applications"))
+                .unwrap_or_else(|| PathBuf::from("/nonexistent")),
+        ];
+
+        for dir in dirs {
+            if !dir.exists() {
+                continue;
+            }
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().and_then(|s| s.to_str()) != Some("app") {
+                        continue;
+                    }
+                    let stem = path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or_default()
+                        .to_lowercase();
+
+                    // Allow partial match if safe? No, exact match of stripped name is better.
+                    // e.g. "corplink" == "corplink" (from CorpLink.app)
+                    if stem == needle {
+                        return Some(path);
+                    }
+                }
+            }
+        }
+        None
+    })?;
     let icns = pick_icns_path(&app_bundle)?;
 
     let cache_key = format!("bundle={};icns={}", app_bundle.display(), icns.display());
