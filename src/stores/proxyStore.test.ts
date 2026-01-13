@@ -65,6 +65,9 @@ describe('proxyStore', () => {
         downloadTotal: 0,
         uploadTotal: 0,
       },
+      now: 0,
+      requestHistory: [],
+      requestHistoryIdSet: {},
       loading: false,
       error: null,
     });

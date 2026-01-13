@@ -28,6 +28,52 @@ export function ConnectionIcon({ className, strokeWidth = 2 }: IconProps) {
   );
 }
 
+// 请求 - 连接列表/请求流转
+export function RequestsIcon({ className, strokeWidth = 2 }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn('w-5 h-5', className)}
+    >
+      {/* 左到右的请求流 */}
+      <path d="M4 8h11" />
+      <path d="M12 5l3 3-3 3" />
+      {/* 右到左的响应流 */}
+      <path d="M20 16H9" />
+      <path d="M12 13l-3 3 3 3" />
+      {/* 端点节点 */}
+      <circle cx="4" cy="8" r="1" fill="currentColor" stroke="none" />
+      <circle cx="20" cy="16" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+// 连接 - 活跃连接/链路
+export function ConnectionsIcon({ className, strokeWidth = 2 }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn('w-5 h-5', className)}
+    >
+      <circle cx="7" cy="12" r="3" />
+      <circle cx="17" cy="12" r="3" />
+      <path d="M10 12h4" />
+      <path d="M7 9v6" />
+      <path d="M17 9v6" />
+    </svg>
+  );
+}
+
 // 概览 - 仪表盘网格
 export function OverviewIcon({ className, strokeWidth = 2 }: IconProps) {
   return (

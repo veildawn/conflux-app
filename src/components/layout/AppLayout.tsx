@@ -14,16 +14,18 @@ import logger from '@/utils/logger';
 import type { ProxyStatus } from '@/types/proxy';
 
 export default function AppLayout() {
-  const { applyStatus, fetchStatus, fetchTraffic, fetchConnections, start, status } = useProxyStore(
-    useShallow((state) => ({
-      applyStatus: state.applyStatus,
-      fetchStatus: state.fetchStatus,
-      fetchTraffic: state.fetchTraffic,
-      fetchConnections: state.fetchConnections,
-      start: state.start,
-      status: state.status,
-    }))
-  );
+  const { applyStatus, fetchStatus, fetchTraffic, fetchConnections, tickNow, start, status } =
+    useProxyStore(
+      useShallow((state) => ({
+        applyStatus: state.applyStatus,
+        fetchStatus: state.fetchStatus,
+        fetchTraffic: state.fetchTraffic,
+        fetchConnections: state.fetchConnections,
+        tickNow: state.tickNow,
+        start: state.start,
+        status: state.status,
+      }))
+    );
   const { fetchSettings, checkRuleDatabaseUpdates } = useAppStore();
   const { toast } = useToast();
   const initStarted = useRef(false);
@@ -192,8 +194,15 @@ export default function AppLayout() {
   useEffect(() => {
     let trafficInterval: NodeJS.Timeout | null = null;
     let connectionsInterval: NodeJS.Timeout | null = null;
+    let nowInterval: NodeJS.Timeout | null = null;
 
     if (status.running) {
+      // 全局时钟：用于连接/请求时长展示（避免页面内创建 interval 造成 HMR 叠加）
+      tickNow();
+      nowInterval = setInterval(() => {
+        tickNow();
+      }, 1000);
+
       // 流量数据每 1.5 秒刷新（降低频率以提升性能）
       fetchTraffic();
       trafficInterval = setInterval(() => {
@@ -214,8 +223,11 @@ export default function AppLayout() {
       if (connectionsInterval) {
         clearInterval(connectionsInterval);
       }
+      if (nowInterval) {
+        clearInterval(nowInterval);
+      }
     };
-  }, [status.running, fetchTraffic, fetchConnections]);
+  }, [status.running, fetchTraffic, fetchConnections, tickNow]);
 
   const handleMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (event.button !== 0) {

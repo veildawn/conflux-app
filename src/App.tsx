@@ -15,6 +15,8 @@ const RuleDatabase = lazy(() => import('./pages/RuleDatabase'));
 const Logs = lazy(() => import('./pages/Logs'));
 const Sync = lazy(() => import('./pages/Sync'));
 const Providers = lazy(() => import('./pages/Providers'));
+const Requests = lazy(() => import('./pages/Requests'));
+const Connections = lazy(() => import('./pages/Connections'));
 const ProxyGroupEditWindow = lazy(() => import('./pages/proxy-groups/ProxyGroupEditWindow'));
 const ProxyServerEditWindow = lazy(() => import('./pages/proxy-servers/ProxyServerEditWindow'));
 const SubscriptionEditWindow = lazy(() => import('./pages/SubscriptionEditWindow'));
@@ -46,6 +48,8 @@ function App() {
           <Route path="rule-database" element={<RuleDatabase />} />
           <Route path="providers" element={<Providers />} />
           <Route path="logs" element={<Logs />} />
+          <Route path="connections" element={<Connections />} />
+          <Route path="requests" element={<Requests />} />
           <Route path="sync" element={<Sync />} />
           <Route path="settings" element={<Settings />} />
         </Route>

@@ -25,6 +25,16 @@ interface ProxyState {
   trafficHistory: TrafficHistoryPoint[];
   connections: Connection[];
   connectionStats: ConnectionStats;
+  /** 全局时钟（用于页面展示连接/请求时长），避免页面内创建 interval 造成 HMR 叠加 */
+  now: number;
+  /**
+   * 请求历史（“曾经出现过的连接”快照）
+   * - 由 fetchConnections() 基于连接 ID diff 生成
+   * - 作为 Requests 页面数据源（类似 _tmp_flclash 的 FixedList(500)）
+   */
+  requestHistory: Connection[];
+  /** 内部：用于去重的连接 ID 集合（仅保留 requestHistory 的那部分） */
+  requestHistoryIdSet: Record<string, true>;
   loading: boolean;
   error: string | null;
 
@@ -42,6 +52,8 @@ interface ProxyState {
   fetchConnections: () => Promise<void>;
   closeConnection: (id: string) => Promise<void>;
   closeAllConnections: () => Promise<void>;
+  clearRequestHistory: () => void;
+  tickNow: () => void;
   setSystemProxy: (enabled: boolean) => Promise<void>;
   setEnhancedMode: (enabled: boolean) => Promise<void>;
   setAllowLan: (enabled: boolean) => Promise<void>;
@@ -71,6 +83,8 @@ const initialConnectionStats: ConnectionStats = {
 
 // 流量历史最大保存点数
 const MAX_TRAFFIC_HISTORY = 40;
+// 请求历史最大保存条数（与 _tmp_flclash FixedList(500) 对齐）
+const MAX_REQUEST_HISTORY = 500;
 
 export const useProxyStore = create<ProxyState>((set, get) => ({
   status: initialStatus,
@@ -79,6 +93,9 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
   trafficHistory: [],
   connections: [],
   connectionStats: initialConnectionStats,
+  now: 0,
+  requestHistory: [],
+  requestHistoryIdSet: {},
   loading: false,
   error: null,
 
@@ -130,6 +147,8 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
         trafficHistory: [],
         connections: [],
         connectionStats: initialConnectionStats,
+        requestHistory: [],
+        requestHistoryIdSet: {},
       });
     } catch (error) {
       logger.error('Failed to stop proxy:', error);
@@ -230,14 +249,44 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
   fetchConnections: async () => {
     try {
       const response = await ipc.getConnections();
+      const nextConnections = response.connections || [];
 
-      set({
-        connections: response.connections || [],
-        connectionStats: {
-          totalConnections: response.connections ? response.connections.length : 0,
-          downloadTotal: response.downloadTotal,
-          uploadTotal: response.uploadTotal,
-        },
+      set((state) => {
+        // 生成“请求历史”（曾出现过的连接）：
+        // - 对 nextConnections 中的新 ID 追加到 requestHistory
+        // - 维持一个固定长度的 ring buffer（MAX_REQUEST_HISTORY）
+        const idSet = { ...state.requestHistoryIdSet };
+        let history = state.requestHistory;
+        let historyChanged = false;
+
+        for (const conn of nextConnections) {
+          if (idSet[conn.id]) continue;
+          idSet[conn.id] = true;
+          history = historyChanged ? history : [...history];
+          history.push(conn);
+          historyChanged = true;
+        }
+
+        if (historyChanged && history.length > MAX_REQUEST_HISTORY) {
+          const overflow = history.length - MAX_REQUEST_HISTORY;
+          const removed = history.slice(0, overflow);
+          history = history.slice(overflow);
+          // 同步清理去重集合，避免无限增长
+          for (const r of removed) {
+            delete idSet[r.id];
+          }
+        }
+
+        return {
+          connections: nextConnections,
+          connectionStats: {
+            totalConnections: nextConnections.length,
+            downloadTotal: response.downloadTotal,
+            uploadTotal: response.uploadTotal,
+          },
+          requestHistory: history,
+          requestHistoryIdSet: idSet,
+        };
       });
     } catch (error) {
       logger.debug('Failed to fetch connections:', error);
@@ -275,6 +324,15 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
       logger.error('Failed to close all connections:', error);
       throw error;
     }
+  },
+
+  clearRequestHistory: () => {
+    set({ requestHistory: [], requestHistoryIdSet: {} });
+  },
+
+  tickNow: () => {
+    // 只写入 store，页面 render 不直接调用 Date.now()
+    set({ now: Date.now() });
   },
 
   setSystemProxy: async (enabled: boolean) => {

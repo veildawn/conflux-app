@@ -5,6 +5,8 @@ import { ipc } from '@/services/ipc';
 import appIconUrl from '../../../src-tauri/icons/icon.png';
 import {
   ConnectionIcon,
+  ConnectionsIcon,
+  RequestsIcon,
   ProfileIcon,
   ConvertIcon,
   NodesIcon,
@@ -31,7 +33,11 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    items: [{ path: '/', icon: ConnectionIcon, label: '活动' }],
+    items: [
+      { path: '/', icon: ConnectionIcon, label: '活动' },
+      { path: '/connections', icon: ConnectionsIcon, label: '连接' },
+      { path: '/requests', icon: RequestsIcon, label: '请求' },
+    ],
   },
   {
     title: '配置',
