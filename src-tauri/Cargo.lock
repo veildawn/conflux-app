@@ -629,6 +629,7 @@ dependencies = [
  "log",
  "nix",
  "once_cell",
+ "png 0.17.16",
  "regex",
  "reqwest",
  "resvg",

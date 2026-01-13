@@ -1,9 +1,11 @@
+import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { getConnectionKeyInfo } from '@/utils/connection';
 import { formatBytes, formatDuration } from '@/utils/format';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ProcessIcon } from './ProcessIcon';
 import type { Connection } from '@/types/proxy';
 
 interface ConnectionRowProps {
@@ -19,6 +21,8 @@ interface ConnectionRowProps {
   closeDisabled?: boolean;
   /** 连接是否仍然活跃（用于区分历史记录中的已关闭连接） */
   isActive?: boolean;
+  /** 右侧自定义操作区（如复制 URL / curl） */
+  actions?: ReactNode;
 }
 
 export function ConnectionRow({
@@ -29,6 +33,7 @@ export function ConnectionRow({
   onClose,
   closeDisabled = false,
   isActive = true,
+  actions,
 }: ConnectionRowProps) {
   const { host, process } = getConnectionKeyInfo(c);
   const durationMs = now ? Math.max(0, now - new Date(c.start).getTime()) : 0;
@@ -54,6 +59,11 @@ export function ConnectionRow({
       )}
     >
       <div className="flex items-start gap-4">
+        <ProcessIcon
+          processName={c.metadata.process}
+          processPath={c.metadata.processPath}
+          className="mt-0.5"
+        />
         <div className="flex-1 min-w-0 space-y-1.5">
           {/* 第一行：Host + 标签 */}
           <div className="flex items-center gap-2 min-w-0">
@@ -172,18 +182,23 @@ export function ConnectionRow({
           </div>
         </div>
 
-        {/* 关闭按钮 */}
-        {onClose && isActive && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0 rounded-full opacity-0 group-hover:opacity-100 transition-all text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-            onClick={() => onClose(c.id)}
-            disabled={closeDisabled}
-            title="关闭连接"
-          >
-            <X className="w-4 h-4" />
-          </Button>
+        {/* 右侧操作区（hover 时显示） */}
+        {(actions || (onClose && isActive)) && (
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+            {actions}
+            {onClose && isActive && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                onClick={() => onClose(c.id)}
+                disabled={closeDisabled}
+                title="关闭连接"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
         )}
       </div>
     </div>

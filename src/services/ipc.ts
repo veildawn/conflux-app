@@ -398,6 +398,19 @@ export const ipc = {
     return invoke('copy_terminal_proxy_command');
   },
 
+  /**
+   * 获取进程对应的应用图标（PNG data URL）
+   * - 优先使用 processPath（更准确）
+   * - 兜底使用 processName（best-effort）
+   */
+  async getProcessIcon(params: {
+    processName?: string;
+    processPath?: string;
+  }): Promise<string | null> {
+    const { processName, processPath } = params;
+    return invoke('get_process_icon', { processName, processPath });
+  },
+
   // ============= Provider 命令 =============
 
   /**

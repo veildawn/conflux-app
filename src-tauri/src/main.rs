@@ -288,6 +288,9 @@ fn main() {
             None,
         ))
         .setup(|app| {
+            // 让 IDE/RA 能追踪到通过 generate_handler 注册的命令引用（避免 dead_code 误报）
+            commands::system::link_tauri_commands_for_ide();
+
             if let Err(err) = crate::utils::ensure_mihomo_in_data_dir() {
                 // macOS legacy TUN 模式下，mihomo 可能被设置为 root-owned + setuid，
                 // 普通用户进程无法覆盖/chmod，这里不应当刷屏 warn。
@@ -507,6 +510,8 @@ fn main() {
             commands::system::get_terminal_proxy_command,
             commands::system::copy_to_clipboard,
             commands::system::copy_terminal_proxy_command,
+            // 进程图标（连接/请求列表）
+            commands::system::get_process_icon,
             // macOS Network Extension（占位，用于增强模式引导）
             commands::system::get_network_extension_status,
             commands::system::open_network_extension_settings,

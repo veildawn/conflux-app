@@ -4,10 +4,10 @@
     "windows": [
       {
         "title": "Conflux",
-        "width": 960,
-        "height": 780,
-        "minWidth": 960,
-        "minHeight": 780,
+        "width": 1024,
+        "height": 860,
+        "minWidth": 1024,
+        "minHeight": 860,
         "resizable": true,
         "fullscreen": false,
         "center": true,

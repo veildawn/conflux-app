@@ -366,3 +366,24 @@ pub async fn copy_terminal_proxy_command() -> Result<String, String> {
     utils::copy_to_clipboard(&command)?;
     Ok(command)
 }
+
+// -----------------------------------------------------------------------------
+// Process icon (Connections / Requests)
+// -----------------------------------------------------------------------------
+
+/// 根据连接元数据中的进程信息获取应用图标（PNG data URL）。
+/// - 优先使用 `processPath`（更准确）
+/// - 兜底使用 `process`（best-effort）
+#[tauri::command]
+pub async fn get_process_icon(
+    process_name: Option<String>,
+    process_path: Option<String>,
+) -> Result<Option<String>, String> {
+    crate::system::get_process_icon_data_url(process_name, process_path).await
+}
+
+/// 让 Rust Analyzer / IDE 能追踪到通过 `tauri::generate_handler!` 注册的命令引用，
+/// 避免出现误报的 dead_code 警告（命令实际会在运行时被 Tauri 调用）。
+pub fn link_tauri_commands_for_ide() {
+    let _ = get_process_icon;
+}

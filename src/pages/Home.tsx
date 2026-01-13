@@ -436,7 +436,8 @@ function PublicIpCard({ className }: { className?: string }) {
               disabled={!data?.ip}
               onClick={() => data?.ip && copy(data.ip)}
               className={cn(
-                'text-left text-base font-mono font-semibold truncate',
+                'text-left font-mono font-semibold truncate w-full',
+                data?.ip?.includes(':') ? 'text-xs' : 'text-base',
                 data?.ip
                   ? 'text-gray-900 dark:text-white hover:underline underline-offset-2 cursor-pointer'
                   : 'text-gray-900 dark:text-white cursor-default'
@@ -578,13 +579,14 @@ function LanIpCard({ className }: { className?: string }) {
       }
     >
       <div className="flex flex-col h-full justify-between">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 min-w-0">
           <button
             type="button"
             disabled={!primary}
             onClick={() => primary && copy(primary)}
             className={cn(
-              'text-left text-base font-mono font-semibold truncate',
+              'text-left font-mono font-semibold truncate w-full',
+              primary?.includes(':') ? 'text-xs' : 'text-base',
               primary
                 ? 'text-gray-900 dark:text-white hover:underline underline-offset-2 cursor-pointer'
                 : 'text-gray-900 dark:text-white cursor-default'
@@ -789,72 +791,6 @@ export default function Home() {
           </div>
         </BentoCard>
 
-        {/* Upload Speed */}
-        <BentoCard
-          title="上传"
-          icon={ArrowUp}
-          iconColor="text-purple-500"
-          className="bg-purple-50/50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/20"
-        >
-          <div className="flex flex-col h-full justify-between">
-            <StatValue value={upVal} unit={upUnit} />
-            <div className="h-10 w-full mt-1 -mb-1 opacity-60">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="gradUp" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#a855f7" stopOpacity={0.4} />
-                      <stop offset="100%" stopColor="#a855f7" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <Area
-                    type="monotone"
-                    dataKey="up"
-                    stroke="#a855f7"
-                    strokeWidth={2}
-                    fill="url(#gradUp)"
-                    isAnimationActive={false}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </BentoCard>
-
-        {/* Download Speed */}
-        <BentoCard
-          title="下载"
-          icon={ArrowDown}
-          iconColor="text-cyan-500"
-          className="bg-cyan-50/50 dark:bg-cyan-900/10 border-cyan-100 dark:border-cyan-900/20"
-        >
-          <div className="flex flex-col h-full justify-between">
-            <StatValue value={downVal} unit={downUnit} />
-            <div className="h-10 w-full mt-1 -mb-1 opacity-60">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="gradDown" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.4} />
-                      <stop offset="100%" stopColor="#06b6d4" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <Area
-                    type="monotone"
-                    dataKey="down"
-                    stroke="#06b6d4"
-                    strokeWidth={2}
-                    fill="url(#gradDown)"
-                    isAnimationActive={false}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </BentoCard>
-
-        {/* Row 2 */}
-
         {/* Active Connections */}
         <BentoCard title="连接" icon={Network} iconColor="text-orange-500">
           <div className="flex flex-col h-full justify-between">
@@ -903,11 +839,81 @@ export default function Home() {
           </div>
         </BentoCard>
 
+        {/* Row 2 */}
+
+        {/* Upload Speed */}
+        <BentoCard
+          title="上传"
+          icon={ArrowUp}
+          iconColor="text-purple-500"
+          className="col-span-1 md:col-span-2 bg-purple-50/50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/20"
+        >
+          <div className="flex flex-col h-full justify-between">
+            <StatValue value={upVal} unit={upUnit} />
+            <div className="h-10 w-full mt-1 -mb-1 opacity-60">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="gradUp" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#a855f7" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="#a855f7" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area
+                    type="monotone"
+                    dataKey="up"
+                    stroke="#a855f7"
+                    strokeWidth={2}
+                    fill="url(#gradUp)"
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </BentoCard>
+
+        {/* Download Speed */}
+        <BentoCard
+          title="下载"
+          icon={ArrowDown}
+          iconColor="text-cyan-500"
+          className="col-span-1 md:col-span-2 bg-cyan-50/50 dark:bg-cyan-900/10 border-cyan-100 dark:border-cyan-900/20"
+        >
+          <div className="flex flex-col h-full justify-between">
+            <StatValue value={downVal} unit={downUnit} />
+            <div className="h-10 w-full mt-1 -mb-1 opacity-60">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="gradDown" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="#06b6d4" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area
+                    type="monotone"
+                    dataKey="down"
+                    stroke="#06b6d4"
+                    strokeWidth={2}
+                    fill="url(#gradDown)"
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </BentoCard>
+
+        {/* Row 3 */}
+
         {/* Public IP */}
-        <PublicIpCard />
+        <PublicIpCard className="col-span-1 md:col-span-2" />
 
         {/* LAN IP */}
-        <LanIpCard />
+        <LanIpCard className="col-span-1 md:col-span-2" />
+
+        {/* Row 4 */}
 
         {/* Diagnostic Card */}
         <DiagnosticCard className="col-span-1 md:col-span-2 lg:col-span-4" />
