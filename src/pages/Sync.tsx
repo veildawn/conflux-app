@@ -594,27 +594,31 @@ export default function Sync() {
             <Divider />
 
             {/* 测试连接 */}
-            <div className="px-5 py-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleTestConnection}
-                disabled={testing || !config.url || !config.username || !config.password}
-                className="h-8 text-xs"
-              >
-                {testing ? (
-                  <>
-                    <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
-                    测试中...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-3 h-3 mr-1.5" />
-                    测试连接
-                  </>
-                )}
-              </Button>
-            </div>
+            <SettingItem
+              icon={RefreshCw}
+              iconBgColor="bg-gray-100 dark:bg-zinc-800"
+              iconColor="text-gray-500"
+              title="连接测试"
+              description="验证服务器地址及账户信息"
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestConnection}
+                  disabled={testing || !config.url || !config.username || !config.password}
+                  className="h-8 text-xs"
+                >
+                  {testing ? (
+                    <>
+                      <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+                      测试中...
+                    </>
+                  ) : (
+                    '测试连接'
+                  )}
+                </Button>
+              }
+            />
           </Card>
         </div>
 
@@ -639,28 +643,30 @@ export default function Sync() {
             <Divider />
 
             {/* 主要同步按钮 */}
-            <div className="px-5 py-4">
-              <Button
-                onClick={handleSync}
-                disabled={syncing || !config.enabled}
-                className="h-9 px-4"
-              >
-                {syncing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    同步中...
-                  </>
-                ) : (
-                  <>
-                    <ArrowUpDown className="w-4 h-4 mr-2" />
-                    立即同步
-                  </>
-                )}
-              </Button>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                智能检测变化，只同步有改动的文件
-              </p>
-            </div>
+            <SettingItem
+              icon={ArrowUpDown}
+              iconBgColor="bg-blue-50 dark:bg-blue-500/10"
+              iconColor="text-blue-500"
+              title="立即同步"
+              description="智能检测变化，只同步有改动的文件"
+              action={
+                <Button
+                  onClick={handleSync}
+                  disabled={syncing || !config.enabled}
+                  size="sm"
+                  className="h-8 px-4"
+                >
+                  {syncing ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                      同步中...
+                    </>
+                  ) : (
+                    '开始同步'
+                  )}
+                </Button>
+              }
+            />
             <Divider />
 
             {/* 高级操作 */}
