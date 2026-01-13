@@ -5,7 +5,8 @@
 ## 安装
 
 ```bash
-brew tap ashbaer/conflux
+# 官方 tap（对应 GitHub 仓库：veildawn/homebrew-cask）
+brew tap veildawn/cask
 brew install --cask conflux
 ```
 

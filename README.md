@@ -39,7 +39,7 @@
 ### 通过 Homebrew 安装 (macOS)
 
 ```bash
-brew tap veildawn/conflux
+brew tap veildawn/cask
 brew install --cask conflux
 ```
 

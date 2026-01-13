@@ -735,7 +735,7 @@ jobs:
             echo ""
             echo "### 🍺 Homebrew (macOS 推荐)"
             echo "\`\`\`bash"
-            echo "brew tap Ashbaer/conflux"
+            echo "brew tap veildawn/cask"
             echo "brew update"
             echo "brew install --cask conflux --no-quarantine --force"
             echo "\`\`\`"
@@ -799,7 +799,7 @@ jobs:
             echo "  x64 SHA256: $X64_SHA"
 
             # Clone homebrew tap repo
-            git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/Ashbaer/homebrew-conflux.git" homebrew-tap
+            git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/veildawn/homebrew-cask.git" homebrew-tap
             cd homebrew-tap
 
             # Update Cask file
@@ -817,21 +817,21 @@ jobs:
           CASK
             echo "    sha256 \"$X64_SHA\"" >> Casks/conflux.rb
             cat >> Casks/conflux.rb << 'CASK'
-                url "https://github.com/Ashbaer/conflux-app/releases/download/v#{version}/Conflux_#{version}_x64.dmg",
-                    verified: "github.com/Ashbaer/conflux-app/"
+                url "https://github.com/veildawn/conflux-app/releases/download/v#{version}/Conflux_#{version}_x64.dmg",
+                    verified: "github.com/veildawn/conflux-app/"
               end
 
               on_arm do
           CASK
             echo "    sha256 \"$ARM64_SHA\"" >> Casks/conflux.rb
             cat >> Casks/conflux.rb << 'CASK'
-                url "https://github.com/Ashbaer/conflux-app/releases/download/v#{version}/Conflux_#{version}_aarch64.dmg",
-                    verified: "github.com/Ashbaer/conflux-app/"
+                url "https://github.com/veildawn/conflux-app/releases/download/v#{version}/Conflux_#{version}_aarch64.dmg",
+                    verified: "github.com/veildawn/conflux-app/"
               end
 
               name "Conflux"
               desc "Modern proxy management app based on MiHomo"
-              homepage "https://github.com/Ashbaer/conflux-app"
+              homepage "https://github.com/veildawn/conflux-app"
 
               livecheck do
                 url :url
