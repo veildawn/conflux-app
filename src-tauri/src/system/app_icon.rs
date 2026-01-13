@@ -19,7 +19,7 @@ fn query_full_process_image_name_windows(pid: u32) -> Option<PathBuf> {
     };
 
     let h = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
-    if h == 0 {
+    if h.is_null() {
         return None;
     }
     let mut buf: Vec<u16> = vec![0u16; 4096];
@@ -42,6 +42,8 @@ fn query_full_process_image_name_windows(pid: u32) -> Option<PathBuf> {
 
 #[cfg(target_os = "windows")]
 fn resolve_process_ids_by_name_windows(process_name: &str) -> Vec<(u32, u32)> {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
     use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
@@ -133,20 +135,19 @@ fn extract_file_icon_png_data_url_windows(exec_path: &Path) -> Option<String> {
     use png::{BitDepth, ColorType, Encoder};
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Foundation::HICON;
     use windows_sys::Win32::Graphics::Gdi::{
         CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, SelectObject, BITMAPINFO,
-        BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS,
+        BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, RGBQUAD,
     };
     use windows_sys::Win32::UI::Shell::{SHGetFileInfoW, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON};
-    use windows_sys::Win32::UI::WindowsAndMessaging::{DestroyIcon, DrawIconEx, DI_NORMAL};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{DestroyIcon, DrawIconEx, DI_NORMAL, HICON};
 
     let wide: Vec<u16> = OsStr::new(exec_path.as_os_str())
         .encode_wide()
         .chain(std::iter::once(0))
         .collect();
     let mut info = SHFILEINFOW {
-        hIcon: 0,
+        hIcon: std::ptr::null_mut(),
         iIcon: 0,
         dwAttributes: 0,
         szDisplayName: [0; 260],
@@ -162,15 +163,15 @@ fn extract_file_icon_png_data_url_windows(exec_path: &Path) -> Option<String> {
             SHGFI_ICON | SHGFI_LARGEICON,
         )
     };
-    if ok == 0 || info.hIcon == 0 {
+    if ok == 0 || info.hIcon.is_null() {
         return None;
     }
     let hicon: HICON = info.hIcon;
 
     // Render icon into a 32-bit BGRA DIB, then encode as PNG.
     let size: i32 = 32;
-    let hdc = unsafe { CreateCompatibleDC(0) };
-    if hdc == 0 {
+    let hdc = unsafe { CreateCompatibleDC(std::ptr::null_mut()) };
+    if hdc.is_null() {
         unsafe { DestroyIcon(hicon) };
         return None;
     }
@@ -189,12 +190,21 @@ fn extract_file_icon_png_data_url_windows(exec_path: &Path) -> Option<String> {
             biClrUsed: 0,
             biClrImportant: 0,
         },
-        bmiColors: [0],
+        bmiColors: [unsafe { std::mem::zeroed::<RGBQUAD>() }],
     };
 
     let mut bits_ptr: *mut std::ffi::c_void = std::ptr::null_mut();
-    let hbmp = unsafe { CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &mut bits_ptr, 0, 0) };
-    if hbmp == 0 || bits_ptr.is_null() {
+    let hbmp = unsafe {
+        CreateDIBSection(
+            hdc,
+            &bmi,
+            DIB_RGB_COLORS,
+            &mut bits_ptr,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if hbmp.is_null() || bits_ptr.is_null() {
         unsafe {
             DeleteDC(hdc);
             DestroyIcon(hicon);
@@ -203,7 +213,19 @@ fn extract_file_icon_png_data_url_windows(exec_path: &Path) -> Option<String> {
     }
 
     let old = unsafe { SelectObject(hdc, hbmp) };
-    let draw_ok = unsafe { DrawIconEx(hdc, 0, 0, hicon, size, size, 0, 0, DI_NORMAL) };
+    let draw_ok = unsafe {
+        DrawIconEx(
+            hdc,
+            0,
+            0,
+            hicon,
+            size,
+            size,
+            0,
+            std::ptr::null_mut(),
+            DI_NORMAL,
+        )
+    };
 
     // Copy pixels out (BGRA -> RGBA)
     let mut rgba = vec![0u8; (size * size * 4) as usize];
