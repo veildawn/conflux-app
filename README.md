@@ -1,9 +1,9 @@
 # Conflux 汇流
 
 <p align="center">
-  <img src="https://img.shields.io/github/v/release/veildawn/conflux-app?display_name=tag&style=flat-square" alt="release">
-  <img src="https://img.shields.io/github/actions/workflow/status/veildawn/conflux-app/ci.yml?branch=main&style=flat-square&label=build" alt="build status">
-  <img src="https://img.shields.io/github/license/veildawn/conflux-app?style=flat-square" alt="license">
+  <img src="https://img.shields.io/github/v/release/veildawn/conflux-app?style=for-the-badge&logo=github&color=007AFF" alt="release">
+  <img src="https://img.shields.io/github/actions/workflow/status/veildawn/conflux-app/ci.yml?branch=main&style=for-the-badge&logo=github&label=build" alt="build status">
+  <img src="https://img.shields.io/github/license/veildawn/conflux-app?style=for-the-badge&color=orange" alt="license">
 </p>
 
 基于 Tauri 2 + MiHomo 的现代化跨平台代理管理桌面应用。
