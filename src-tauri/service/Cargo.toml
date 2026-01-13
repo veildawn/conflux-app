@@ -3,6 +3,7 @@ name = "conflux-service"
 version = "0.1.0"
 edition = "2021"
 description = "Conflux TUN Service - Runs mihomo with elevated privileges"
+license = "GPL-3.0-only"
 
 [[bin]]
 name = "conflux-service"
