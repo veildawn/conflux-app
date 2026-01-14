@@ -1,9 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, Loader2 } from 'lucide-react';
+import { ChevronDown, Loader2, ShieldAlert } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useProxyStore } from '@/stores/proxyStore';
 import { useToast } from '@/hooks/useToast';
 import { cn } from '@/utils/cn';
+import { ipc } from '@/services/ipc';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import WindowControls from './WindowControls';
 
 const toastVariantStyles = {
@@ -51,17 +61,30 @@ const getToastVariantStyle = (variant?: string) =>
   toastVariantStyles[variant as keyof typeof toastVariantStyles] ?? toastVariantStyles.default;
 
 export default function Header() {
-  const { status, loading, setSystemProxy, setEnhancedMode } = useProxyStore(
+  const {
+    status,
+    loading,
+    setSystemProxy,
+    setEnhancedMode,
+    needAdminRestart,
+    setNeedAdminRestart,
+    startNormalMode,
+  } = useProxyStore(
     useShallow((state) => ({
       status: state.status,
       loading: state.loading,
       setSystemProxy: state.setSystemProxy,
       setEnhancedMode: state.setEnhancedMode,
+      needAdminRestart: state.needAdminRestart,
+      setNeedAdminRestart: state.setNeedAdminRestart,
+      startNormalMode: state.startNormalMode,
     }))
   );
   const { toast, history, toasts, clearAll } = useToast();
   const formatError = (error: unknown) => (error instanceof Error ? error.message : String(error));
   const [logOpen, setLogOpen] = useState(false);
+  const [restartingAsAdmin, setRestartingAsAdmin] = useState(false);
+  const [startingNormalMode, setStartingNormalMode] = useState(false);
   const [pulseId, setPulseId] = useState<string | null>(null);
   const [swapActive, setSwapActive] = useState(false);
   const [previousMessage, setPreviousMessage] = useState<string | null>(null);
@@ -171,16 +194,116 @@ export default function Header() {
       await setEnhancedMode(next);
     } catch (error) {
       console.error('Failed to toggle enhanced mode:', error);
+      const errorMsg = formatError(error);
       toast({
         title: status.enhanced_mode ? '无法关闭增强模式' : '无法开启增强模式',
-        description: formatError(error),
+        description: errorMsg.replace('NEED_ADMIN:', ''),
         variant: 'destructive',
       });
     }
   };
 
+  const handleRestartAsAdmin = async () => {
+    setRestartingAsAdmin(true);
+    try {
+      await ipc.restartAsAdmin();
+    } catch (error) {
+      console.error('Failed to restart as admin:', error);
+      toast({
+        title: '重启失败',
+        description: formatError(error),
+        variant: 'destructive',
+      });
+      setRestartingAsAdmin(false);
+    }
+  };
+
+  const handleCloseAdminDialog = () => {
+    setNeedAdminRestart(false);
+    setRestartingAsAdmin(false);
+    setStartingNormalMode(false);
+  };
+
+  const handleStartNormalMode = async () => {
+    setStartingNormalMode(true);
+    try {
+      await startNormalMode();
+      setNeedAdminRestart(false);
+      toast({
+        title: '已以普通模式启动',
+        description: '增强模式已禁用，您可以稍后在设置中安装服务以启用增强模式',
+      });
+    } catch (error) {
+      console.error('Failed to start in normal mode:', error);
+      toast({
+        title: '启动失败',
+        description: formatError(error),
+        variant: 'destructive',
+      });
+    } finally {
+      setStartingNormalMode(false);
+    }
+  };
+
   return (
     <div className="flex flex-col w-full shrink-0 z-50">
+      {/* 需要管理员权限对话框 */}
+      <Dialog open={needAdminRestart} onOpenChange={handleCloseAdminDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-amber-500" />
+              需要管理员权限
+            </DialogTitle>
+            <DialogDescription className="text-left pt-2">
+              您的配置启用了增强模式（TUN），该功能需要管理员权限才能创建虚拟网卡。
+              <br />
+              <br />
+              请选择：
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>
+                  <strong>以普通模式启动</strong> - 禁用增强模式，立即启动代理
+                </li>
+                <li>
+                  <strong>以管理员身份重启</strong> - 重启应用以获取权限
+                </li>
+                <li>或在设置中安装 Conflux 服务（推荐，一劳永逸）</li>
+              </ul>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={handleStartNormalMode}
+              disabled={restartingAsAdmin || startingNormalMode}
+            >
+              {startingNormalMode ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  正在启动...
+                </>
+              ) : (
+                '以普通模式启动'
+              )}
+            </Button>
+            <Button
+              onClick={handleRestartAsAdmin}
+              disabled={restartingAsAdmin || startingNormalMode}
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+            >
+              {restartingAsAdmin ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  正在重启...
+                </>
+              ) : (
+                '以管理员身份重启'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <header
         data-tauri-drag-region
         className="h-11 min-[960px]:h-12 flex items-center justify-between px-3 min-[960px]:px-4 bg-transparent drag-region select-none"

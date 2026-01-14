@@ -1,4 +1,44 @@
 import type { Connection } from '@/types/proxy';
+import type { ConnectionTypeFilter } from '@/components/connection/TypeFilter';
+
+/**
+ * 判断连接的链路类型
+ * - direct: chains 包含 DIRECT
+ * - reject: chains 包含 REJECT 或 rule 包含 REJECT
+ * - proxied: 其他情况（经过代理节点）
+ */
+export function getConnectionChainType(c: Connection): 'direct' | 'reject' | 'proxied' {
+  const chainsUpper = c.chains.map((chain) => chain.toUpperCase());
+  const ruleUpper = c.rule.toUpperCase();
+
+  // 检查是否直连（chains 包含 DIRECT）
+  if (chainsUpper.includes('DIRECT')) {
+    return 'direct';
+  }
+
+  // 检查是否拒绝（chains 包含 REJECT 或 rule 包含 REJECT）
+  if (chainsUpper.includes('REJECT') || ruleUpper.includes('REJECT')) {
+    return 'reject';
+  }
+
+  // 其他情况为代理
+  return 'proxied';
+}
+
+/**
+ * 根据类型过滤连接列表
+ */
+export function filterConnectionsByType(
+  connections: Connection[],
+  filterType: ConnectionTypeFilter
+): Connection[] {
+  if (filterType === 'all') return connections;
+
+  return connections.filter((c) => {
+    const chainType = getConnectionChainType(c);
+    return chainType === filterType;
+  });
+}
 
 /**
  * 从连接信息中提取显示用的关键信息

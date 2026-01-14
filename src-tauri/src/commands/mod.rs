@@ -162,13 +162,13 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     let current_system_proxy = crate::system::SystemProxy::get_proxy_status().unwrap_or(false);
     log::info!("Detected system proxy status: {}", current_system_proxy);
 
-    // Windows: 检查服务状态，如果服务正在运行但 mihomo 没有启动，则通过服务启动
+    // 检查 mihomo 是否运行
+    let mut is_running = mihomo_manager.is_running().await;
+
+    // Windows: 检查服务状态
     #[cfg(target_os = "windows")]
     {
         use crate::system::WinServiceManager;
-
-        // 检查 mihomo 是否运行（仅 Windows 需要与服务状态联动）
-        let is_running = mihomo_manager.is_running().await;
 
         // 优化：只检查服务是否运行，不查询 mihomo 状态（节省一次 HTTP 请求）
         let service_running = WinServiceManager::is_running().unwrap_or(false);
@@ -177,10 +177,14 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
             log::info!("Service is running but mihomo is not, starting mihomo via service...");
 
             // 通过服务启动 mihomo
-            if let Err(e) = mihomo_manager.start().await {
-                log::error!("Failed to start mihomo via service: {}", e);
-            } else {
-                log::info!("Mihomo started via service successfully");
+            match mihomo_manager.start().await {
+                Ok(_) => {
+                    log::info!("Mihomo started via service successfully");
+                    is_running = true;
+                }
+                Err(e) => {
+                    log::error!("Failed to start mihomo via service: {}", e);
+                }
             }
         } else if service_running {
             log::info!("Service and mihomo are both running");
@@ -190,7 +194,11 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     // 如果配置发生变更（如密钥更新）且 Mihomo 正在运行，需要重启以应用新配置
     // 否则 API 调用会因认证失败而报错
     // 注意：这需要在服务启动检查之后，因为可能刚启动了 mihomo
-    let is_running_now = mihomo_manager.is_running().await;
+    let is_running_now = if is_running {
+        true
+    } else {
+        mihomo_manager.is_running().await
+    };
     if config_changed && is_running_now {
         log::info!("API configuration changed, restarting Mihomo...");
         if let Err(e) = mihomo_manager.restart().await {
@@ -198,8 +206,7 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
         }
     }
 
-    // 优化：在后台获取 enhanced_mode，不阻塞初始化
-    // 先假设 false，后续通过前端轮询或事件更新
+    // 获取 enhanced_mode 状态
     let enhanced_mode = if is_running_now {
         // 快速尝试获取配置，超时 500ms
         match tokio::time::timeout(
@@ -225,6 +232,19 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     } else {
         false
     };
+
+    // 同步 settings.json 中的 TUN 设置与实际运行状态
+    if app_settings.mihomo.tun.enable != enhanced_mode {
+        log::info!(
+            "Syncing TUN setting: settings.json={} -> actual={}",
+            app_settings.mihomo.tun.enable,
+            enhanced_mode
+        );
+        app_settings.mihomo.tun.enable = enhanced_mode;
+        if let Err(e) = config_manager.save_app_settings(&app_settings) {
+            log::warn!("Failed to sync TUN setting to settings.json: {}", e);
+        }
+    }
 
     // 初始化 Sub-Store 管理器
     let substore_manager = Arc::new(Mutex::new(

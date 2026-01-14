@@ -14,6 +14,23 @@ pub struct TrayMenuStateInner<R: Runtime> {
 }
 
 impl<R: Runtime> TrayMenuStateInner<R> {
+    /// 预处理互斥切换：在执行后端命令前立即更新 UI
+    /// 当开启一个模式时，立即关闭另一个模式的显示
+    pub fn pre_toggle_exclusive(&self, item_id: &str, will_enable: bool) {
+        if !will_enable {
+            return; // 关闭操作不需要处理互斥
+        }
+        match item_id {
+            "system_proxy" => {
+                let _ = self.enhanced_mode_item.set_checked(false);
+            }
+            "enhanced_mode" => {
+                let _ = self.system_proxy_item.set_checked(false);
+            }
+            _ => {}
+        }
+    }
+
     pub fn sync_from_status(&self, status: &ProxyStatus) {
         if let Err(e) = self.mode_rule_item.set_checked(status.mode == "rule") {
             log::warn!("Failed to update mode_rule menu item: {}", e);

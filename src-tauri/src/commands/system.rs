@@ -10,9 +10,38 @@ use tauri::{AppHandle, Emitter, Manager};
 /// 设置系统代理
 #[tauri::command]
 pub async fn set_system_proxy(app: AppHandle) -> Result<(), String> {
+    use crate::commands::reload::safe_restart_proxy;
+
     let state = get_app_state_or_err()?;
 
     crate::commands::require_active_subscription_with_proxies()?;
+
+    // 如果 TUN 模式已启用，先关闭（系统代理与 TUN 互斥）
+    let enhanced_mode = *state.enhanced_mode.lock().await;
+    if enhanced_mode {
+        log::info!("TUN mode is enabled, disabling before setting system proxy...");
+
+        // 更新配置文件
+        state
+            .config_manager
+            .update_tun_mode(false)
+            .map_err(|e| format!("禁用 TUN 模式失败: {}", e))?;
+
+        // 重启代理核心使 TUN 关闭生效
+        safe_restart_proxy(&app).await.map_err(|e| {
+            // 尝试回滚配置
+            let _ = state.config_manager.update_tun_mode(true);
+            format!("重启代理核心失败: {}", e)
+        })?;
+
+        // 更新内存状态
+        {
+            let mut enhanced_mode = state.enhanced_mode.lock().await;
+            *enhanced_mode = false;
+        }
+
+        log::info!("TUN mode disabled successfully");
+    }
 
     // 获取代理端口
     let config = state
@@ -382,8 +411,97 @@ pub async fn get_process_icon(
     crate::system::get_process_icon_data_url(process_name, process_path).await
 }
 
+/// 检查当前应用是否以管理员权限运行
+#[tauri::command]
+pub fn is_admin() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        crate::system::WinServiceManager::has_admin_privileges()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        false
+    }
+}
+
+/// 以管理员权限重启应用 (Windows)
+///
+/// 这会触发 UAC 对话框，如果用户确认，应用将以管理员权限重新启动
+#[tauri::command]
+pub async fn restart_as_admin(app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        use std::process::Command;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        // 获取当前可执行文件路径
+        let exe_path =
+            std::env::current_exe().map_err(|e| format!("无法获取当前程序路径: {}", e))?;
+
+        log::info!("Restarting app as admin: {:?}", exe_path);
+
+        // 使用 PowerShell Start-Process -Verb RunAs 触发 UAC
+        // -WindowStyle Hidden 防止弹出 CMD 窗口
+        let ps_command = format!(
+            "$ErrorActionPreference = 'Stop'; \
+            try {{ \
+                Start-Process -FilePath '{}' -Verb RunAs -WindowStyle Hidden; \
+            }} catch {{ \
+                Write-Error $_.Exception.Message; \
+                exit 1; \
+            }}",
+            exe_path.display()
+        );
+
+        let output = Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                &ps_command,
+            ])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| format!("执行提权命令失败: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            log::warn!("Failed to restart as admin: {}", stderr);
+
+            // 检查是否是用户取消
+            if stderr.contains("canceled")
+                || stderr.contains("cancelled")
+                || stderr.contains("拒绝")
+                || stderr.contains("denied")
+                || stderr.contains("The operation was canceled")
+            {
+                return Err("用户取消了管理员权限请求".to_string());
+            }
+
+            return Err(format!("以管理员权限重启失败: {}", stderr.trim()));
+        }
+
+        log::info!("New admin instance started, exiting current instance...");
+
+        // 退出当前应用
+        app.exit(0);
+
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = app;
+        Err("此功能仅支持 Windows".to_string())
+    }
+}
+
 /// 让 Rust Analyzer / IDE 能追踪到通过 `tauri::generate_handler!` 注册的命令引用，
 /// 避免出现误报的 dead_code 警告（命令实际会在运行时被 Tauri 调用）。
 pub fn link_tauri_commands_for_ide() {
     let _ = get_process_icon;
+    let _ = is_admin;
+    let _ = restart_as_admin;
 }

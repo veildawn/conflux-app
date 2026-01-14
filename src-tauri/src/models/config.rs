@@ -389,7 +389,7 @@ pub struct TunConfig {
 impl Default for TunConfig {
     fn default() -> Self {
         Self {
-            enable: true,
+            enable: false,
             stack: Some("system".to_string()),
             auto_route: Some(true),
             auto_detect_interface: Some(true),

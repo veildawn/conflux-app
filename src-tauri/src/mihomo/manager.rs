@@ -161,17 +161,21 @@ impl MihomoManager {
     pub fn cleanup_stale_processes() {
         log::debug!("Cleaning up stale MiHomo processes...");
 
-        // 1. 首先尝试通过 PID 文件清理
+        // 通过 PID 文件清理旧进程
         if let Some(old_pid) = Self::load_pid() {
             log::debug!("Found old PID file with PID: {}", old_pid);
             Self::kill_process_by_pid(old_pid);
+            // 只有在确认进程已停止后才删除 PID 文件。
+            // 否则会导致后续 start() 误判并启动第二个实例。
+            if Self::is_pid_running(old_pid) {
+                log::error!(
+                    "Stale MiHomo process {} is still running after cleanup attempt; keeping PID file",
+                    old_pid
+                );
+                return;
+            }
+            Self::remove_pid_file();
         }
-
-        // 2. 然后通过进程名清理所有 mihomo 进程（更彻底）
-        Self::kill_all_mihomo_processes();
-
-        // 3. 删除 PID 文件
-        Self::remove_pid_file();
 
         log::debug!("Cleanup completed");
     }
@@ -195,10 +199,31 @@ impl MihomoManager {
         {
             use std::os::windows::process::CommandExt;
             const CREATE_NO_WINDOW: u32 = 0x08000000;
-            let _ = Command::new("taskkill")
+
+            let output = Command::new("taskkill")
                 .args(["/F", "/PID", &pid.to_string()])
                 .creation_flags(CREATE_NO_WINDOW)
                 .output();
+
+            match &output {
+                Ok(out) if out.status.success() => {
+                    log::info!("taskkill succeeded for PID {}", pid);
+                }
+                Ok(out) => {
+                    let stdout = String::from_utf8_lossy(&out.stdout);
+                    let stderr = String::from_utf8_lossy(&out.stderr);
+                    let combined = format!("{}{}", stdout, stderr);
+                    log::warn!(
+                        "taskkill failed for PID {} (exit={:?}), output={}",
+                        pid,
+                        out.status.code(),
+                        combined.trim()
+                    );
+                }
+                Err(e) => {
+                    log::warn!("Failed to execute taskkill for PID {}: {}", pid, e);
+                }
+            };
         }
     }
 
@@ -236,32 +261,6 @@ impl MihomoManager {
                 result != 0 && exit_code == STILL_ACTIVE
             }
         }
-    }
-
-    /// 检查启用 TUN 模式时是否需要 UAC 权限提升
-    ///
-    /// 返回 true 如果：
-    /// - 服务未运行（或未安装）
-    /// - 且当前应用没有管理员权限
-    #[cfg(windows)]
-    pub fn is_tun_elevation_required() -> bool {
-        use crate::system::WinServiceManager;
-
-        // 如果服务正在运行，不需要 UAC（通过服务启动）
-        let service_running = WinServiceManager::is_running().unwrap_or(false);
-        if service_running {
-            log::debug!("Service is running, no UAC required for TUN mode");
-            return false;
-        }
-
-        // 如果已经是管理员权限，不需要 UAC
-        if Self::is_running_as_admin() {
-            log::debug!("Already running as admin, no UAC required for TUN mode");
-            return false;
-        }
-
-        log::debug!("UAC elevation required for TUN mode (service not running, not admin)");
-        true
     }
 
     /// 检查当前进程是否已经以管理员权限运行
@@ -326,138 +325,6 @@ impl MihomoManager {
         }
     }
 
-    /// 以管理员权限启动 mihomo（Windows TUN 模式）
-    ///
-    /// 如果应用已经以管理员权限运行，直接启动
-    /// 否则使用 PowerShell Start-Process -Verb RunAs 触发 UAC
-    #[cfg(windows)]
-    fn start_elevated(mihomo_path: &PathBuf, config_dir: &str, config_path: &str) -> Result<Child> {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-        // 检查当前进程是否已经有管理员权限
-        if Self::is_running_as_admin() {
-            log::info!("Already running as admin, starting mihomo directly...");
-
-            // 直接启动 mihomo，无需 UAC
-            let child = Command::new(mihomo_path)
-                .current_dir(std::path::Path::new(config_dir))
-                .args(["-d", config_dir, "-f", config_path])
-                .creation_flags(CREATE_NO_WINDOW)
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-                .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?;
-
-            log::info!(
-                "MiHomo started directly with admin privileges, PID: {}",
-                child.id()
-            );
-            return Ok(child);
-        }
-
-        // 需要请求管理员权限
-        log::info!("Not running as admin, requesting elevation...");
-
-        // 构建 mihomo 命令参数
-        let args = format!("-d \"{}\" -f \"{}\"", config_dir, config_path);
-
-        log::info!("Elevating mihomo: {} {}", mihomo_path.display(), args);
-
-        // 使用 PowerShell 的 Start-Process -Verb RunAs 启动
-        // 这会触发 UAC 对话框
-        // -PassThru 让我们可以获取进程信息
-        let ps_command = format!(
-            "$ErrorActionPreference = 'Stop'; \
-            try {{ \
-                $proc = Start-Process -FilePath '{}' -ArgumentList '{}' -Verb RunAs -WindowStyle Hidden -PassThru; \
-                Write-Output $proc.Id; \
-            }} catch {{ \
-                Write-Error $_.Exception.Message; \
-                exit 1; \
-            }}",
-            mihomo_path.display(),
-            args
-        );
-
-        log::info!("UAC elevation requested, waiting for user confirmation...");
-
-        // 同步执行 PowerShell，等待 UAC 结果
-        let output = Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                &ps_command,
-            ])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-            .map_err(|e| anyhow::anyhow!("执行提权命令失败: {}", e))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            log::warn!("UAC elevation failed or was cancelled: {}", stderr);
-
-            // 检查是否是用户取消
-            if stderr.contains("canceled")
-                || stderr.contains("cancelled")
-                || stderr.contains("拒绝")
-                || stderr.contains("denied")
-                || stderr.contains("The operation was canceled")
-                || output.status.code() == Some(1)
-            {
-                return Err(anyhow::anyhow!("用户取消了管理员权限请求"));
-            }
-
-            return Err(anyhow::anyhow!("管理员权限请求失败: {}", stderr.trim()));
-        }
-
-        log::info!("UAC elevation completed successfully");
-
-        // 解析 PowerShell 返回的实际 mihomo PID
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let actual_pid: Option<u32> = stdout.trim().parse().ok();
-
-        if let Some(pid) = actual_pid {
-            log::info!("MiHomo spawned with PID: {} (via UAC elevation)", pid);
-            // 保存真正的 mihomo PID 到文件
-            if let Ok(pid_file) = Self::get_pid_file_path() {
-                if let Ok(mut file) = fs::File::create(&pid_file) {
-                    let _ = file.write_all(pid.to_string().as_bytes());
-                    log::info!("Saved MiHomo PID {} to {:?}", pid, pid_file);
-                }
-            }
-        } else {
-            log::warn!(
-                "Could not parse mihomo PID from UAC elevation output: {}",
-                stdout
-            );
-        }
-
-        // 等待一小段时间让进程启动
-        std::thread::sleep(std::time::Duration::from_millis(500));
-
-        // 验证 mihomo 进程是否真的启动了
-        if !Self::is_mihomo_process_running() {
-            return Err(anyhow::anyhow!("管理员权限已授予，但 mihomo 启动失败"));
-        }
-
-        // 返回一个 dummy 进程作为占位符
-        // 真正的 mihomo PID 已通过上面的逻辑保存到 PID 文件
-        // 注意：caller 中的 save_pid 调用会覆盖这个 PID，但因为是 dummy 进程，
-        // 我们需要在 start() 函数中跳过保存，或者在这里标记已保存
-        let dummy = Command::new("cmd")
-            .args(["/C", "timeout", "/t", "1", "/nobreak"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| anyhow::anyhow!("Failed to create placeholder: {}", e))?;
-
-        Ok(dummy)
-    }
-
     /// 通过服务模式启动 mihomo（Windows TUN 模式）
     #[cfg(windows)]
     async fn start_via_service(
@@ -480,6 +347,11 @@ impl MihomoManager {
         .map_err(|e| anyhow::anyhow!("Failed to start mihomo via service: {}", e))?;
 
         log::info!("Mihomo started via service with PID: {}", pid);
+
+        // 保存 PID 到文件，以便后续通过 PID 停止进程
+        if let Err(e) = self.save_pid(pid) {
+            log::warn!("Failed to save PID file: {}", e);
+        }
 
         // 优化：服务模式下使用更短的健康检查超时
         // 服务已经启动了 mihomo，只需验证 API 可用
@@ -533,33 +405,6 @@ impl MihomoManager {
         ))
     }
 
-    /// 杀死所有 mihomo 进程（通过进程名匹配）
-    fn kill_all_mihomo_processes() {
-        #[cfg(unix)]
-        {
-            // 使用 pkill 杀死所有 mihomo 进程
-            log::debug!("Killing all mihomo processes");
-            let _ = Command::new("pkill").args(["-9", "-f", "mihomo"]).output();
-        }
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
-            // Windows 上匹配可执行文件名
-            let binary_name = crate::utils::get_mihomo_binary_name();
-            // 尝试杀死当前版本的进程，以及可能存在的旧版本进程
-            let targets = vec![binary_name, "mihomo.exe", "mihomo-core.exe"];
-
-            log::debug!("Killing mihomo processes: {:?}", targets);
-            for target in targets {
-                let _ = Command::new("taskkill")
-                    .args(["/F", "/IM", target])
-                    .creation_flags(CREATE_NO_WINDOW)
-                    .output();
-            }
-        }
-    }
-
     /// 启动 MiHomo 进程
     pub async fn start(&self) -> Result<()> {
         let mut process_guard = self.process.lock().await;
@@ -590,6 +435,18 @@ impl MihomoManager {
         // 非服务模式：在启动新进程前，清理所有残留的旧进程
         if !use_service_mode {
             Self::cleanup_stale_processes();
+            // 清理后如果 PID 文件仍存在且进程仍在运行，说明无法停止旧进程；
+            // 此时必须中止启动，避免产生双实例。
+            if let Some(stale_pid) = Self::load_pid() {
+                if Self::is_pid_running(stale_pid) {
+                    return Err(anyhow::anyhow!(
+                        "旧的 MiHomo 进程仍在运行 (PID: {})，已中止启动以避免双实例。请尝试手动结束进程后重试。",
+                        stale_pid
+                    ));
+                }
+                // 进程不在运行但 pidfile 仍在（理论上不应发生），这里兜底清理。
+                Self::remove_pid_file();
+            }
         }
 
         log::info!("Config path: {:?}", self.config_path);
@@ -613,7 +470,7 @@ impl MihomoManager {
         // 不能使用 Stdio::piped() 因为如果不读取管道，缓冲区会满导致进程阻塞
         // mihomo 的日志已经通过 WebSocket API (/logs) 获取，无需从 stdout/stderr 读取
         #[cfg(windows)]
-        let (child, pid_already_saved) = {
+        let child = {
             use std::os::windows::process::CommandExt;
             const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -625,7 +482,7 @@ impl MihomoManager {
                 use_service_mode
             );
 
-            // 优先级 1：如果服务正在运行且非开发模式，通过服务启动
+            // 优先级 1：如果服务正在运行，通过服务启动
             if use_service_mode {
                 log::info!("Service is running, starting mihomo via service...");
                 log::debug!("  mihomo_path: {:?}", mihomo_path);
@@ -633,16 +490,13 @@ impl MihomoManager {
                 log::debug!("  config_path: {}", config_path_str);
 
                 // 使用指数退避等待 IPC 就绪（最多 10 秒）
-                // 服务模式下不需要重启 Windows 服务本身，只需等待 IPC 就绪
-                // 重启 Windows 服务可能触发 UAC，违背服务模式的设计初衷
                 if wait_for_service_ipc(Duration::from_secs(10)).await {
                     return self
                         .start_via_service(&mihomo_path, &config_dir_str, &config_path_str)
                         .await;
                 }
 
-                // 服务模式下 IPC 超时，返回错误而不是尝试重启服务或回退到 UAC
-                // 用户选择服务模式就是为了避免 UAC
+                // 服务模式下 IPC 超时，返回错误
                 log::error!("Service IPC not ready after 10 seconds");
                 if tun_enabled {
                     return Err(anyhow::anyhow!(
@@ -652,32 +506,6 @@ impl MihomoManager {
                 } else {
                     // TUN 未启用，可以普通模式启动
                     log::info!("TUN not enabled, starting in normal mode...");
-                    (
-                        Command::new(&mihomo_path)
-                            .current_dir(config_dir)
-                            .args(["-d", &config_dir_str, "-f", &config_path_str])
-                            .creation_flags(CREATE_NO_WINDOW)
-                            .stdout(Stdio::null())
-                            .stderr(Stdio::null())
-                            .spawn()
-                            .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?,
-                        false,
-                    )
-                }
-            }
-            // 优先级 2：TUN 启用但服务未运行，使用 UAC 提权
-            else if tun_enabled {
-                log::info!("TUN mode enabled but service not running, using UAC elevation...");
-                // UAC 提权模式：start_elevated 已保存正确的 mihomo PID，返回 (child, true)
-                (
-                    Self::start_elevated(&mihomo_path, &config_dir_str, &config_path_str)?,
-                    true,
-                )
-            }
-            // 优先级 3：普通模式，直接启动
-            else {
-                log::info!("Starting mihomo in normal mode...");
-                (
                     Command::new(&mihomo_path)
                         .current_dir(config_dir)
                         .args(["-d", &config_dir_str, "-f", &config_path_str])
@@ -685,33 +513,62 @@ impl MihomoManager {
                         .stdout(Stdio::null())
                         .stderr(Stdio::null())
                         .spawn()
-                        .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?,
-                    false,
-                )
+                        .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?
+                }
+            }
+            // 优先级 2：TUN 启用但服务未运行，检查是否以管理员模式运行
+            else if tun_enabled {
+                if Self::is_running_as_admin() {
+                    log::info!("TUN mode enabled, running as admin, starting mihomo directly...");
+                    Command::new(&mihomo_path)
+                        .current_dir(config_dir)
+                        .args(["-d", &config_dir_str, "-f", &config_path_str])
+                        .creation_flags(CREATE_NO_WINDOW)
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .spawn()
+                        .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?
+                } else {
+                    // 不是管理员模式，返回带标识的错误，前端可据此提示用户重启
+                    log::error!(
+                        "TUN mode enabled but not running as admin and service not running"
+                    );
+                    return Err(anyhow::anyhow!(
+                        "NEED_ADMIN:增强模式需要管理员权限。请选择以下方式之一：\n\
+                        1. 在设置中安装并启动 Conflux 服务（推荐）\n\
+                        2. 以管理员身份重新启动应用"
+                    ));
+                }
+            }
+            // 优先级 3：普通模式，直接启动
+            else {
+                log::info!("Starting mihomo in normal mode...");
+                Command::new(&mihomo_path)
+                    .current_dir(config_dir)
+                    .args(["-d", &config_dir_str, "-f", &config_path_str])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?
             }
         };
 
         #[cfg(not(windows))]
-        let (child, pid_already_saved) = (
-            Command::new(&mihomo_path)
-                .current_dir(config_dir)
-                .args(["-d", &config_dir_str, "-f", &config_path_str])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-                .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?,
-            false,
-        );
+        let child = Command::new(&mihomo_path)
+            .current_dir(config_dir)
+            .args(["-d", &config_dir_str, "-f", &config_path_str])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?;
 
         let pid = child.id();
         log::info!("MiHomo spawned with PID: {}", pid);
 
         // 保存 PID 到文件，以便下次启动时清理
-        // 注意：UAC 提权模式下，PID 已在 start_elevated 中保存（保存的是真正的 mihomo PID）
-        if !pid_already_saved {
-            if let Err(e) = self.save_pid(pid) {
-                log::warn!("Failed to save PID file: {}", e);
-            }
+        if let Err(e) = self.save_pid(pid) {
+            log::warn!("Failed to save PID file: {}", e);
         }
 
         // 优化：减少初始等待时间，从 500ms 降至 100ms
@@ -794,10 +651,17 @@ impl MihomoManager {
                     );
                     if let Err(e) = WinServiceManager::stop_mihomo().await {
                         log::warn!(
-                            "Failed to stop mihomo via service: {}, falling back to process kill",
+                            "Failed to stop mihomo via service: {}, falling back to PID kill",
                             e
                         );
-                        Self::kill_all_mihomo_processes();
+                        // 回退到通过 PID 停止
+                        if let Some(pid) = status.mihomo_pid {
+                            Self::kill_process_by_pid(pid);
+                        } else if let Some(pid) = Self::load_pid() {
+                            Self::kill_process_by_pid(pid);
+                        } else {
+                            log::warn!("No PID available to stop MiHomo");
+                        }
                     }
                     // 清理进程句柄和 PID 文件
                     self.process.lock().await.take();
@@ -815,6 +679,9 @@ impl MihomoManager {
             let pid = child.id();
             log::info!("Stopping MiHomo process (PID: {})", pid);
 
+            // 检查 PID 文件，确保没有残留进程
+            let pid_from_file = Self::load_pid();
+
             // 使用进程句柄的 kill 方法
             if let Err(e) = child.kill() {
                 log::warn!("Failed to kill MiHomo process: {}", e);
@@ -822,19 +689,46 @@ impl MihomoManager {
                 Self::kill_process_by_pid(pid);
             }
 
+            if let Some(real_pid) = pid_from_file {
+                if real_pid != pid && Self::is_pid_running(real_pid) {
+                    log::info!(
+                        "Detected different PID in pid file (pid_file={}, child_pid={}), killing pid_file process...",
+                        real_pid,
+                        pid
+                    );
+                    Self::kill_process_by_pid(real_pid);
+                }
+                // 关键：如果真实 PID 仍在运行，不要删除 pidfile，否则后续 restart/start 会误判。
+                if Self::is_pid_running(real_pid) {
+                    log::error!(
+                        "MiHomo real PID {} is still running after stop attempt; keeping PID file",
+                        real_pid
+                    );
+                    return Err(anyhow::anyhow!(
+                        "停止 MiHomo 失败：进程仍在运行 (PID: {})",
+                        real_pid
+                    ));
+                }
+            }
+
             Self::remove_pid_file();
             log::info!("MiHomo stopped");
         } else if let Some(pid) = Self::load_pid() {
             log::info!("Stopping MiHomo process by PID file (PID: {})", pid);
             Self::kill_process_by_pid(pid);
+            if Self::is_pid_running(pid) {
+                log::error!(
+                    "MiHomo PID {} is still running after stop attempt; keeping PID file",
+                    pid
+                );
+                return Err(anyhow::anyhow!(
+                    "停止 MiHomo 失败：进程仍在运行 (PID: {})",
+                    pid
+                ));
+            }
             Self::remove_pid_file();
         } else {
-            // 最后尝试通过进程名清理（覆盖 UAC 模式等情况）
-            #[cfg(windows)]
-            {
-                log::info!("No process handle or PID file, killing by process name...");
-                Self::kill_all_mihomo_processes();
-            }
+            log::warn!("No process handle or PID file found, MiHomo may not be running");
         }
 
         Ok(())
@@ -859,11 +753,15 @@ impl MihomoManager {
                     .enable_all()
                     .build();
                 if let Ok(rt) = rt {
-                    let _ = rt.block_on(async { WinServiceManager::stop_mihomo().await });
+                    if let Err(e) = rt.block_on(async { WinServiceManager::stop_mihomo().await }) {
+                        log::warn!("Failed to stop mihomo via service: {}", e);
+                    } else {
+                        log::info!("MiHomo stopped via service");
+                        Self::remove_pid_file();
+                        return;
+                    }
                 }
             }
-            // 无论服务停止是否成功，都通过进程名清理确保完全停止
-            Self::kill_all_mihomo_processes();
         }
 
         // 尝试获取锁并停止进程
@@ -876,12 +774,16 @@ impl MihomoManager {
             } else if let Some(pid) = Self::load_pid() {
                 log::info!("Stopping MiHomo process by PID file (PID: {})", pid);
                 Self::kill_process_by_pid(pid);
+            } else {
+                log::warn!("No process handle or PID file found, MiHomo may not be running");
             }
         } else {
             // 如果拿不到锁，通过 PID 文件清理
             log::warn!("Could not acquire lock, cleaning up via PID file");
             if let Some(pid) = Self::load_pid() {
                 Self::kill_process_by_pid(pid);
+            } else {
+                log::warn!("No PID file found");
             }
         }
 
@@ -895,7 +797,7 @@ impl MihomoManager {
     /// 1. 停止当前进程
     /// 2. 使用指数退避等待进程停止（100ms -> 200ms -> 400ms -> 500ms max）
     /// 3. 必要时清理残留进程
-    /// 4. 立即启动新进程
+    /// 4. 确认进程已停止后再启动新进程
     pub async fn restart(&self) -> Result<()> {
         log::info!("Restarting MiHomo...");
 
@@ -929,9 +831,20 @@ impl MihomoManager {
                 "MiHomo did not stop gracefully after {:?}, forcing cleanup...",
                 elapsed
             );
+
+            // 尝试使用 cleanup_stale_processes
             Self::cleanup_stale_processes();
-            // 清理后短暂等待
-            sleep(Duration::from_millis(200)).await;
+            sleep(Duration::from_millis(500)).await;
+
+            // 最终检查
+            if self.is_running().await {
+                log::error!(
+                    "MiHomo process still running after cleanup, cannot start new instance"
+                );
+                return Err(anyhow::anyhow!(
+                    "无法停止旧的代理进程，请尝试手动结束 mihomo 进程后重试"
+                ));
+            }
         }
 
         // 启动新进程
@@ -943,10 +856,30 @@ impl MihomoManager {
 
     /// 检查进程是否正在运行
     ///
-    /// 简化的检测逻辑：不依赖任何状态标志，只检查进程是否存在
-    /// 无论是服务模式、UAC 模式还是普通模式启动，最终都是 mihomo 进程在运行
+    /// 检测逻辑：
+    /// 1. Windows 服务模式：通过服务 API 查询 mihomo 状态
+    /// 2. 普通模式：检查进程句柄或 PID 文件
     pub async fn is_running(&self) -> bool {
-        // 1. 先检查进程句柄（应用自己启动的）
+        // Windows: 先检查服务模式
+        #[cfg(target_os = "windows")]
+        {
+            use crate::system::WinServiceManager;
+
+            // 如果服务正在运行，通过服务 API 查询 mihomo 状态
+            if WinServiceManager::is_running().unwrap_or(false) {
+                if let Ok(status) = WinServiceManager::get_status().await {
+                    if status.mihomo_running {
+                        log::debug!(
+                            "is_running: Service mode, mihomo_running=true, pid={:?}",
+                            status.mihomo_pid
+                        );
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // 普通模式：检查进程句柄（应用自己启动的）
         let process_guard = self.process.lock().await;
         if let Some(child) = process_guard.as_ref() {
             let pid = child.id();
@@ -957,7 +890,7 @@ impl MihomoManager {
         }
         drop(process_guard);
 
-        // 2. 检查 PID 文件
+        // 普通模式：检查 PID 文件
         if let Some(pid) = Self::load_pid() {
             if Self::is_pid_running(pid) {
                 return true;
@@ -965,105 +898,7 @@ impl MihomoManager {
             Self::remove_pid_file();
         }
 
-        // 3. 最后通过进程名检测（覆盖服务模式、UAC 模式等所有情况）
-        #[cfg(windows)]
-        {
-            return Self::is_mihomo_process_running();
-        }
-
-        #[cfg(not(windows))]
         false
-    }
-
-    /// 检查 mihomo 进程是否在运行（通过进程名）
-    /// 优化：使用 Windows API (CreateToolhelp32Snapshot) 替代 tasklist 命令
-    /// 性能提升约 20 倍（从 ~100ms 降至 ~5ms）
-    #[cfg(windows)]
-    fn is_mihomo_process_running() -> bool {
-        use std::ffi::OsString;
-        use std::os::windows::ffi::OsStringExt;
-
-        // Windows API 常量和结构
-        const TH32CS_SNAPPROCESS: u32 = 0x00000002;
-        const INVALID_HANDLE_VALUE: isize = -1;
-        const MAX_PATH: usize = 260;
-
-        #[repr(C)]
-        struct PROCESSENTRY32W {
-            dw_size: u32,
-            cnt_usage: u32,
-            th32_process_id: u32,
-            th32_default_heap_id: usize,
-            th32_module_id: u32,
-            cnt_threads: u32,
-            th32_parent_process_id: u32,
-            pc_pri_class_base: i32,
-            dw_flags: u32,
-            sz_exe_file: [u16; MAX_PATH],
-        }
-
-        extern "system" {
-            fn CreateToolhelp32Snapshot(
-                dw_flags: u32,
-                th32_process_id: u32,
-            ) -> *mut std::ffi::c_void;
-            fn Process32FirstW(
-                h_snapshot: *mut std::ffi::c_void,
-                lppe: *mut PROCESSENTRY32W,
-            ) -> i32;
-            fn Process32NextW(h_snapshot: *mut std::ffi::c_void, lppe: *mut PROCESSENTRY32W)
-                -> i32;
-            fn CloseHandle(h_object: *mut std::ffi::c_void) -> i32;
-        }
-
-        let binary_name = crate::utils::get_mihomo_binary_name();
-        // 获取用于匹配的短名称（前 20 个字符）
-        let name_prefix = binary_name.trim_end_matches(".exe");
-        let match_prefix = if name_prefix.len() > 20 {
-            &name_prefix[..20]
-        } else {
-            name_prefix
-        };
-
-        unsafe {
-            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-            if snapshot == INVALID_HANDLE_VALUE as *mut std::ffi::c_void {
-                log::warn!("Failed to create process snapshot");
-                return false;
-            }
-
-            let mut entry: PROCESSENTRY32W = std::mem::zeroed();
-            entry.dw_size = std::mem::size_of::<PROCESSENTRY32W>() as u32;
-
-            let mut found = false;
-
-            if Process32FirstW(snapshot, &mut entry) != 0 {
-                loop {
-                    // 将 UTF-16 进程名转换为 Rust 字符串
-                    let name_len = entry
-                        .sz_exe_file
-                        .iter()
-                        .position(|&c| c == 0)
-                        .unwrap_or(MAX_PATH);
-                    let process_name = OsString::from_wide(&entry.sz_exe_file[..name_len]);
-
-                    if let Some(name_str) = process_name.to_str() {
-                        // 检查进程名是否匹配
-                        if name_str.contains(match_prefix) || name_str == binary_name {
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if Process32NextW(snapshot, &mut entry) == 0 {
-                        break;
-                    }
-                }
-            }
-
-            CloseHandle(snapshot);
-            found
-        }
     }
 
     /// 健康检查

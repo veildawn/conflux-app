@@ -438,6 +438,11 @@ fn main() {
                                 .await
                                 .unwrap_or(false);
                             let next = !current;
+
+                            // 立即更新互斥状态
+                            app.state::<TrayMenuState>()
+                                .pre_toggle_exclusive("system_proxy", next);
+
                             let _ = if next {
                                 commands::system::set_system_proxy(app).await
                             } else {
@@ -454,6 +459,11 @@ fn main() {
                                 .map(|status| status.enhanced_mode)
                                 .unwrap_or(false);
                             let next = !current;
+
+                            // 立即更新互斥状态
+                            app.state::<TrayMenuState>()
+                                .pre_toggle_exclusive("enhanced_mode", next);
+
                             let _ = commands::proxy::set_tun_mode(app, next).await;
                         });
                     }
@@ -516,6 +526,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             // 代理命令
             commands::proxy::start_proxy,
+            commands::proxy::start_proxy_normal_mode,
             commands::proxy::stop_proxy,
             commands::proxy::restart_proxy,
             commands::proxy::get_proxy_status,
@@ -548,6 +559,9 @@ fn main() {
             commands::system::get_terminal_proxy_command,
             commands::system::copy_to_clipboard,
             commands::system::copy_terminal_proxy_command,
+            // 管理员权限相关
+            commands::system::is_admin,
+            commands::system::restart_as_admin,
             // 进程图标（连接/请求列表）
             commands::system::get_process_icon,
             // macOS Network Extension（占位，用于增强模式引导）
@@ -768,7 +782,6 @@ fn main() {
                         log::info!("MiHomo stopped via manager");
 
                         // 4. 额外清理：确保所有 mihomo 进程都被终止
-                        // 包括通过 UAC 提权启动的和服务模式启动的
                         mihomo::MihomoManager::cleanup_stale_processes();
                         log::info!("All MiHomo processes cleaned up");
                     } else {

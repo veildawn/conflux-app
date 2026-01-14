@@ -42,6 +42,14 @@ export const ipc = {
   },
 
   /**
+   * 以普通模式启动代理（强制禁用 TUN 模式）
+   * 用于用户取消管理员权限对话框时
+   */
+  async startProxyNormalMode(): Promise<void> {
+    return invoke('start_proxy_normal_mode');
+  },
+
+  /**
    * 停止代理
    */
   async stopProxy(): Promise<void> {
@@ -955,6 +963,14 @@ export const ipc = {
    */
   async hasAdminPrivileges(): Promise<boolean> {
     return invoke('has_admin_privileges');
+  },
+
+  /**
+   * 以管理员权限重启应用 (Windows)
+   * 会触发 UAC 对话框，用户确认后应用将以管理员权限重新启动
+   */
+  async restartAsAdmin(): Promise<void> {
+    return invoke('restart_as_admin');
   },
 
   // ============= WebDAV 同步命令 =============

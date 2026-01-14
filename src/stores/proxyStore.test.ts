@@ -239,11 +239,18 @@ describe('proxyStore', () => {
   describe('setSystemProxy', () => {
     it('应该成功设置系统代理', async () => {
       vi.mocked(ipc.setSystemProxy).mockResolvedValue(undefined);
+      vi.mocked(ipc.getProxyStatus).mockResolvedValue({
+        ...initialStatus,
+        system_proxy: true,
+        enhanced_mode: false, // 互斥：开启系统代理会关闭增强模式
+      });
 
       await useProxyStore.getState().setSystemProxy(true);
 
       expect(ipc.setSystemProxy).toHaveBeenCalled();
+      expect(ipc.getProxyStatus).toHaveBeenCalled();
       expect(useProxyStore.getState().status.system_proxy).toBe(true);
+      expect(useProxyStore.getState().status.enhanced_mode).toBe(false);
     });
 
     it('应该成功清除系统代理', async () => {
@@ -252,22 +259,38 @@ describe('proxyStore', () => {
       });
 
       vi.mocked(ipc.clearSystemProxy).mockResolvedValue(undefined);
+      vi.mocked(ipc.getProxyStatus).mockResolvedValue({
+        ...initialStatus,
+        system_proxy: false,
+      });
 
       await useProxyStore.getState().setSystemProxy(false);
 
       expect(ipc.clearSystemProxy).toHaveBeenCalled();
+      expect(ipc.getProxyStatus).toHaveBeenCalled();
       expect(useProxyStore.getState().status.system_proxy).toBe(false);
     });
   });
 
   describe('setEnhancedMode', () => {
     it('应该成功设置增强模式', async () => {
+      // 初始状态设为未开启增强模式 + 系统代理开启，验证互斥：开启增强模式后系统代理应关闭
+      useProxyStore.setState({
+        status: { ...initialStatus, enhanced_mode: false, system_proxy: true },
+      });
       vi.mocked(ipc.setTunMode).mockResolvedValue(undefined);
+      vi.mocked(ipc.getProxyStatus).mockResolvedValue({
+        ...initialStatus,
+        enhanced_mode: true,
+        system_proxy: false, // 互斥：开启增强模式会关闭系统代理
+      });
 
       await useProxyStore.getState().setEnhancedMode(true);
 
       expect(ipc.setTunMode).toHaveBeenCalledWith(true);
+      expect(ipc.getProxyStatus).toHaveBeenCalled();
       expect(useProxyStore.getState().status.enhanced_mode).toBe(true);
+      expect(useProxyStore.getState().status.system_proxy).toBe(false);
     });
   });
 

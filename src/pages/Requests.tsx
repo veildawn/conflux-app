@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { BentoCard } from '@/components/ui/bento-card';
-import { ConnectionRow, KeywordFilter, SortSelect } from '@/components/connection';
-import { getConnectionKeyInfo, sortConnections } from '@/utils/connection';
+import { ConnectionRow, KeywordFilter, SortSelect, TypeFilter } from '@/components/connection';
+import type { ConnectionTypeFilter } from '@/components/connection/TypeFilter';
+import { filterConnectionsByType, getConnectionKeyInfo, sortConnections } from '@/utils/connection';
 import type { ConnectionSortKey, SortOrder } from '@/utils/connection';
 
 export default function Requests() {
@@ -28,6 +29,7 @@ export default function Requests() {
 
   const [query, setQuery] = useState('');
   const [keywords, setKeywords] = useState<string[]>([]);
+  const [typeFilter, setTypeFilter] = useState<ConnectionTypeFilter>('all');
   const [autoScrollToTop, setAutoScrollToTop] = useState(true);
   const [sortKey, setSortKey] = useState<ConnectionSortKey>('time');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -62,10 +64,12 @@ export default function Requests() {
       return hay.includes(k);
     };
 
-    // 过滤
-    let filtered = requestHistory;
+    // 类型过滤
+    let filtered = filterConnectionsByType(requestHistory, typeFilter);
+
+    // 文本过滤
     if (q || ks.length > 0) {
-      filtered = requestHistory.filter((c) => {
+      filtered = filtered.filter((c) => {
         const { host, process } = getConnectionKeyInfo(c);
         const qOk =
           !q ||
@@ -82,7 +86,7 @@ export default function Requests() {
 
     // 排序
     return sortConnections(filtered, sortKey, sortOrder);
-  }, [requestHistory, query, keywords, sortKey, sortOrder]);
+  }, [requestHistory, query, keywords, typeFilter, sortKey, sortOrder]);
 
   useEffect(() => {
     if (!autoScrollToTop) return;
@@ -175,6 +179,8 @@ export default function Requests() {
                 className="h-8 pl-9 w-[200px] bg-gray-50/50 dark:bg-zinc-800/50 border-gray-200 dark:border-zinc-700 text-xs focus-visible:ring-1"
               />
             </div>
+            <div className="h-4 w-px bg-gray-200 dark:bg-zinc-700" />
+            <TypeFilter value={typeFilter} onChange={setTypeFilter} />
             <div className="h-4 w-px bg-gray-200 dark:bg-zinc-700" />
             <SortSelect
               sortKey={sortKey}

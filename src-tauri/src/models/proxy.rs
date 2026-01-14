@@ -11,9 +11,9 @@ pub enum RunMode {
     /// Windows 服务模式
     #[serde(rename = "service")]
     Service,
-    /// Windows UAC 提权模式
-    #[serde(rename = "elevated_win")]
-    ElevatedWin,
+    /// Windows 管理员模式（以管理员权限运行的应用）
+    #[serde(rename = "admin_win")]
+    AdminWin,
     /// macOS 提权模式
     #[serde(rename = "elevated_mac")]
     ElevatedMac,

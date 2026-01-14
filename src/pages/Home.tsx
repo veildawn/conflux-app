@@ -759,7 +759,7 @@ export default function Home() {
                     )}
                   >
                     {status.run_mode === 'service' && '服务模式'}
-                    {status.run_mode === 'elevated_win' && 'UAC提权'}
+                    {status.run_mode === 'admin_win' && '管理员模式'}
                     {status.run_mode === 'elevated_mac' && 'Mac提权'}
                   </div>
                 )}

@@ -28,7 +28,7 @@ interface ProxyState {
   /** 全局时钟（用于页面展示连接/请求时长），避免页面内创建 interval 造成 HMR 叠加 */
   now: number;
   /**
-   * 请求历史（“曾经出现过的连接”快照）
+   * 请求历史（"曾经出现过的连接"快照）
    * - 由 fetchConnections() 基于连接 ID diff 生成
    * - 作为 Requests 页面数据源（类似 _tmp_flclash 的 FixedList(500)）
    */
@@ -37,6 +37,8 @@ interface ProxyState {
   requestHistoryIdSet: Record<string, true>;
   loading: boolean;
   error: string | null;
+  /** 是否需要管理员权限重启（用于显示确认对话框） */
+  needAdminRestart: boolean;
 
   // 动作
   applyStatus: (status: ProxyStatus) => void;
@@ -60,6 +62,10 @@ interface ProxyState {
   setPorts: (port: number, socksPort: number) => Promise<void>;
   setIpv6: (enabled: boolean) => Promise<void>;
   setTcpConcurrent: (enabled: boolean) => Promise<void>;
+  /** 设置是否需要管理员权限重启 */
+  setNeedAdminRestart: (value: boolean) => void;
+  /** 以普通模式启动代理（强制禁用 TUN 模式） */
+  startNormalMode: () => Promise<void>;
 }
 
 const initialStatus: ProxyStatus = {
@@ -98,6 +104,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
   requestHistoryIdSet: {},
   loading: false,
   error: null,
+  needAdminRestart: false,
 
   applyStatus: (status) => {
     set((state) => ({
@@ -128,8 +135,14 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
       await ipc.startProxy();
       await get().fetchStatus();
     } catch (error) {
+      const errorMsg = String(error);
       logger.error('Failed to start proxy:', error);
-      set({ error: String(error) });
+      // 检测是否需要管理员权限
+      if (errorMsg.includes('NEED_ADMIN:')) {
+        set({ needAdminRestart: true, loading: false });
+        return; // 不抛出错误，让对话框处理
+      }
+      set({ error: errorMsg });
       throw error;
     } finally {
       set({ loading: false });
@@ -338,14 +351,19 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
   setSystemProxy: async (enabled: boolean) => {
     set({ loading: true, error: null });
     try {
+      // 互斥：开启系统代理会关闭增强模式（后端也会强制处理），这里先做本地即时更新避免 UI 抖动
+      if (enabled) {
+        set((state) => ({
+          status: { ...state.status, enhanced_mode: false },
+        }));
+      }
       if (enabled) {
         await ipc.setSystemProxy();
       } else {
         await ipc.clearSystemProxy();
       }
-      set((state) => ({
-        status: { ...state.status, system_proxy: enabled },
-      }));
+      // 以真实状态为准（后端会 emit proxy-status-changed，这里也兜底拉取一次）
+      await get().fetchStatus();
     } catch (error) {
       logger.error('Failed to set system proxy:', error);
       set({ error: String(error) });
@@ -358,13 +376,24 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
   setEnhancedMode: async (enabled: boolean) => {
     set({ loading: true, error: null });
     try {
+      // 互斥：开启增强模式会关闭系统代理（后端也会强制处理），这里先做本地即时更新避免 UI 抖动
+      if (enabled) {
+        set((state) => ({
+          status: { ...state.status, system_proxy: false },
+        }));
+      }
       await ipc.setTunMode(enabled);
-      set((state) => ({
-        status: { ...state.status, enhanced_mode: enabled },
-      }));
+      // 以真实状态为准（后端会 emit proxy-status-changed，这里也兜底拉取一次）
+      await get().fetchStatus();
     } catch (error) {
+      const errorMsg = String(error);
       logger.error('Failed to set TUN mode:', error);
-      set({ error: String(error) });
+      // 检测是否需要管理员权限
+      if (errorMsg.includes('NEED_ADMIN:')) {
+        set({ needAdminRestart: true, loading: false });
+        return; // 不抛出错误，让对话框处理
+      }
+      set({ error: errorMsg });
       // 失败时获取实际状态，确保 UI 显示正确
       try {
         const status = await ipc.getProxyStatus();
@@ -439,6 +468,26 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
       }));
     } catch (error) {
       logger.error('Failed to set TCP concurrent:', error);
+      set({ error: String(error) });
+      throw error;
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  setNeedAdminRestart: (value: boolean) => {
+    set({ needAdminRestart: value });
+  },
+
+  /** 以普通模式启动代理（强制禁用 TUN 模式） */
+  startNormalMode: async () => {
+    set({ loading: true, error: null, needAdminRestart: false });
+    try {
+      await ipc.startProxyNormalMode();
+      await get().fetchStatus();
+      logger.info('Proxy started in normal mode');
+    } catch (error) {
+      logger.error('Failed to start proxy in normal mode:', error);
       set({ error: String(error) });
       throw error;
     } finally {

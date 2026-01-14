@@ -49,13 +49,68 @@ pub async fn start_proxy(app: AppHandle) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
 
+    log::info!("Proxy started successfully");
+
     // 同步状态到托盘菜单和前端
     if let Ok(status) = get_proxy_status().await {
         app.state::<TrayMenuState>().sync_from_status(&status);
         let _ = app.emit("proxy-status-changed", status);
     }
 
-    log::info!("Proxy started successfully");
+    Ok(())
+}
+
+/// 以普通模式启动代理（强制禁用 TUN 模式）
+/// 用于用户取消管理员权限对话框时
+#[tauri::command]
+pub async fn start_proxy_normal_mode(app: AppHandle) -> Result<(), String> {
+    use crate::commands::reload::sync_proxy_status;
+
+    let state = get_app_state_or_err()?;
+
+    log::info!("Starting proxy in normal mode (forced, TUN disabled)...");
+
+    // 1. 禁用配置文件中的 TUN 模式
+    if let Err(e) = state.config_manager.update_tun_mode(false) {
+        log::error!("Failed to disable TUN in config: {}", e);
+        return Err(format!("禁用增强模式配置失败: {}", e));
+    }
+
+    // 2. 更新 settings.json
+    if let Ok(mut app_settings) = state.config_manager.load_app_settings() {
+        app_settings.mihomo.tun.enable = false;
+        if let Err(e) = state.config_manager.save_app_settings(&app_settings) {
+            log::warn!("Failed to sync TUN setting to settings.json: {}", e);
+        }
+    }
+
+    // 3. 清除系统代理状态（如果有）
+    {
+        let mut system_proxy = state.system_proxy_enabled.lock().await;
+        if *system_proxy {
+            let _ = crate::system::SystemProxy::clear_proxy();
+            *system_proxy = false;
+        }
+    }
+
+    // 4. 清除增强模式状态
+    {
+        let mut enhanced_mode = state.enhanced_mode.lock().await;
+        *enhanced_mode = false;
+    }
+
+    // 5. 启动 mihomo（现在配置中 TUN 已禁用，会以普通模式启动）
+    state
+        .mihomo_manager
+        .start()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    log::info!("Proxy started in normal mode successfully");
+
+    // 6. 同步状态到托盘菜单和前端
+    sync_proxy_status(&app).await;
+
     Ok(())
 }
 
@@ -155,14 +210,14 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
 }
 
 /// 检测当前运行模式
-async fn detect_run_mode(running: bool, enhanced_mode: bool) -> crate::models::RunMode {
+async fn detect_run_mode(running: bool, _enhanced_mode: bool) -> crate::models::RunMode {
     use crate::models::RunMode;
 
     if !running {
         return RunMode::Normal;
     }
 
-    // Windows: 优先检测服务模式（不依赖 enhanced_mode，因为配置文件可能不准确）
+    // Windows: 检测服务模式或管理员模式
     #[cfg(target_os = "windows")]
     {
         use crate::system::WinServiceManager;
@@ -178,21 +233,20 @@ async fn detect_run_mode(running: bool, enhanced_mode: bool) -> crate::models::R
             }
         }
 
-        // 如果启用了 TUN 但不是服务模式，是 UAC 提权模式
-        if enhanced_mode {
-            log::debug!("detect_run_mode: ElevatedWin (TUN enabled, not via service)");
-            return RunMode::ElevatedWin;
+        // 检查是否以管理员权限运行（始终显示，不依赖增强模式）
+        if crate::system::is_running_as_admin() {
+            log::debug!("detect_run_mode: AdminWin (running as admin)");
+            return RunMode::AdminWin;
         }
 
-        // 普通模式
         return RunMode::Normal;
     }
 
     #[cfg(target_os = "macos")]
     {
-        // macOS TUN 模式需要提权
-        if enhanced_mode {
-            log::debug!("detect_run_mode: ElevatedMac");
+        // macOS: 检查是否有 root 权限
+        if unsafe { libc::geteuid() } == 0 {
+            log::debug!("detect_run_mode: ElevatedMac (running as root)");
             return RunMode::ElevatedMac;
         }
         return RunMode::Normal;
@@ -285,6 +339,15 @@ pub async fn switch_mode(app: AppHandle, mode: String) -> Result<(), String> {
     let valid_modes = ["rule", "global", "direct"];
     if !valid_modes.contains(&mode.as_str()) {
         return Err(format!("Invalid mode: {}", mode));
+    }
+
+    // 检查当前模式，如果相同则跳过（避免托盘菜单 set_checked 触发重复调用）
+    let current_config = state
+        .config_manager
+        .load_mihomo_config()
+        .map_err(|e| e.to_string())?;
+    if current_config.mode == mode {
+        return Ok(());
     }
 
     // 如果 MiHomo 正在运行，通过 API 切换模式
@@ -509,10 +572,7 @@ pub async fn close_all_connections() -> Result<(), String> {
 /// 8. 如果失败，回滚配置和状态
 #[tauri::command]
 pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
-    use crate::commands::reload::{
-        apply_settings_to_config, reload_config, safe_restart_proxy, sync_proxy_status,
-        ConfigBackup, ReloadOptions,
-    };
+    use crate::commands::reload::sync_proxy_status;
 
     let state = get_app_state_or_err()?;
 
@@ -520,189 +580,126 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
         return Err("代理核心未运行".to_string());
     }
 
-    // 记录当前状态，用于失败回滚
+    // 记录当前状态
     let previous_enabled = *state.enhanced_mode.lock().await;
 
-    // 无论配置文件状态如何，只要用户发起请求，就强制执行更新流程
-    // 这样可以修复配置文件与运行状态不一致的问题
-    // let config = state.config_manager.load_mihomo_config().map_err(|e| e.to_string())?;
-    // let current_tun_enabled = config.tun.as_ref().map(|t| t.enable).unwrap_or(false);
-    // if current_tun_enabled == enabled { ... }
+    // 如果状态没变，直接返回
+    if previous_enabled == enabled {
+        log::info!("TUN mode already set to {}, skipping", enabled);
+        return Ok(());
+    }
 
-    // 如果要启用 TUN 模式，执行前置检查
+    log::info!(
+        "set_tun_mode: enabled={}, previous_enabled={}",
+        enabled,
+        previous_enabled
+    );
+
+    // ========== 启用 TUN 模式 ==========
     if enabled {
-        // 检查是否有激活的订阅
+        // 1. 前置检查
         crate::commands::require_active_subscription_with_proxies()?;
 
-        // 检查并设置权限
         let has_permission =
             crate::system::TunPermission::check_permission().map_err(|e| e.to_string())?;
-
         if !has_permission {
             log::info!("TUN permission not set, requesting setup...");
-            crate::system::TunPermission::setup_permission().map_err(|e| {
-                // macOS 上我们已切换到 Network Extension 流程（若未集成则会给出明确引导信息）
-                format!("增强模式需要额外系统权限/组件：{}", e)
-            })?;
+            crate::system::TunPermission::setup_permission()
+                .map_err(|e| format!("增强模式需要额外系统权限/组件：{}", e))?;
         }
 
-        // Windows: 检查是否需要 UAC 权限，不需要预先确认，直接由 safe_restart_proxy 触发提权
-        #[cfg(target_os = "windows")]
-        {
-            use crate::mihomo::MihomoManager;
-            if MihomoManager::is_tun_elevation_required() {
-                log::info!("UAC elevation required for TUN mode, will trigger during restart...");
+        // 2. 互斥：启用 TUN 时必须关闭系统代理
+        let was_system_proxy_enabled = *state.system_proxy_enabled.lock().await;
+        if was_system_proxy_enabled {
+            log::info!("System proxy is enabled, clearing before enabling TUN mode...");
+            crate::system::SystemProxy::clear_proxy().map_err(|e| e.to_string())?;
+            *state.system_proxy_enabled.lock().await = false;
+        }
+
+        // 3. 停止当前核心
+        state
+            .mihomo_manager
+            .stop()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // 4. 更新配置文件
+        if let Err(e) = state.config_manager.update_tun_mode(true) {
+            log::error!("Failed to update TUN config: {}", e);
+            // 尝试恢复核心（普通模式）
+            let _ = state.mihomo_manager.start().await;
+            return Err(format!("更新配置失败: {}", e));
+        }
+
+        // 5. 以 TUN 模式启动核心
+        match state.mihomo_manager.start().await {
+            Ok(_) => {
+                // 启动成功，更新状态和 settings.json
+                {
+                    let mut enhanced_mode = state.enhanced_mode.lock().await;
+                    *enhanced_mode = true;
+                }
+
+                if let Ok(mut app_settings) = state.config_manager.load_app_settings() {
+                    app_settings.mihomo.tun.enable = true;
+                    if app_settings.mihomo.tun.stack.is_none() {
+                        app_settings.mihomo.tun.stack = Some("system".to_string());
+                    }
+                    if let Err(e) = state.config_manager.save_app_settings(&app_settings) {
+                        log::warn!("Failed to sync TUN setting to settings.json: {}", e);
+                    }
+                }
+
+                sync_proxy_status(&app).await;
+                log::info!("TUN mode enabled successfully");
+                return Ok(());
+            }
+            Err(e) => {
+                // 启动失败：回滚配置并尝试普通模式启动
+                log::error!("Failed to start mihomo with TUN mode: {}", e);
+                let _ = state.config_manager.update_tun_mode(false);
+                let _ = state.mihomo_manager.start().await;
+                sync_proxy_status(&app).await;
+                return Err(format!("启动增强模式失败: {}", e));
             }
         }
     }
 
-    // 创建配置备份
-    let backup = ConfigBackup::create(state).map_err(|e| e.to_string())?;
+    // ========== 禁用 TUN 模式 ==========
+    state
+        .mihomo_manager
+        .stop()
+        .await
+        .map_err(|e| e.to_string())?;
 
     // 更新配置文件
-    if let Err(e) = state.config_manager.update_tun_mode(enabled) {
+    if let Err(e) = state.config_manager.update_tun_mode(false) {
         log::error!("Failed to update TUN config: {}", e);
         return Err(format!("更新配置失败: {}", e));
     }
 
-    // TUN 模式切换涉及网络栈重大变更，使用安全重启以确稳定性
-    log::info!("TUN mode change requires restart for stability...");
-    let result = safe_restart_proxy(&app).await;
+    // 以普通模式启动核心
+    if let Err(e) = state.mihomo_manager.start().await {
+        log::error!("Failed to start mihomo in normal mode: {}", e);
+        return Err(format!("启动代理核心失败: {}", e));
+    }
 
-    match result {
-        Ok(_) => {
-            // 成功：更新状态
-            {
-                let mut enhanced_mode = state.enhanced_mode.lock().await;
-                *enhanced_mode = enabled;
-            }
+    // 更新状态和 settings.json
+    {
+        let mut enhanced_mode = state.enhanced_mode.lock().await;
+        *enhanced_mode = false;
+    }
 
-            // safe_restart_proxy 已经包含了完整的健康检查，这里使用 API 进行额外验证
-            // 通过 API 检查比进程检测更可靠，因为它确认了 mihomo 完全就绪
-            let api_healthy = match state.mihomo_api.get_version().await {
-                Ok(_) => {
-                    log::debug!("MiHomo API health check passed after TUN mode change");
-                    true
-                }
-                Err(e) => {
-                    log::warn!("MiHomo API health check failed: {}, will retry...", e);
-                    // 短暂等待后重试一次
-                    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-                    state.mihomo_api.get_version().await.is_ok()
-                }
-            };
-
-            if !api_healthy {
-                log::error!(
-                    "MiHomo API not responding after TUN mode change, attempting recovery..."
-                );
-
-                // 回滚配置
-                if let Err(rollback_err) = backup.rollback() {
-                    log::error!("Failed to rollback config: {}", rollback_err);
-                }
-
-                // 恢复状态
-                {
-                    let mut enhanced_mode = state.enhanced_mode.lock().await;
-                    *enhanced_mode = previous_enabled;
-                }
-
-                // 尝试重新启动
-                if let Err(e) = state.mihomo_manager.start().await {
-                    log::error!("Failed to restart MiHomo after crash: {}", e);
-                }
-
-                sync_proxy_status(&app).await;
-                return Err("增强模式切换后代理核心异常，已尝试恢复".to_string());
-            }
-
-            // 清理备份
-            backup.cleanup();
-
-            // 同步保存到 settings.json
-            if let Ok(mut app_settings) = state.config_manager.load_app_settings() {
-                app_settings.mihomo.tun.enable = enabled;
-                if enabled {
-                    // 同步 TUN 默认配置
-                    if app_settings.mihomo.tun.stack.is_none() {
-                        app_settings.mihomo.tun.stack = Some("system".to_string());
-                    }
-                }
-                if let Err(e) = state.config_manager.save_app_settings(&app_settings) {
-                    log::warn!("Failed to sync TUN setting to settings.json: {}", e);
-                }
-            }
-
-            log::info!("TUN mode set to: {}", enabled);
-            sync_proxy_status(&app).await;
-            Ok(())
-        }
-        Err(e) => {
-            log::error!("Failed to apply TUN mode change: {}", e);
-
-            // 回滚配置
-            // 既然启动失败，说明 TUN 模式无法工作（可能是用户拒绝了 UAC）
-            // 此时 settings.json 中的 tun.enable 应该还是 false（因为我们只在成功后才更新 settings）
-            // 所以正确的做法是重新从 settings.json 加载配置并应用到 config.yaml，然后重启服务
-
-            // 1. 清理备份文件（我们改用配置合并的方式回滚，不需要文件备份了）
-            backup.cleanup();
-
-            log::info!("Reverting config from settings...");
-            let mut recovered = false;
-
-            // 2. 执行配置合并回滚
-            if let Ok(app_settings) = state.config_manager.load_app_settings() {
-                if let Ok(mut config) = state.config_manager.load_mihomo_config() {
-                    // 将 settings 中的配置（包含关闭的 TUN）应用到 config
-                    apply_settings_to_config(&app_settings.mihomo, &mut config);
-
-                    // 保存 config
-                    if let Err(save_err) = state.config_manager.save_mihomo_config(&config) {
-                        log::error!("Failed to save reverted config: {}", save_err);
-                    } else {
-                        recovered = true;
-                    }
-                }
-            }
-
-            if !recovered {
-                log::error!(
-                    "Failed to recover config from settings, falling back to file rollback"
-                );
-                // 如果上述逻辑失败，尝试使用文件回滚作为最后的手段
-                if let Err(rollback_err) = backup.rollback() {
-                    log::error!("Failed to rollback config from backup: {}", rollback_err);
-                }
-            }
-
-            // 3. 尝试重启服务（普通模式）
-            // reload_config 只对运行中的进程有效，所以必须检查进程状态并尝试重启
-            if !state.mihomo_manager.is_running().await {
-                log::warn!(
-                    "Mihomo is not running after rollback, attempting to restart in normal mode..."
-                );
-                if let Err(restart_err) = state.mihomo_manager.start().await {
-                    log::error!("Failed to recover mihomo process: {}", restart_err);
-                } else {
-                    log::info!("Mihomo recovered successfully in normal mode");
-                }
-            } else {
-                // 如果进程还在运行（虽然不太可能，但为了保险），重载一下配置
-                let _ = reload_config(Some(&app), &ReloadOptions::quick()).await;
-            }
-
-            // 恢复状态
-            {
-                let mut enhanced_mode = state.enhanced_mode.lock().await;
-                *enhanced_mode = previous_enabled;
-            }
-
-            sync_proxy_status(&app).await;
-            Err(format!("切换增强模式失败: {}", e))
+    if let Ok(mut app_settings) = state.config_manager.load_app_settings() {
+        app_settings.mihomo.tun.enable = false;
+        if let Err(e) = state.config_manager.save_app_settings(&app_settings) {
+            log::warn!("Failed to sync TUN setting to settings.json: {}", e);
         }
     }
+
+    sync_proxy_status(&app).await;
+    log::info!("TUN mode disabled successfully");
+    Ok(())
 }
 
 /// 检查 TUN 权限状态

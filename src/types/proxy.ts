@@ -1,7 +1,7 @@
 /**
  * 运行模式
  */
-export type RunMode = 'normal' | 'service' | 'elevated_win' | 'elevated_mac';
+export type RunMode = 'normal' | 'service' | 'admin_win' | 'elevated_mac';
 
 /**
  * 代理状态

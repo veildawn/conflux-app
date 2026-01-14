@@ -203,7 +203,11 @@ export default function SubscriptionEditWindow() {
         } else {
           profile = await ipc.createBlankProfile(profileName);
         }
-        toast({ title: '创建成功', description: `配置 "${profile.name}" 已添加` });
+
+        // 自动激活新创建的配置
+        await ipc.activateProfile(profile.id);
+
+        toast({ title: '创建成功', description: `配置 "${profile.name}" 已添加并激活` });
       }
 
       await emit('profiles-changed');
