@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/github/license/veildawn/conflux-app?style=for-the-badge&color=orange" alt="license">
 </p>
 
-English | [简体中文](README.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
+[简体中文](README.md) | English | [日本語](README.ja.md) | [한국어](README.ko.md)
 
 A modern cross-platform proxy management desktop application based on Tauri 2 + MiHomo.
 

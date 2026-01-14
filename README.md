@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/github/license/veildawn/conflux-app?style=for-the-badge&color=orange" alt="license">
 </p>
 
-[English](README.en.md) | 简体中文 | [日本語](README.ja.md) | [한국어](README.ko.md)
+简体中文 | [English](README.en.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
 基于 Tauri 2 + MiHomo 构建的现代化跨平台代理管理桌面应用。
 

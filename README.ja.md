@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/github/license/veildawn/conflux-app?style=for-the-badge&color=orange" alt="license">
 </p>
 
-[English](README.en.md) | [简体中文](README.md) | 日本語 | [한국어](README.ko.md)
+[简体中文](README.md) | [English](README.en.md) | 日本語 | [한국어](README.ko.md)
 
 Tauri 2 + MiHomo に基づく最新のクロスプラットフォームプロキシ管理デスクトップアプリケーション。
 
