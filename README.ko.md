@@ -2,13 +2,13 @@
 
 <p align="center">
   <img src="https://img.shields.io/github/v/release/veildawn/conflux-app?style=for-the-badge&logo=github&color=007AFF" alt="release">
-  <img src="https://img.shields.io/github/downloads/veildawn/conflux-app/total?style=for-the-badge&logo=github&color=2ea44f" alt="downloads">
+  <img src="https://img.shields.io/github/downloads/veildawn/conflux-app/latest/total?style=for-the-badge&logo=github&color=2ea44f" alt="downloads">
   <img src="https://img.shields.io/github/stars/veildawn/conflux-app?style=for-the-badge&logo=github" alt="stars">
   <img src="https://img.shields.io/github/actions/workflow/status/veildawn/conflux-app/ci.yml?branch=main&style=for-the-badge&logo=github&label=build" alt="build status">
   <img src="https://img.shields.io/github/license/veildawn/conflux-app?style=for-the-badge&color=orange" alt="license">
 </p>
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
+[English](README.en.md) | [简体中文](README.md) | [日本語](README.ja.md) | 한국어
 
 Tauri 2 + MiHomo 기반의 현대적인 크로스 플랫폼 프록시 관리 데스크톱 애플리케이션입니다.
 
@@ -31,13 +31,13 @@ Tauri 2 + MiHomo 기반의 현대적인 크로스 플랫폼 프록시 관리 데
 
 ## 특징
 
-- 🚀 **고성능** - Rust + Tauri 2, 빠른 시작, 낮은 리소스 점유율
-- 🎨 **현대적인 UI** - React + Tailwind CSS, 아름답고 부드러운 인터페이스
-- 📊 **실시간 모니터링** - 트래픽 통계, 연결 관리, 속도 테스트
-- 🎯 **유연한 규칙** - 강력한 규칙 관리, 드래그 앤 드롭 정렬 지원
-- 📦 **구독 관리** - 원격 구독, 로컬 가져오기, 자동 업데이트
-- 🏪 **Sub-Store** - 내장된 고급 구독 관리 도구
-- 🔧 **TUN 모드** - 가상 네트워크 카드를 통한 전역 프록시
+- **고성능**：Rust + Tauri 2, 빠른 시작, 낮은 리소스 점유율.
+- **현대적인 UI**：React + Tailwind CSS, 아름답고 부드러운 인터페이스.
+- **실시간 모니터링**：트래픽 통계, 연결 관리, 속도 테스트.
+- **유연한 규칙**：강력한 규칙 관리, 드래그 앤 드롭 정렬 지원.
+- **구독 관리**：원격 구독, 로컬 가져오기, 자동 업데이트.
+- **Sub-Store**：내장된 고급 구독 관리 도구.
+- **TUN 모드**：가상 네트워크 카드를 통한 전역 프록시.
 
 ## 설치
 
@@ -73,14 +73,14 @@ pnpm tauri dev
 pnpm tauri build
 ```
 
-> 요구 사항: Node.js >= 18, pnpm >= 8, Rust >= 1.77
+> **요구 사항**：Node.js >= 18, pnpm >= 8, Rust >= 1.77
 >
-> 시스템 의존성은 [Tauri Prerequisites](https://v2.tauri.app/start/prerequisites/)를 참조하십시오
+> **시스템 의존성**：[Tauri Prerequisites](https://v2.tauri.app/start/prerequisites/)를 참조하십시오
 
 ## 문서
 
-- [📖 사용자 가이드](docs/USER_GUIDE.md)
-- [🔧 MiHomo API 문서](docs/MIHOMO_API.md)
+- [사용자 가이드](docs/USER_GUIDE.md)
+- [MiHomo API 문서](docs/MIHOMO_API.md)
 
 ## 라이선스
 

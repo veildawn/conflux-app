@@ -2,13 +2,13 @@
 
 <p align="center">
   <img src="https://img.shields.io/github/v/release/veildawn/conflux-app?style=for-the-badge&logo=github&color=007AFF" alt="release">
-  <img src="https://img.shields.io/github/downloads/veildawn/conflux-app/total?style=for-the-badge&logo=github&color=2ea44f" alt="downloads">
+  <img src="https://img.shields.io/github/downloads/veildawn/conflux-app/latest/total?style=for-the-badge&logo=github&color=2ea44f" alt="downloads">
   <img src="https://img.shields.io/github/stars/veildawn/conflux-app?style=for-the-badge&logo=github" alt="stars">
   <img src="https://img.shields.io/github/actions/workflow/status/veildawn/conflux-app/ci.yml?branch=main&style=for-the-badge&logo=github&label=build" alt="build status">
   <img src="https://img.shields.io/github/license/veildawn/conflux-app?style=for-the-badge&color=orange" alt="license">
 </p>
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
+[English](README.en.md) | [简体中文](README.md) | 日本語 | [한국어](README.ko.md)
 
 Tauri 2 + MiHomo に基づく最新のクロスプラットフォームプロキシ管理デスクトップアプリケーション。
 
@@ -31,13 +31,13 @@ Tauri 2 + MiHomo に基づく最新のクロスプラットフォームプロキ
 
 ## 特徴
 
-- 🚀 **高性能** - Rust + Tauri 2、高速起動、低リソース消費
-- 🎨 **モダンな UI** - React + Tailwind CSS、美しくスムーズなインターフェース
-- 📊 **リアルタイム監視** - トラフィック統計、接続管理、速度テスト
-- 🎯 **柔軟なルール** - 強力なルール管理、ドラッグアンドドロップによる並べ替えをサポート
-- 📦 **サブスクリプション管理** - リモートサブスクリプション、ローカルインポート、自動更新
-- 🏪 **Sub-Store** - 内蔵の高度なサブスクリプション管理ツール
-- 🔧 **TUN モード** - 仮想ネットワークカードによるグローバルプロキシ
+- **高性能**：Rust + Tauri 2、高速起動、低リソース消費。
+- **モダンな UI**：React + Tailwind CSS、美しくスムーズなインターフェース。
+- **リアルタイム監視**：トラフィック統計、接続管理、速度テスト。
+- **柔軟なルール**：強力なルール管理、ドラッグアンドドロップによる並べ替えをサポート。
+- **サブスクリプション管理**：リモートサブスクリプション、ローカルインポート、自動更新。
+- **Sub-Store**：内蔵の高度なサブスクリプション管理ツール。
+- **TUN モード**：仮想ネットワークカードによるグローバルプロキシ。
 
 ## インストール
 
@@ -73,14 +73,14 @@ pnpm tauri dev
 pnpm tauri build
 ```
 
-> 要件：Node.js >= 18, pnpm >= 8, Rust >= 1.77
+> **要件**：Node.js >= 18, pnpm >= 8, Rust >= 1.77
 >
-> システム要件については [Tauri Prerequisites](https://v2.tauri.app/start/prerequisites/) を参照してください
+> **システム要件**：[Tauri Prerequisites](https://v2.tauri.app/start/prerequisites/) を参照してください
 
 ## ドキュメント
 
-- [📖 ユーザーガイド](docs/USER_GUIDE.md)
-- [🔧 MiHomo API ドキュメント](docs/MIHOMO_API.md)
+- [ユーザーガイド](docs/USER_GUIDE.md)
+- [MiHomo API ドキュメント](docs/MIHOMO_API.md)
 
 ## ライセンス
 

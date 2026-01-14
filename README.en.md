@@ -2,13 +2,13 @@
 
 <p align="center">
   <img src="https://img.shields.io/github/v/release/veildawn/conflux-app?style=for-the-badge&logo=github&color=007AFF" alt="release">
-  <img src="https://img.shields.io/github/downloads/veildawn/conflux-app/total?style=for-the-badge&logo=github&color=2ea44f" alt="downloads">
+  <img src="https://img.shields.io/github/downloads/veildawn/conflux-app/latest/total?style=for-the-badge&logo=github&color=2ea44f" alt="downloads">
   <img src="https://img.shields.io/github/stars/veildawn/conflux-app?style=for-the-badge&logo=github" alt="stars">
   <img src="https://img.shields.io/github/actions/workflow/status/veildawn/conflux-app/ci.yml?branch=main&style=for-the-badge&logo=github&label=build" alt="build status">
   <img src="https://img.shields.io/github/license/veildawn/conflux-app?style=for-the-badge&color=orange" alt="license">
 </p>
 
-[English](README.en.md) | [简体中文](README.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
+English | [简体中文](README.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
 A modern cross-platform proxy management desktop application based on Tauri 2 + MiHomo.
 
