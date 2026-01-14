@@ -163,11 +163,11 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     log::info!("Detected system proxy status: {}", current_system_proxy);
 
     // 检查 mihomo 是否运行
-    let mut is_running = mihomo_manager.is_running().await;
+    let is_running = mihomo_manager.is_running().await;
 
     // Windows: 检查服务状态
     #[cfg(target_os = "windows")]
-    {
+    let is_running = {
         use crate::system::WinServiceManager;
 
         // 优化：只检查服务是否运行，不查询 mihomo 状态（节省一次 HTTP 请求）
@@ -180,16 +180,20 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
             match mihomo_manager.start().await {
                 Ok(_) => {
                     log::info!("Mihomo started via service successfully");
-                    is_running = true;
+                    true
                 }
                 Err(e) => {
                     log::error!("Failed to start mihomo via service: {}", e);
+                    is_running
                 }
             }
-        } else if service_running {
-            log::info!("Service and mihomo are both running");
+        } else {
+            if service_running {
+                log::info!("Service and mihomo are both running");
+            }
+            is_running
         }
-    }
+    };
 
     // 如果配置发生变更（如密钥更新）且 Mihomo 正在运行，需要重启以应用新配置
     // 否则 API 调用会因认证失败而报错

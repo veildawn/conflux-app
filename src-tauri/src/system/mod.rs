@@ -75,9 +75,3 @@ pub fn is_running_as_admin() -> bool {
         result != 0 && elevation.token_is_elevated != 0
     }
 }
-
-/// 非 Windows 平台始终返回 false
-#[cfg(not(target_os = "windows"))]
-pub fn is_running_as_admin() -> bool {
-    false
-}

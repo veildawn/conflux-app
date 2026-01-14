@@ -210,7 +210,7 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
 }
 
 /// 检测当前运行模式
-async fn detect_run_mode(running: bool, _enhanced_mode: bool) -> crate::models::RunMode {
+async fn detect_run_mode(running: bool, enhanced_mode: bool) -> crate::models::RunMode {
     use crate::models::RunMode;
 
     if !running {
@@ -244,12 +244,15 @@ async fn detect_run_mode(running: bool, _enhanced_mode: bool) -> crate::models::
 
     #[cfg(target_os = "macos")]
     {
-        // macOS: 检查是否有 root 权限
-        if unsafe { libc::geteuid() } == 0 {
-            log::debug!("detect_run_mode: ElevatedMac (running as root)");
-            return RunMode::ElevatedMac;
+        // macOS: 当启用增强模式且 TUN 权限已设置时，视为提权模式
+        if enhanced_mode {
+            let has_permission = crate::system::TunPermission::check_permission().unwrap_or(false);
+            if has_permission {
+                log::debug!("detect_run_mode: ElevatedMac (TUN permission set)");
+                return RunMode::ElevatedMac;
+            }
         }
-        return RunMode::Normal;
+        RunMode::Normal
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
