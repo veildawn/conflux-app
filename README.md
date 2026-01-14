@@ -1,4 +1,4 @@
-# Conflux 汇流
+# Conflux
 
 <p align="center">
   <img src="https://img.shields.io/github/v/release/veildawn/conflux-app?style=for-the-badge&logo=github&color=007AFF" alt="release">
@@ -8,36 +8,38 @@
   <img src="https://img.shields.io/github/license/veildawn/conflux-app?style=for-the-badge&color=orange" alt="license">
 </p>
 
-基于 Tauri 2 + MiHomo 的现代化跨平台代理管理桌面应用。
+[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
+
+A modern cross-platform proxy management desktop application based on Tauri 2 + MiHomo.
 
 <p align="center">
-  <img src="src-tauri/icons/icon.png" width="128" height="128" alt="Conflux 汇流">
+  <img src="src-tauri/icons/icon.png" width="128" height="128" alt="Conflux">
 </p>
 
 <p align="center">
-  <a href="https://conflux.veildawn.com/">官网</a> •
-  <a href="https://github.com/veildawn/conflux-app/releases">下载</a> •
-  <a href="docs/USER_GUIDE.md">文档</a>
+  <a href="https://conflux.veildawn.com/">Website</a> •
+  <a href="https://github.com/veildawn/conflux-app/releases">Download</a> •
+  <a href="docs/USER_GUIDE.md">Docs</a>
 </p>
 
-## 合规与使用声明
+## Compliance and Usage Statement
 
-- 本项目仅面向合法合规场景（如网络调试、内部安全访问、教育与研究）。严禁用于任何违反中华人民共和国法律法规、监管政策或平台条款的用途，包括但不限于规避监管、侵害他人权益或传播违法信息。
-- 软件不提供任何网络接入、代理节点、规则订阅等服务，相关配置、数据来源均由用户自行提供与审核，务必确保合法合规。
-- 使用者应自行遵守所在地法律法规并承担全部风险与后果；因违规使用所产生的任何法律或经济责任由用户自负，项目作者及贡献者不承担任何责任。
-- 如不同意上述条款，请立即停止安装与使用。
+- This project is intended solely for legal and compliant scenarios (such as network debugging, internal secure access, education, and research). It is strictly prohibited to use it for any purpose that violates the laws, regulations, international conventions, or platform terms of your location, including but not limited to illegally bypassing regulations, infringing on the rights of others, or disseminating illegal information.
+- The software does not provide any network access, proxy nodes, rule subscriptions, or other services. All configurations and data sources must be provided and audited by the user, ensuring full compliance.
+- Users are solely responsible for complying with local laws and regulations and assume all risks and consequences. The project authors and contributors are not liable for any legal or economic responsibilities arising from improper use.
+- If you do not agree to the above terms, please stop installing and using this software immediately.
 
-## 特性
+## Features
 
-- 🚀 **高性能** - Rust + Tauri 2，启动快速，资源占用低
-- 🎨 **现代化 UI** - React + Tailwind CSS，界面美观流畅
-- 📊 **实时监控** - 流量统计、连接管理、速度测试
-- 🎯 **灵活规则** - 强大的规则管理，支持拖拽排序
-- 📦 **订阅管理** - 远程订阅、本地导入、自动更新
-- 🏪 **Sub-Store** - 内置高级订阅管理工具
-- 🔧 **TUN 模式** - 虚拟网卡全局代理
+- 🚀 **High Performance** - Rust + Tauri 2, fast startup, low resource usage
+- 🎨 **Modern UI** - React + Tailwind CSS, beautiful and smooth interface
+- 📊 **Real-time Monitoring** - Traffic statistics, connection management, speed testing
+- 🎯 **Flexible Rules** - Powerful rule management, supports drag-and-drop sorting
+- 📦 **Subscription Management** - Remote subscriptions, local imports, auto-updates
+- 🏪 **Sub-Store** - Built-in advanced subscription management tool
+- 🔧 **TUN Mode** - Virtual network card for global proxy
 
-## 安装
+## Installation
 
 ### Homebrew (macOS)
 
@@ -46,46 +48,46 @@ brew tap veildawn/cask
 brew install --cask conflux
 ```
 
-### 手动下载
+### Manual Download
 
-前往 [Releases](https://github.com/veildawn/conflux-app/releases) 下载对应平台安装包。
+Visit [Releases](https://github.com/veildawn/conflux-app/releases) to download the installer for your platform.
 
-| 平台    | 格式            |
-| ------- | --------------- |
-| macOS   | `.dmg`          |
-| Windows | `.msi` / `.exe` |
+| Platform | Format          |
+| -------- | --------------- |
+| macOS    | `.dmg`          |
+| Windows  | `.msi` / `.exe` |
 
-## 开发
+## Development
 
 ```bash
-# 安装依赖
+# Install dependencies
 pnpm install
 
-# 下载外部依赖 (MiHomo, Sub-Store, Node.js)
+# Download external dependencies (MiHomo, Sub-Store, Node.js)
 pnpm run fetch:all
 
-# 开发模式
+# Development mode
 pnpm tauri dev
 
-# 构建应用
+# Build application
 pnpm tauri build
 ```
 
-> 环境要求：Node.js >= 18, pnpm >= 8, Rust >= 1.77
+> Requirements: Node.js >= 18, pnpm >= 8, Rust >= 1.77
 >
-> 系统依赖参考 [Tauri 前置要求](https://v2.tauri.app/start/prerequisites/)
+> System dependencies: see [Tauri Prerequisites](https://v2.tauri.app/start/prerequisites/)
 
-## 文档
+## Documentation
 
-- [📖 用户使用手册](docs/USER_GUIDE.md)
-- [🔧 MiHomo API 文档](docs/MIHOMO_API.md)
+- [📖 User Guide](docs/USER_GUIDE.md)
+- [🔧 MiHomo API Docs](docs/MIHOMO_API.md)
 
-## 许可证
+## License
 
 [GPL-3.0 License](LICENSE)
 
-## 致谢
+## Acknowledgements
 
-- [Tauri](https://tauri.app/) - 跨平台桌面应用框架
-- [MiHomo](https://github.com/MetaCubeX/mihomo) - 代理核心
-- [Sub-Store](https://github.com/sub-store-org/Sub-Store) - 订阅管理
+- [Tauri](https://tauri.app/) - Cross-platform desktop application framework
+- [MiHomo](https://github.com/MetaCubeX/mihomo) - Proxy core
+- [Sub-Store](https://github.com/sub-store-org/Sub-Store) - Subscription management
