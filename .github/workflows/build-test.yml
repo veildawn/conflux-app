@@ -71,6 +71,14 @@ jobs:
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
 
+      - name: Build macOS TUN Helper
+        run: |
+          echo "Building macOS TUN helper..."
+          cd src-tauri/helper
+          cargo build --release
+          cp target/release/conflux-helper ../binaries/helper-aarch64-apple-darwin
+          echo "✅ macOS helper built successfully"
+
       - name: Cache Node.js binaries
         id: cache-node
         uses: actions/cache@v4
@@ -201,6 +209,14 @@ jobs:
         run: |
           chmod +x scripts/fetch-mihomo.sh
           ./scripts/fetch-mihomo.sh
+
+      - name: Build macOS TUN Helper
+        run: |
+          echo "Building macOS TUN helper..."
+          cd src-tauri/helper
+          cargo build --release
+          cp target/release/conflux-helper ../binaries/helper-x86_64-apple-darwin
+          echo "✅ macOS helper built successfully"
 
       - name: Cache Node.js binaries
         id: cache-node

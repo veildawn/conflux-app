@@ -55,5 +55,11 @@ coverage/
 
 # Tauri build artifacts
 src-tauri/service/target
+src-tauri/helper/target
 src-tauri/gen
 src-tauri/gen/schemas
+
+# Sub-store data files
+root.json
+sub-store.json
+stop

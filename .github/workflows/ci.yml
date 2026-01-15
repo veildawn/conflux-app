@@ -68,6 +68,10 @@ jobs:
         working-directory: src-tauri/service
         run: cargo fmt --all 2>/dev/null || true
 
+      - name: Format helper code (if exists)
+        working-directory: src-tauri/helper
+        run: cargo fmt --all 2>/dev/null || true
+
       - name: Check for changes
         id: changes
         run: |
@@ -210,6 +214,16 @@ jobs:
             exit 1
           }
           Write-Host "✅ Windows service built successfully"
+
+      - name: Build macOS TUN Helper
+        if: runner.os == 'macOS'
+        run: |
+          echo "Building macOS TUN helper..."
+          cd src-tauri/helper
+          cargo build --release
+          HELPER_NAME="helper-${{ matrix.target }}"
+          cp target/release/conflux-helper "../binaries/${HELPER_NAME}"
+          echo "✅ macOS helper built: ${HELPER_NAME}"
 
       - name: Cache Node.js binaries
         id: cache-node

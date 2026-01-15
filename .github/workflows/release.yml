@@ -99,6 +99,15 @@ jobs:
           fi
           echo "✅ mihomo-aarch64-apple-darwin verified: $FILE_SIZE bytes"
 
+      - name: Build macOS TUN Helper
+        run: |
+          echo "Building macOS TUN helper..."
+          cd src-tauri/helper
+          cargo build --release
+          cp target/release/conflux-helper ../binaries/helper-aarch64-apple-darwin
+          echo "✅ macOS helper built successfully"
+          ls -lh ../binaries/helper-*
+
       - name: Cache Node.js binaries
         id: cache-node
         uses: actions/cache@v4
@@ -281,6 +290,15 @@ jobs:
             exit 1
           fi
           echo "✅ mihomo-x86_64-apple-darwin verified: $FILE_SIZE bytes"
+
+      - name: Build macOS TUN Helper
+        run: |
+          echo "Building macOS TUN helper..."
+          cd src-tauri/helper
+          cargo build --release
+          cp target/release/conflux-helper ../binaries/helper-x86_64-apple-darwin
+          echo "✅ macOS helper built successfully"
+          ls -lh ../binaries/helper-*
 
       - name: Cache Node.js binaries
         id: cache-node

@@ -39,7 +39,7 @@
       "icons/icon.ico"
     ],
     "resources": ["resources/sub-store"],
-    "externalBin": ["binaries/node", "binaries/mihomo"],
+    "externalBin": ["binaries/node", "binaries/mihomo", "binaries/helper"],
     "category": "Utility",
     "shortDescription": "汇流 - 现代化代理管理桌面应用",
     "longDescription": "Conflux 汇流是一个基于 Tauri 2 + MiHomo 的现代化跨平台代理管理桌面应用",

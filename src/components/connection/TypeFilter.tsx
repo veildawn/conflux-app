@@ -16,12 +16,12 @@ const filterOptions: { value: ConnectionTypeFilter; label: string }[] = [
 
 export function TypeFilter({ value, onChange }: TypeFilterProps) {
   return (
-    <div className="flex items-center gap-1.5">
-      <Filter className="w-3.5 h-3.5 text-gray-400" />
+    <div className="relative">
+      <Filter className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
       <select
         value={value}
         onChange={(e) => onChange(e.target.value as ConnectionTypeFilter)}
-        className="h-7 text-xs bg-gray-50/50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700 rounded-md px-2 pr-6 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer appearance-none"
+        className="h-8 text-xs bg-gray-50/50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700 rounded-md pl-8 pr-8 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer appearance-none min-w-[90px]"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%239CA3AF'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E%3C/svg%3E")`,
           backgroundPosition: 'right 4px center',

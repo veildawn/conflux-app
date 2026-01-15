@@ -138,28 +138,34 @@ export function ConnectionRow({
               <div className="flex items-center gap-1 overflow-hidden">
                 {c.chains.length > 0 ? (
                   enableKeywordFilter ? (
-                    c.chains
-                      .slice()
-                      .reverse()
-                      .map((ch, i) => (
+                    c.chains.map((ch, i) => {
+                      const translated = ch === 'DIRECT' ? '直连' : ch === 'REJECT' ? '拒绝' : ch;
+                      return (
                         <div key={i} className="flex items-center">
-                          {i > 0 && <span className="text-gray-300 mx-1">←</span>}
+                          {i > 0 && <span className="text-gray-300 mx-1">→</span>}
                           <button
                             type="button"
                             className={cn('truncate max-w-[150px]', clickableClass)}
                             onClick={() => handleKeywordClick(ch)}
                             title="点击筛选此节点"
                           >
-                            <TextWithFlag text={ch} />
+                            <TextWithFlag text={translated} />
                           </button>
                         </div>
-                      ))
+                      );
+                    })
                   ) : (
                     <span
                       className="truncate max-w-[300px]"
-                      title={c.chains.slice().reverse().join(' ← ')}
+                      title={c.chains
+                        .map((x) => (x === 'DIRECT' ? '直连' : x === 'REJECT' ? '拒绝' : x))
+                        .join(' → ')}
                     >
-                      <TextWithFlag text={c.chains.slice().reverse().join(' ← ')} />
+                      <TextWithFlag
+                        text={c.chains
+                          .map((x) => (x === 'DIRECT' ? '直连' : x === 'REJECT' ? '拒绝' : x))
+                          .join(' → ')}
+                      />
                     </span>
                   )
                 ) : (

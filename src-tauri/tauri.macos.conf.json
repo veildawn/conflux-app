@@ -22,7 +22,7 @@
   "bundle": {
     "targets": ["dmg"],
     "resources": ["resources/sub-store"],
-    "externalBin": ["binaries/node", "binaries/mihomo"],
+    "externalBin": ["binaries/node", "binaries/mihomo", "binaries/helper"],
     "macOS": {
       "minimumSystemVersion": "10.15",
       "frameworks": [],
