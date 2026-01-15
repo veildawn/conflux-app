@@ -510,8 +510,17 @@ impl MihomoManager {
         }
 
         // 确保 mihomo 二进制在数据目录（从 sidecar 或开发环境复制）
-        let mihomo_path = ensure_mihomo_in_data_dir()?;
+        let mihomo_path = ensure_mihomo_in_data_dir().map_err(|e| {
+            log::error!("Failed to ensure mihomo binary: {}", e);
+            anyhow::anyhow!("无法找到 MiHomo 核心文件: {}", e)
+        })?;
         log::info!("Using MiHomo binary at: {:?}", mihomo_path);
+
+        // 验证二进制文件存在
+        if !mihomo_path.exists() {
+            log::error!("MiHomo binary not found at: {:?}", mihomo_path);
+            return Err(anyhow::anyhow!("MiHomo 核心文件不存在: {:?}", mihomo_path));
+        }
 
         let config_dir = self.config_path.parent().unwrap();
         let config_dir_str = config_dir.to_string_lossy().to_string();
