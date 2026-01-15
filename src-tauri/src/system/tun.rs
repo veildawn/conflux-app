@@ -37,7 +37,7 @@ impl TunPermission {
         // 检查 helper 是否具有 setuid root 权限
         let has_permission = is_setuid_root(&helper_path)?;
 
-        log::info!(
+        log::debug!(
             "TUN permission check: helper={:?}, has_permission={}",
             helper_path,
             has_permission
