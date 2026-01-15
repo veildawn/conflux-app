@@ -96,6 +96,7 @@ pub fn get_mihomo_binary_name() -> &'static str {
 /// 2. Sidecar 路径 - Tauri externalBin 打包后的位置
 /// 3. 开发环境路径 - 支持 `cargo run` 和 `pnpm tauri dev`
 #[cfg(not(target_os = "windows"))]
+#[allow(dead_code)]
 pub fn get_mihomo_binary_path() -> Result<PathBuf> {
     let binary_name = get_mihomo_binary_name();
     log::debug!("Looking for MiHomo binary: {}", binary_name);
@@ -342,6 +343,7 @@ fn hash_file(path: &PathBuf) -> Result<u64> {
 
 /// 记录所有尝试过的路径（用于调试）
 #[cfg(not(target_os = "windows"))]
+#[allow(dead_code)]
 fn log_search_paths(binary_name: &str) -> Result<()> {
     let data_dir = get_app_data_dir()?;
     let current_exe = std::env::current_exe()?;
@@ -402,6 +404,7 @@ pub fn get_helper_binary_name() -> &'static str {
 /// 2. Sidecar 路径 - Tauri externalBin 打包后的位置
 /// 3. 开发环境路径 - 支持 `cargo run` 和 `pnpm tauri dev`
 #[cfg(target_os = "macos")]
+#[allow(dead_code)]
 pub fn get_helper_binary_path() -> Result<PathBuf> {
     let binary_name = get_helper_binary_name();
     log::debug!("Looking for Helper binary: {}", binary_name);
