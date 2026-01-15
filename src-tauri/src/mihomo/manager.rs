@@ -681,7 +681,18 @@ impl MihomoManager {
             (Some(child), false)
         };
 
-        // 非 Windows 平台：处理 PID 保存
+        // 保存 PID 到文件（所有平台通用）
+        // Windows 普通模式：保存 Child 的 PID
+        // macOS/Linux 普通模式：保存 Child 的 PID
+        // macOS TUN 模式：PID 由 helper 管理，child 为 None
+        #[cfg(windows)]
+        {
+            let pid = child.id();
+            log::info!("MiHomo spawned with PID: {}", pid);
+            if let Err(e) = self.save_pid(pid) {
+                log::warn!("Failed to save PID file: {}", e);
+            }
+        }
         #[cfg(not(windows))]
         {
             if let Some(ref child) = child {
