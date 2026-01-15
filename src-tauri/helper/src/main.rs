@@ -181,7 +181,10 @@ fn handle_kill(args: &[String]) {
         }
 
         // Process still running after SIGKILL, report failure
-        eprintln!("Failed to kill process {}: still running after SIGKILL", pid);
+        eprintln!(
+            "Failed to kill process {}: still running after SIGKILL",
+            pid
+        );
         std::process::exit(1);
     }
 }
