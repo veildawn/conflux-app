@@ -760,7 +760,7 @@ export default function Home() {
                   >
                     {status.run_mode === 'service' && '服务模式'}
                     {status.run_mode === 'admin_win' && '管理员模式'}
-                    {status.run_mode === 'elevated_mac' && 'Mac提权'}
+                    {status.run_mode === 'helper_mac' && '助手模式'}
                   </div>
                 )}
                 {/* 运行状态标签 */}

@@ -14,9 +14,9 @@ pub enum RunMode {
     /// Windows 管理员模式（以管理员权限运行的应用）
     #[serde(rename = "admin_win")]
     AdminWin,
-    /// macOS 提权模式
-    #[serde(rename = "elevated_mac")]
-    ElevatedMac,
+    /// macOS 助手模式
+    #[serde(rename = "helper_mac")]
+    HelperMac,
 }
 
 impl Default for RunMode {

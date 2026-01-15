@@ -248,8 +248,8 @@ async fn detect_run_mode(running: bool, enhanced_mode: bool) -> crate::models::R
         if enhanced_mode {
             let has_permission = crate::system::TunPermission::check_permission().unwrap_or(false);
             if has_permission {
-                log::debug!("detect_run_mode: ElevatedMac (TUN permission set)");
-                return RunMode::ElevatedMac;
+                log::debug!("detect_run_mode: HelperMac (TUN permission set)");
+                return RunMode::HelperMac;
             }
         }
         RunMode::Normal
