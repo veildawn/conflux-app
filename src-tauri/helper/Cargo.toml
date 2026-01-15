@@ -1,0 +1,18 @@
+[package]
+name = "conflux-helper"
+version = "0.1.0"
+edition = "2021"
+description = "Conflux TUN Helper - Manages mihomo with elevated privileges on macOS"
+license = "GPL-3.0-only"
+
+[[bin]]
+name = "conflux-helper"
+path = "src/main.rs"
+
+[dependencies]
+libc = "0.2"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true

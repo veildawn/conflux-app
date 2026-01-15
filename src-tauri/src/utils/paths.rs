@@ -148,21 +148,15 @@ pub fn ensure_mihomo_in_data_dir() -> Result<PathBuf> {
     if user_binary_path.exists() {
         if let Some(ref source_path) = source_path {
             if should_refresh_binary(source_path, &user_binary_path)? {
-                // 如果用户已经通过 TUN 授权把 mihomo 设为 root-owned + setuid，
-                // 普通用户进程将无法覆盖该文件（EPERM）。这种情况下跳过刷新即可。
+                // 兼容旧版本：如果文件被设为 root-owned，普通用户进程将无法覆盖（EPERM）
                 if let Err(e) = std::fs::copy(source_path, &user_binary_path) {
                     if e.kind() == std::io::ErrorKind::PermissionDenied {
-                        log::warn!(
-                            "MiHomo in data dir is not writable (likely root-owned for TUN), skip refresh: {}",
-                            e
-                        );
+                        log::warn!("MiHomo in data dir is not writable, skip refresh: {}", e);
                     } else {
                         return Err(e.into());
                     }
                 } else {
-                    // 规范化执行权限 (macOS/Linux)：
-                    // - 统一设置为 755
-                    // - 清除潜在的 setuid/setgid 位，避免后续产生 root-owned 文件导致“无权限覆盖”
+                    // 规范化执行权限 (macOS/Linux)：统一设置为 755
                     #[cfg(unix)]
                     normalize_mihomo_permissions(&user_binary_path)?;
                     log::info!("Refreshed MiHomo in data dir from {:?}", source_path);
@@ -198,14 +192,10 @@ fn normalize_mihomo_permissions(path: &PathBuf) -> Result<()> {
     let current_mode = metadata.permissions().mode();
     let mut permissions = metadata.permissions();
     // 统一确保可执行权限为 755 (rwxr-xr-x)
-    //
-    // 注意：macOS legacy TUN 模式依赖 setuid(root)，这里需要保留 special bits，
-    // 否则应用启动时会把 setuid 清掉导致 TUN 无法启用。
-    let special_bits = current_mode & 0o7000;
-    permissions.set_mode(0o755 | special_bits);
+    // 清除任何特殊位（setuid/setgid/sticky）
+    permissions.set_mode(0o755);
     if let Err(e) = std::fs::set_permissions(path, permissions) {
-        // 如果 mihomo 已经被设置为 root-owned（TUN legacy 方案），普通用户无法再 chmod。
-        // 这不应阻塞应用启动：直接跳过即可。
+        // 兼容旧版本：如果文件是 root-owned，普通用户无法 chmod，跳过即可
         if e.kind() == std::io::ErrorKind::PermissionDenied {
             log::debug!(
                 "Skip normalizing MiHomo permissions for {:?} due to PermissionDenied: {}",
@@ -220,7 +210,7 @@ fn normalize_mihomo_permissions(path: &PathBuf) -> Result<()> {
         "Normalized MiHomo permissions for {:?} (mode {:o} -> {:o})",
         path,
         current_mode,
-        0o755 | special_bits
+        0o755
     );
     Ok(())
 }
@@ -382,6 +372,232 @@ fn log_search_paths(binary_name: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+// ============================================================================
+// macOS Helper 二进制文件路径
+// ============================================================================
+
+/// 获取 Helper 二进制文件名（根据当前平台和架构）
+#[cfg(target_os = "macos")]
+pub fn get_helper_binary_name() -> &'static str {
+    #[cfg(target_arch = "aarch64")]
+    {
+        "helper-aarch64-apple-darwin"
+    }
+    #[cfg(target_arch = "x86_64")]
+    {
+        "helper-x86_64-apple-darwin"
+    }
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+    {
+        compile_error!("Unsupported macOS architecture")
+    }
+}
+
+/// 获取 Helper 二进制文件的完整路径
+///
+/// 查找优先级：
+/// 1. 用户数据目录 - 权限设置后的位置
+/// 2. Sidecar 路径 - Tauri externalBin 打包后的位置
+/// 3. 开发环境路径 - 支持 `cargo run` 和 `pnpm tauri dev`
+#[cfg(target_os = "macos")]
+pub fn get_helper_binary_path() -> Result<PathBuf> {
+    let binary_name = get_helper_binary_name();
+    log::debug!("Looking for Helper binary: {}", binary_name);
+
+    // 首先检查用户数据目录（权限设置后的位置）
+    let data_dir = get_app_data_dir()?;
+    let user_binary_path = data_dir.join(binary_name);
+    if user_binary_path.exists() {
+        log::debug!("Found Helper at user data path: {:?}", user_binary_path);
+        return Ok(user_binary_path);
+    }
+
+    // Sidecar 路径
+    if let Some(sidecar_path) = find_helper_sidecar_binary(binary_name)? {
+        log::debug!("Found Helper at sidecar path: {:?}", sidecar_path);
+        return Ok(sidecar_path);
+    }
+
+    // 开发环境路径
+    if let Some(dev_path) = find_helper_dev_binary(binary_name)? {
+        log::debug!("Found Helper at dev path: {:?}", dev_path);
+        return Ok(dev_path);
+    }
+
+    Err(anyhow::anyhow!("Helper binary not found: {}", binary_name))
+}
+
+/// 确保 Helper 二进制在用户数据目录，用于权限设置
+#[cfg(target_os = "macos")]
+pub fn ensure_helper_in_data_dir() -> Result<PathBuf> {
+    let binary_name = get_helper_binary_name();
+    let data_dir = get_app_data_dir()?;
+    let user_binary_path = data_dir.join(binary_name);
+
+    // 如果已存在且有 setuid 权限，不覆盖
+    if user_binary_path.exists() {
+        if is_setuid_root(&user_binary_path)? {
+            log::debug!(
+                "Helper already exists with setuid, skipping copy: {:?}",
+                user_binary_path
+            );
+            return Ok(user_binary_path);
+        }
+    }
+
+    // 查找源文件
+    let sidecar_path = find_helper_sidecar_binary(binary_name)?;
+    let dev_path = find_helper_dev_binary(binary_name)?;
+    let source_path = sidecar_path.or(dev_path);
+
+    if let Some(source_path) = source_path {
+        // 如果目标文件存在但不是 setuid，检查是否需要更新
+        if user_binary_path.exists() {
+            if should_refresh_binary(&source_path, &user_binary_path)? {
+                std::fs::copy(&source_path, &user_binary_path)?;
+                log::info!("Refreshed Helper from {:?}", source_path);
+            }
+        } else {
+            std::fs::copy(&source_path, &user_binary_path)?;
+            log::info!("Copied Helper to data dir from {:?}", source_path);
+        }
+
+        // 设置可执行权限
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&user_binary_path)?.permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&user_binary_path, perms)?;
+        }
+
+        return Ok(user_binary_path);
+    }
+
+    if user_binary_path.exists() {
+        return Ok(user_binary_path);
+    }
+
+    Err(anyhow::anyhow!(
+        "Helper binary not found for initialization"
+    ))
+}
+
+/// 检查文件是否为 root 所有且设置了 setuid 位
+#[cfg(target_os = "macos")]
+pub fn is_setuid_root(path: &PathBuf) -> Result<bool> {
+    use std::os::unix::fs::MetadataExt;
+
+    let metadata = std::fs::metadata(path)?;
+
+    // 检查所有者是否为 root (uid 0)
+    let is_root_owned = metadata.uid() == 0;
+
+    // 检查是否设置了 setuid 位 (0o4000)
+    let has_setuid = (metadata.mode() & 0o4000) != 0;
+
+    log::debug!(
+        "Permission check for {:?}: uid={}, mode={:o}, is_root={}, has_setuid={}",
+        path,
+        metadata.uid(),
+        metadata.mode(),
+        is_root_owned,
+        has_setuid
+    );
+
+    Ok(is_root_owned && has_setuid)
+}
+
+/// 查找 Helper Sidecar 二进制文件路径
+#[cfg(target_os = "macos")]
+fn find_helper_sidecar_binary(binary_name: &str) -> Result<Option<PathBuf>> {
+    let current_exe = std::env::current_exe()?;
+    let exe_dir = current_exe
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Cannot get executable directory"))?;
+
+    // 尝试多种可能的文件名
+    let candidates = vec![exe_dir.join("helper"), exe_dir.join(binary_name)];
+
+    for path in candidates {
+        if path.exists() {
+            return Ok(Some(path));
+        }
+    }
+
+    // macOS: 检查 .app bundle 内的 Resources 目录
+    if let Some(contents_dir) = exe_dir.parent() {
+        let resources_dir = contents_dir.join("Resources");
+        let resource_candidates = vec![
+            resources_dir.join("helper"),
+            resources_dir.join(binary_name),
+        ];
+        for path in resource_candidates {
+            if path.exists() {
+                return Ok(Some(path));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+/// 查找 Helper 开发环境二进制文件路径
+#[cfg(target_os = "macos")]
+fn find_helper_dev_binary(binary_name: &str) -> Result<Option<PathBuf>> {
+    let current_exe = std::env::current_exe()?;
+    let exe_dir = current_exe
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Cannot get executable directory"))?;
+
+    // 开发环境路径：从 target/debug 往上找到 src-tauri/binaries 或 helper/target/debug
+    if let Some(target_dir) = exe_dir.parent() {
+        let src_tauri_candidates = [
+            target_dir.parent(),
+            target_dir.parent().and_then(|p| p.parent()),
+        ];
+
+        for src_tauri in src_tauri_candidates.into_iter().flatten() {
+            // 检查 binaries 目录
+            let binaries_path = src_tauri.join("binaries").join(binary_name);
+            if binaries_path.exists() {
+                return Ok(Some(binaries_path));
+            }
+
+            // 检查 helper/target/debug 目录（开发时编译的位置）
+            let helper_debug_path = src_tauri.join("helper/target/debug/conflux-helper");
+            if helper_debug_path.exists() {
+                return Ok(Some(helper_debug_path));
+            }
+        }
+    }
+
+    // 从当前工作目录查找
+    if let Ok(cwd) = std::env::current_dir() {
+        let cwd_binaries_path = cwd.join("src-tauri/binaries").join(binary_name);
+        if cwd_binaries_path.exists() {
+            return Ok(Some(cwd_binaries_path));
+        }
+
+        let cwd_helper_debug = cwd.join("src-tauri/helper/target/debug/conflux-helper");
+        if cwd_helper_debug.exists() {
+            return Ok(Some(cwd_helper_debug));
+        }
+    }
+
+    Ok(None)
+}
+
+/// TUN 模式 PID 文件路径（由 helper 管理）
+#[cfg(target_os = "macos")]
+pub const HELPER_PID_FILE: &str = "/tmp/conflux-mihomo-tun.pid";
+
+/// 检查是否存在 helper 管理的 TUN 模式进程
+#[cfg(target_os = "macos")]
+pub fn has_helper_pid_file() -> bool {
+    std::path::Path::new(HELPER_PID_FILE).exists()
 }
 
 // ============================================================================

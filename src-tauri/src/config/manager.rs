@@ -362,12 +362,12 @@ impl ConfigManager {
 
         tun.enable = enabled;
         if enabled {
-            // macOS legacy(setuid) TUN 模式下，禁止核心自动下载 GEO 数据，
-            // 由应用负责下载并触发 reload，避免 root 自动写入导致权限问题。
+            // macOS TUN 模式下，禁止核心自动下载 GEO 数据，
+            // 由应用负责下载并触发 reload，避免 root 进程自动写入导致权限问题。
             #[cfg(target_os = "macos")]
             {
                 if config.geo_auto_update {
-                    log::warn!("Disabling geo-auto-update for macOS TUN legacy mode");
+                    log::warn!("Disabling geo-auto-update for macOS TUN mode");
                 }
                 config.geo_auto_update = false;
             }

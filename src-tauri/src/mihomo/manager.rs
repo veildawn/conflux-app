@@ -10,7 +10,7 @@ use tokio::time::{sleep, Duration};
 use crate::utils::{ensure_mihomo_in_data_dir, get_app_data_dir, get_mihomo_config_path};
 
 /// 检查配置文件中 TUN 模式是否启用
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn is_tun_enabled() -> bool {
     let config_path = match get_mihomo_config_path() {
         Ok(p) => p,
@@ -227,10 +227,62 @@ impl MihomoManager {
         }
     }
 
-    /// 判断 PID 是否存在
+    /// 通过 helper 以 root 权限杀死进程 (仅 macOS)
+    #[cfg(target_os = "macos")]
+    fn kill_process_via_helper(pid: u32) {
+        use crate::utils::ensure_helper_in_data_dir;
+
+        match ensure_helper_in_data_dir() {
+            Ok(helper_path) => {
+                let output = Command::new(&helper_path)
+                    .args(["kill", &pid.to_string()])
+                    .output();
+
+                match output {
+                    Ok(out) if out.status.success() => {
+                        log::info!("Helper killed process {} successfully", pid);
+                    }
+                    Ok(out) => {
+                        let stderr = String::from_utf8_lossy(&out.stderr);
+                        log::warn!(
+                            "Helper kill returned non-zero for PID {}: {}",
+                            pid,
+                            stderr.trim()
+                        );
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to run helper kill for PID {}: {}", pid, e);
+                    }
+                }
+            }
+            Err(e) => {
+                log::warn!(
+                    "Helper not available, cannot kill PID {} via helper: {}",
+                    pid,
+                    e
+                );
+            }
+        }
+    }
+
+    /// 判断 PID 是否存在（真正运行中，不包括僵尸进程）
     fn is_pid_running(pid: u32) -> bool {
         #[cfg(unix)]
         {
+            // 先尝试 waitpid 回收可能的僵尸进程
+            // WNOHANG: 非阻塞，如果子进程还没退出就立即返回 0
+            let wait_result =
+                unsafe { libc::waitpid(pid as i32, std::ptr::null_mut(), libc::WNOHANG) };
+
+            if wait_result == pid as i32 {
+                // waitpid 返回 pid，说明成功回收了僵尸进程，进程已停止
+                log::debug!("Reaped zombie process {}", pid);
+                return false;
+            }
+            // wait_result == 0: 子进程还在运行
+            // wait_result == -1: 不是我们的子进程或已被回收
+
+            // 使用 kill(pid, 0) 检查进程是否存在
             return unsafe { libc::kill(pid as i32, 0) == 0 };
         }
         #[cfg(windows)]
@@ -554,27 +606,109 @@ impl MihomoManager {
             }
         };
 
+        // macOS: 根据 TUN 模式决定启动方式
+        #[cfg(target_os = "macos")]
+        let (child, started_via_helper) = {
+            use crate::utils::{ensure_helper_in_data_dir, HELPER_PID_FILE};
+
+            let tun_enabled = is_tun_enabled();
+            log::info!("macOS start check: tun_enabled={}", tun_enabled);
+
+            // 清理可能残留的 helper PID 文件
+            let _ = fs::remove_file(HELPER_PID_FILE);
+
+            if tun_enabled {
+                // TUN 模式：通过 helper 启动
+                log::info!("Starting mihomo via helper for TUN mode...");
+
+                let helper_path = ensure_helper_in_data_dir()
+                    .map_err(|e| anyhow::anyhow!("Helper not found: {}", e))?;
+
+                let output = Command::new(&helper_path)
+                    .args([
+                        "start",
+                        &mihomo_path.to_string_lossy(),
+                        "-d",
+                        &config_dir_str,
+                        "-f",
+                        &config_path_str,
+                    ])
+                    .output()
+                    .map_err(|e| anyhow::anyhow!("Failed to run helper: {}", e))?;
+
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    return Err(anyhow::anyhow!("Helper failed to start mihomo: {}", stderr));
+                }
+
+                // Helper 输出 PID
+                let pid_str = String::from_utf8_lossy(&output.stdout);
+                let pid: u32 = pid_str
+                    .trim()
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("Invalid PID from helper: {}", pid_str))?;
+
+                log::info!("MiHomo started via helper with PID: {}", pid);
+
+                // 返回 None 表示没有 Child 句柄（进程由 helper 管理）
+                (None, true)
+            } else {
+                // 普通模式：直接启动
+                log::info!("Starting mihomo in normal mode...");
+                let child = Command::new(&mihomo_path)
+                    .current_dir(config_dir)
+                    .args(["-d", &config_dir_str, "-f", &config_path_str])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?;
+
+                (Some(child), false)
+            }
+        };
+
+        // Linux: 直接启动
+        #[cfg(target_os = "linux")]
+        let (child, started_via_helper) = {
+            let child = Command::new(&mihomo_path)
+                .current_dir(config_dir)
+                .args(["-d", &config_dir_str, "-f", &config_path_str])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?;
+
+            (Some(child), false)
+        };
+
+        // 非 Windows 平台：处理 PID 保存
         #[cfg(not(windows))]
-        let child = Command::new(&mihomo_path)
-            .current_dir(config_dir)
-            .args(["-d", &config_dir_str, "-f", &config_path_str])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?;
+        {
+            if let Some(ref child) = child {
+                let pid = child.id();
+                log::info!("MiHomo spawned with PID: {}", pid);
 
-        let pid = child.id();
-        log::info!("MiHomo spawned with PID: {}", pid);
-
-        // 保存 PID 到文件，以便下次启动时清理
-        if let Err(e) = self.save_pid(pid) {
-            log::warn!("Failed to save PID file: {}", e);
+                // 保存 PID 到文件，以便下次启动时清理
+                if let Err(e) = self.save_pid(pid) {
+                    log::warn!("Failed to save PID file: {}", e);
+                }
+            }
+            // TUN 模式的 PID 由 helper 管理，不需要在这里保存
+            let _ = started_via_helper; // 避免 unused 警告
         }
 
         // 优化：减少初始等待时间，从 500ms 降至 100ms
         sleep(Duration::from_millis(100)).await;
 
-        *process_guard = Some(child);
+        // 保存 Child 句柄（macOS TUN 模式下为 None，因为进程由 helper 管理）
+        #[cfg(windows)]
+        {
+            *process_guard = Some(child);
+        }
+        #[cfg(not(windows))]
+        {
+            *process_guard = child;
+        }
         drop(process_guard);
 
         // 优化：使用指数退避策略进行健康检查
@@ -635,7 +769,10 @@ impl MihomoManager {
 
     /// 停止 MiHomo 进程
     ///
-    /// 简化的停止逻辑：动态判断停止方式，不依赖任何状态标志
+    /// 停止逻辑根据当前运行状态选择方式：
+    /// - Windows: 检查 service 模式
+    /// - macOS: 检查 helper PID 文件判断是否为 TUN 模式
+    /// - 普通模式: 直接 kill
     pub async fn stop(&self) -> Result<()> {
         // Windows: 动态检测是否通过服务启动
         #[cfg(target_os = "windows")]
@@ -672,36 +809,154 @@ impl MihomoManager {
             }
         }
 
-        // 其他情况：直接停止进程
-        let mut process_guard = self.process.lock().await;
+        // macOS: 检查是否是 TUN 模式（通过 helper 启动）
+        #[cfg(target_os = "macos")]
+        {
+            use crate::utils::{ensure_helper_in_data_dir, has_helper_pid_file, HELPER_PID_FILE};
 
-        if let Some(mut child) = process_guard.take() {
+            if has_helper_pid_file() {
+                // 当前是 TUN 模式运行的 -> 通过 helper 停止
+                log::info!("Stopping TUN mode MiHomo via helper...");
+
+                // 先读取 PID 以便后续验证
+                let pid_before_stop: Option<u32> = fs::read_to_string(HELPER_PID_FILE)
+                    .ok()
+                    .and_then(|s| s.trim().parse().ok());
+
+                match ensure_helper_in_data_dir() {
+                    Ok(helper_path) => {
+                        let output = Command::new(&helper_path).arg("stop").output();
+
+                        match output {
+                            Ok(out) if out.status.success() => {
+                                log::info!("MiHomo stopped via helper");
+                            }
+                            Ok(out) => {
+                                let stderr = String::from_utf8_lossy(&out.stderr);
+                                log::warn!("Helper stop returned error: {}", stderr);
+                            }
+                            Err(e) => {
+                                log::warn!("Failed to run helper stop: {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!("Helper not found, cannot stop TUN mode: {}", e);
+                    }
+                }
+
+                // 等待并验证进程是否真的停止
+                if let Some(pid) = pid_before_stop {
+                    // 等待最多 2 秒
+                    for _ in 0..20 {
+                        if !Self::is_pid_running(pid) {
+                            log::info!("TUN mode MiHomo (PID: {}) confirmed stopped", pid);
+                            break;
+                        }
+                        sleep(Duration::from_millis(100)).await;
+                    }
+
+                    // 最终检查
+                    if Self::is_pid_running(pid) {
+                        log::error!(
+                            "TUN mode MiHomo (PID: {}) still running after helper stop",
+                            pid
+                        );
+                        // 不返回错误，继续清理
+                    }
+                }
+
+                // 确保 PID 文件被清理
+                let _ = fs::remove_file(HELPER_PID_FILE);
+
+                // 清理进程句柄
+                self.process.lock().await.take();
+                return Ok(());
+            }
+        }
+
+        // 普通模式：停止进程
+        // macOS: 直接使用 helper 以 root 权限终止（更可靠）
+        // 其他平台：使用 Child 句柄或 kill_process_by_pid
+        let mut process_guard = self.process.lock().await;
+        let child_opt = process_guard.take();
+        drop(process_guard);
+
+        if let Some(child) = child_opt {
             let pid = child.id();
             log::info!("Stopping MiHomo process (PID: {})", pid);
 
-            // 检查 PID 文件，确保没有残留进程
+            // 检查 PID 文件
             let pid_from_file = Self::load_pid();
+            let check_pid = pid_from_file.unwrap_or(pid);
 
-            // 使用进程句柄的 kill 方法
-            if let Err(e) = child.kill() {
-                log::warn!("Failed to kill MiHomo process: {}", e);
-                // 回退到直接通过 PID 杀死
+            // 终止进程
+            #[cfg(target_os = "macos")]
+            {
+                log::info!(
+                    "Using helper to kill process {} with elevated privileges",
+                    check_pid
+                );
+                Self::kill_process_via_helper(check_pid);
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                // 非 macOS: 使用 SIGTERM + SIGKILL
                 Self::kill_process_by_pid(pid);
             }
 
+            // 等待进程退出（最多 2 秒）
+            let mut stopped = false;
+            for i in 0..20 {
+                if !Self::is_pid_running(check_pid) {
+                    log::info!(
+                        "MiHomo process (PID: {}) confirmed stopped after {}ms",
+                        check_pid,
+                        i * 100
+                    );
+                    stopped = true;
+                    break;
+                }
+                sleep(Duration::from_millis(100)).await;
+            }
+
+            // 如果进程仍未停止，报错
+            if !stopped && Self::is_pid_running(check_pid) {
+                log::error!(
+                    "MiHomo PID {} is still running after stop attempt",
+                    check_pid
+                );
+                return Err(anyhow::anyhow!(
+                    "停止 MiHomo 失败：进程仍在运行 (PID: {})",
+                    check_pid
+                ));
+            }
+
+            // 检查 PID 文件中是否有不同的 PID 需要处理
             if let Some(real_pid) = pid_from_file {
                 if real_pid != pid && Self::is_pid_running(real_pid) {
                     log::info!(
-                        "Detected different PID in pid file (pid_file={}, child_pid={}), killing pid_file process...",
+                        "Detected different PID in pid file (pid_file={}, child_pid={}), killing...",
                         real_pid,
                         pid
                     );
+                    #[cfg(target_os = "macos")]
+                    Self::kill_process_via_helper(real_pid);
+                    #[cfg(not(target_os = "macos"))]
                     Self::kill_process_by_pid(real_pid);
+
+                    // 等待
+                    for _ in 0..10 {
+                        if !Self::is_pid_running(real_pid) {
+                            break;
+                        }
+                        sleep(Duration::from_millis(100)).await;
+                    }
                 }
-                // 关键：如果真实 PID 仍在运行，不要删除 pidfile，否则后续 restart/start 会误判。
+                // 最终检查
                 if Self::is_pid_running(real_pid) {
                     log::error!(
-                        "MiHomo real PID {} is still running after stop attempt; keeping PID file",
+                        "MiHomo real PID {} is still running after stop attempt",
                         real_pid
                     );
                     return Err(anyhow::anyhow!(
@@ -715,12 +970,23 @@ impl MihomoManager {
             log::info!("MiHomo stopped");
         } else if let Some(pid) = Self::load_pid() {
             log::info!("Stopping MiHomo process by PID file (PID: {})", pid);
+
+            // macOS: 使用 helper 终止
+            #[cfg(target_os = "macos")]
+            Self::kill_process_via_helper(pid);
+            // 非 macOS: 使用普通方式
+            #[cfg(not(target_os = "macos"))]
             Self::kill_process_by_pid(pid);
+
+            // 等待进程退出
+            for _ in 0..20 {
+                if !Self::is_pid_running(pid) {
+                    break;
+                }
+                sleep(Duration::from_millis(100)).await;
+            }
             if Self::is_pid_running(pid) {
-                log::error!(
-                    "MiHomo PID {} is still running after stop attempt; keeping PID file",
-                    pid
-                );
+                log::error!("MiHomo PID {} is still running after stop attempt", pid);
                 return Err(anyhow::anyhow!(
                     "停止 MiHomo 失败：进程仍在运行 (PID: {})",
                     pid
@@ -736,7 +1002,7 @@ impl MihomoManager {
 
     /// 同步停止进程（用于应用退出时）
     ///
-    /// 简化的停止逻辑：动态判断停止方式，不依赖任何状态标志
+    /// 停止逻辑根据当前运行状态选择方式
     pub fn stop_sync(&self) {
         log::info!("Synchronously stopping MiHomo...");
 
@@ -761,6 +1027,50 @@ impl MihomoManager {
                         return;
                     }
                 }
+            }
+        }
+
+        // macOS: 检查是否是 TUN 模式（通过 helper 启动）
+        #[cfg(target_os = "macos")]
+        {
+            use crate::utils::{ensure_helper_in_data_dir, has_helper_pid_file, HELPER_PID_FILE};
+
+            if has_helper_pid_file() {
+                log::info!("Stopping TUN mode MiHomo via helper (sync)...");
+
+                // 先读取 PID
+                let pid_before_stop: Option<u32> = fs::read_to_string(HELPER_PID_FILE)
+                    .ok()
+                    .and_then(|s| s.trim().parse().ok());
+
+                if let Ok(helper_path) = ensure_helper_in_data_dir() {
+                    match Command::new(&helper_path).arg("stop").output() {
+                        Ok(out) if out.status.success() => {
+                            log::info!("MiHomo stopped via helper");
+                        }
+                        Ok(out) => {
+                            let stderr = String::from_utf8_lossy(&out.stderr);
+                            log::warn!("Helper stop returned error: {}", stderr);
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to run helper stop: {}", e);
+                        }
+                    }
+                }
+
+                // 等待进程停止
+                if let Some(pid) = pid_before_stop {
+                    for _ in 0..20 {
+                        if !Self::is_pid_running(pid) {
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                    }
+                }
+
+                // 清理 PID 文件
+                let _ = fs::remove_file(HELPER_PID_FILE);
+                return;
             }
         }
 
@@ -858,7 +1168,8 @@ impl MihomoManager {
     ///
     /// 检测逻辑：
     /// 1. Windows 服务模式：通过服务 API 查询 mihomo 状态
-    /// 2. 普通模式：检查进程句柄或 PID 文件
+    /// 2. macOS TUN 模式：检查 helper PID 文件
+    /// 3. 普通模式：检查进程句柄或 PID 文件
     pub async fn is_running(&self) -> bool {
         // Windows: 先检查服务模式
         #[cfg(target_os = "windows")]
@@ -874,6 +1185,34 @@ impl MihomoManager {
                             status.mihomo_pid
                         );
                         return true;
+                    }
+                }
+            }
+        }
+
+        // macOS: 检查 TUN 模式（通过 helper 启动）
+        #[cfg(target_os = "macos")]
+        {
+            use crate::utils::{has_helper_pid_file, HELPER_PID_FILE};
+
+            if has_helper_pid_file() {
+                // 读取 helper PID 文件中的 PID
+                if let Ok(content) = fs::read_to_string(HELPER_PID_FILE) {
+                    if let Ok(pid) = content.trim().parse::<u32>() {
+                        if Self::is_pid_running(pid) {
+                            log::debug!(
+                                "is_running: TUN mode via helper, mihomo_running=true, pid={}",
+                                pid
+                            );
+                            return true;
+                        } else {
+                            // PID 文件存在但进程已退出，清理 PID 文件
+                            log::debug!(
+                                "is_running: TUN mode helper PID file exists but process {} not running, cleaning up",
+                                pid
+                            );
+                            let _ = fs::remove_file(HELPER_PID_FILE);
+                        }
                     }
                 }
             }

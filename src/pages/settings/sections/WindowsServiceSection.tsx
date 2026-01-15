@@ -208,7 +208,6 @@ export function WindowsServiceSection({ toast }: WindowsServiceSectionProps) {
   };
 
   const statusInfo = getStatusInfo();
-  const StatusIcon = statusInfo.icon;
 
   return (
     <div>
@@ -224,27 +223,32 @@ export function WindowsServiceSection({ toast }: WindowsServiceSectionProps) {
             size="sm"
             onClick={refreshStatus}
             disabled={loading}
-            className="h-7 px-2"
+            className="h-7 w-7 rounded-full p-0 hover:bg-black/5 dark:hover:bg-white/10"
           >
-            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+            <RefreshCw className={cn('w-3.5 h-3.5 text-gray-500', loading && 'animate-spin')} />
           </Button>
         }
       >
         <div className="p-5 pt-2 space-y-4">
           {/* 状态显示 */}
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-            <div className={cn('w-2.5 h-2.5 rounded-full', statusInfo.color)} />
-            <StatusIcon
-              className={cn(
-                'w-4 h-4',
-                serviceStatus.installed && serviceStatus.running
-                  ? 'text-green-500'
-                  : 'text-gray-400'
-              )}
-            />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-              {statusInfo.text}
-            </span>
+          <div className="flex items-center justify-between py-2 px-1">
+            <div className="flex items-center gap-3">
+              <div
+                className={cn(
+                  'w-2 h-2 rounded-full ring-4 ring-opacity-20',
+                  statusInfo.color.replace('bg-', 'ring-'),
+                  statusInfo.color
+                )}
+              />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                {statusInfo.text}
+              </span>
+            </div>
+            {serviceStatus.mihomo_pid && (
+              <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
+                PID: {serviceStatus.mihomo_pid}
+              </span>
+            )}
           </div>
 
           {/* 操作按钮 */}
@@ -254,7 +258,7 @@ export function WindowsServiceSection({ toast }: WindowsServiceSectionProps) {
                 size="sm"
                 onClick={handleInstall}
                 disabled={actionLoading !== null}
-                className="h-8 gap-1.5"
+                className="h-7 text-xs rounded-full px-3 gap-1.5 shadow-none"
               >
                 {actionLoading === 'install' ? (
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -271,12 +275,12 @@ export function WindowsServiceSection({ toast }: WindowsServiceSectionProps) {
                     variant="outline"
                     onClick={handleStop}
                     disabled={actionLoading !== null}
-                    className="h-8 gap-1.5"
+                    className="h-7 text-xs rounded-full px-3 gap-1.5 border-gray-200 dark:border-zinc-700"
                   >
                     {actionLoading === 'stop' ? (
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                     ) : (
-                      <Square className="w-3.5 h-3.5" />
+                      <Square className="w-3.5 h-3.5 fill-current" />
                     )}
                     停止服务
                   </Button>
@@ -285,22 +289,22 @@ export function WindowsServiceSection({ toast }: WindowsServiceSectionProps) {
                     size="sm"
                     onClick={handleStart}
                     disabled={actionLoading !== null}
-                    className="h-8 gap-1.5"
+                    className="h-7 text-xs rounded-full px-3 gap-1.5 shadow-none"
                   >
                     {actionLoading === 'start' ? (
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                     ) : (
-                      <Play className="w-3.5 h-3.5" />
+                      <Play className="w-3.5 h-3.5 fill-current" />
                     )}
                     启动服务
                   </Button>
                 )}
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant="ghost"
                   onClick={handleUninstall}
                   disabled={actionLoading !== null}
-                  className="h-8 gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+                  className="h-7 text-xs rounded-full px-3 gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
                 >
                   {actionLoading === 'uninstall' ? (
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -314,21 +318,21 @@ export function WindowsServiceSection({ toast }: WindowsServiceSectionProps) {
           </div>
 
           {/* 提示信息 */}
-          <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+          <div className="text-xs text-gray-500 dark:text-gray-400 space-y-2 pt-2 border-t border-gray-100 dark:border-zinc-800">
             {!serviceStatus.installed && (
-              <p className="flex items-center gap-1.5">
+              <p className="flex items-center gap-2">
                 <Shield className="w-3.5 h-3.5 text-amber-500" />
                 安装服务需要管理员权限，会弹出 UAC 提示
               </p>
             )}
             {serviceStatus.installed && serviceStatus.running && (
-              <p className="flex items-center gap-1.5">
+              <p className="flex items-center gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
                 开启 TUN 模式时将自动使用服务模式
               </p>
             )}
             {serviceStatus.installed && !serviceStatus.running && (
-              <p className="flex items-center gap-1.5">
+              <p className="flex items-center gap-2">
                 <AlertCircle className="w-3.5 h-3.5 text-yellow-500" />
                 启动服务后，TUN 模式将不再需要 UAC 确认
               </p>

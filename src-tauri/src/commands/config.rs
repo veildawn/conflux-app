@@ -440,22 +440,18 @@ pub async fn download_resource(
     }
 
     if let Err(e) = std::fs::write(&tmp_path, &content) {
-        // 给出更可操作的提示，尤其是 macOS 上 root-owned 文件导致无法覆盖的情况
+        // 给出更可操作的提示
         if e.kind() == std::io::ErrorKind::PermissionDenied {
             return Err(format!(
                 "没有权限写入资源文件：{:?}\n\
-可能原因：该文件/目录曾被 root 创建（例如 mihomo 带 setuid 或以管理员权限运行过），导致当前用户无法覆盖。\n\
-建议修复（macOS）：\n\
+可能原因：该文件/目录曾被 root 创建，导致当前用户无法覆盖。\n\
+建议修复（macOS/Linux）：\n\
   sudo chown -R $(whoami) \"{}\"\n\
-  sudo chmod u-s \"{}\"  # 去掉 mihomo 的 setuid 位（若存在）\n\
 然后重启应用再试。",
                 tmp_path,
                 crate::utils::get_app_data_dir()
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|_| "<Conflux 数据目录>".to_string()),
-                crate::utils::get_app_data_dir()
-                    .map(|p| p.join(crate::utils::get_mihomo_binary_name()).to_string_lossy().to_string())
-                    .unwrap_or_else(|_| "<Conflux/mihomo>".to_string()),
             ));
         }
         return Err(format!("Failed to write temp file: {}", e));

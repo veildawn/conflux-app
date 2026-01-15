@@ -322,8 +322,7 @@ fn main() {
             commands::system::link_tauri_commands_for_ide();
 
             if let Err(err) = crate::utils::ensure_mihomo_in_data_dir() {
-                // macOS legacy TUN 模式下，mihomo 可能被设置为 root-owned + setuid，
-                // 普通用户进程无法覆盖/chmod，这里不应当刷屏 warn。
+                // 兼容旧版本：文件可能是 root-owned，普通用户进程无法覆盖
                 log::debug!("MiHomo binary init skipped/failed: {}", err);
             }
 
