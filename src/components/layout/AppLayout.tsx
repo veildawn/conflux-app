@@ -99,6 +99,16 @@ export default function AppLayout() {
         logger.log('AppLayout: Rule database update check initiated');
       } catch (error) {
         logger.error('AppLayout: Init failed:', error);
+        // 显示启动失败的错误信息
+        const errorMsg = String(error);
+        if (!errorMsg.includes('NEED_ADMIN')) {
+          // NEED_ADMIN 错误由 Header 组件的对话框处理，这里不重复显示
+          toast({
+            title: '启动失败',
+            description: errorMsg,
+            variant: 'destructive',
+          });
+        }
       }
     };
 
@@ -134,7 +144,7 @@ export default function AppLayout() {
       if (backendReadyUnlisten) backendReadyUnlisten();
       if (initFailedUnlisten) initFailedUnlisten();
     };
-  }, [fetchSettings, fetchStatus, start, checkRuleDatabaseUpdates]);
+  }, [fetchSettings, fetchStatus, start, checkRuleDatabaseUpdates, toast]);
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
