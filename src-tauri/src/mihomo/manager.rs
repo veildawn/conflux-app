@@ -604,14 +604,24 @@ impl MihomoManager {
             // 优先级 3：普通模式，直接启动
             else {
                 log::info!("Starting mihomo in normal mode...");
-                Command::new(&mihomo_path)
+                log::info!("  mihomo_path: {:?}", mihomo_path);
+                log::info!("  config_dir: {}", config_dir_str);
+                log::info!("  config_path: {}", config_path_str);
+
+                let child = Command::new(&mihomo_path)
                     .current_dir(config_dir)
                     .args(["-d", &config_dir_str, "-f", &config_path_str])
                     .creation_flags(CREATE_NO_WINDOW)
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
                     .spawn()
-                    .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?
+                    .map_err(|e| {
+                        log::error!("Failed to spawn mihomo: {}", e);
+                        anyhow::anyhow!("启动 MiHomo 失败: {} (路径: {:?})", e, mihomo_path)
+                    })?;
+
+                log::info!("MiHomo spawned with PID: {}", child.id());
+                child
             }
         };
 
