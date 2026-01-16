@@ -163,10 +163,8 @@ pub async fn save_config(config: MihomoConfig) -> Result<(), String> {
         if let Some(tun) = &config_to_save.tun {
             app_settings.mihomo.tun = tun.clone();
         }
-        // 同步其他设置
-        app_settings.mihomo.port = config_to_save.port;
-        app_settings.mihomo.socks_port = config_to_save.socks_port;
-        app_settings.mihomo.mixed_port = config_to_save.mixed_port;
+        // 同步其他设置（注意：不同步端口，端口由 set_ports 命令单独管理，
+        // 避免运行时的 0 值覆盖用户设置）
         app_settings.mihomo.allow_lan = config_to_save.allow_lan;
         app_settings.mihomo.ipv6 = config_to_save.ipv6;
         app_settings.mihomo.tcp_concurrent = config_to_save.tcp_concurrent;
