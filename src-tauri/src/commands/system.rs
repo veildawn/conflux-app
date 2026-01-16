@@ -175,20 +175,25 @@ fn parse_ip_api_response(v: &serde_json::Value) -> Option<(String, String)> {
 
 /// 获取公网 IP 信息
 ///
-/// 使用 ip-api.com 查询，它返回完整的 IP 和国家代码信息。
-/// 当代理运行时，通过代理发起请求以获取代理后的出口 IP；
-/// 否则直接请求获取本机公网 IP。
+/// 优先通过代理获取出口 IP，代理未运行时获取本机公网 IP。
+/// 使用多个备选 API 服务确保可靠性。
 #[tauri::command]
 pub async fn get_public_ip_info() -> Result<Option<PublicIpInfo>, String> {
-    const API_URL: &str = "http://ip-api.com/json";
-
     // 检查代理是否运行，如果运行则通过代理获取出口 IP
     let proxy_url = if let Ok(state) = super::get_app_state_or_err() {
         if state.mihomo_manager.is_running().await {
-            // 使用 HTTP 代理端口
-            let config = state.config_manager.load_mihomo_config().ok();
-            let port = config.and_then(|c| c.port).unwrap_or(7890);
-            Some(format!("http://127.0.0.1:{}", port))
+            // 通过 mihomo API 获取运行时端口配置（config.yaml 静态文件中端口可能为 0）
+            let port = match state.mihomo_api.get_configs().await {
+                Ok(configs) => configs
+                    .get("port")
+                    .and_then(|v| v.as_u64())
+                    .map(|p| p as u16)
+                    .filter(|&p| p > 0),
+                Err(_) => None,
+            };
+
+            // 端口有效才使用代理
+            port.map(|p| format!("http://127.0.0.1:{}", p))
         } else {
             None
         }
@@ -198,7 +203,7 @@ pub async fn get_public_ip_info() -> Result<Option<PublicIpInfo>, String> {
 
     let mut client_builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(10));
 
-    // 如果代理运行，通过代理请求
+    // 如果代理运行且端口有效，通过代理请求
     if let Some(ref proxy_addr) = proxy_url {
         if let Ok(proxy) = reqwest::Proxy::all(proxy_addr) {
             client_builder = client_builder.proxy(proxy);
@@ -207,29 +212,98 @@ pub async fn get_public_ip_info() -> Result<Option<PublicIpInfo>, String> {
 
     let client = client_builder.build().map_err(|e| e.to_string())?;
 
-    let resp = client
-        .get(API_URL)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
+    // 尝试多个 API 服务，确保可靠性
+    if let Some(info) = try_ip_api(&client).await {
+        return Ok(Some(info));
+    }
+    if let Some(info) = try_ipify(&client).await {
+        return Ok(Some(info));
+    }
+    if let Some(info) = try_ipinfo(&client).await {
+        return Ok(Some(info));
+    }
+
+    Ok(None)
+}
+
+/// 尝试 ip-api.com
+async fn try_ip_api(client: &reqwest::Client) -> Option<PublicIpInfo> {
+    const API_URL: &str = "http://ip-api.com/json";
+    let resp = client.get(API_URL).send().await.ok()?;
     if !resp.status().is_success() {
-        return Ok(None);
+        return None;
     }
-
-    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-    let Some((ip, cc)) = parse_ip_api_response(&json) else {
-        return Ok(None);
-    };
-
+    let json: serde_json::Value = resp.json().await.ok()?;
+    let (ip, cc) = parse_ip_api_response(&json)?;
     if ip.is_empty() || cc.is_empty() {
-        return Ok(None);
+        return None;
     }
-
-    Ok(Some(PublicIpInfo {
+    Some(PublicIpInfo {
         ip,
         region_code: cc,
         source: API_URL.to_string(),
-    }))
+    })
+}
+
+/// 尝试 api.ipify.org + ip-api.com 组合（ipify 只返回 IP，需要额外查询国家）
+async fn try_ipify(client: &reqwest::Client) -> Option<PublicIpInfo> {
+    const IPIFY_URL: &str = "https://api.ipify.org?format=json";
+    let resp = client.get(IPIFY_URL).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let json: serde_json::Value = resp.json().await.ok()?;
+    let ip = json.get("ip")?.as_str()?.to_string();
+    if ip.is_empty() {
+        return None;
+    }
+
+    // 用获取到的 IP 查询国家代码
+    let geo_url = format!("http://ip-api.com/json/{}", ip);
+    if let Ok(geo_resp) = client.get(&geo_url).send().await {
+        if geo_resp.status().is_success() {
+            if let Ok(geo_json) = geo_resp.json::<serde_json::Value>().await {
+                if let Some(cc) = geo_json.get("countryCode").and_then(|v| v.as_str()) {
+                    return Some(PublicIpInfo {
+                        ip,
+                        region_code: cc.to_string(),
+                        source: IPIFY_URL.to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    // 无法获取国家代码，仍返回 IP（使用空字符串作为 region_code）
+    Some(PublicIpInfo {
+        ip,
+        region_code: String::new(),
+        source: IPIFY_URL.to_string(),
+    })
+}
+
+/// 尝试 ipinfo.io
+async fn try_ipinfo(client: &reqwest::Client) -> Option<PublicIpInfo> {
+    const API_URL: &str = "https://ipinfo.io/json";
+    let resp = client.get(API_URL).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let json: serde_json::Value = resp.json().await.ok()?;
+    let ip = json.get("ip")?.as_str()?.to_string();
+    let cc = json
+        .get("country")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if ip.is_empty() {
+        return None;
+    }
+    Some(PublicIpInfo {
+        ip,
+        region_code: cc,
+        source: API_URL.to_string(),
+    })
 }
 
 fn is_private_ipv4(ip: std::net::Ipv4Addr) -> bool {
