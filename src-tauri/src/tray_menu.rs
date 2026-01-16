@@ -14,21 +14,11 @@ pub struct TrayMenuStateInner<R: Runtime> {
 }
 
 impl<R: Runtime> TrayMenuStateInner<R> {
-    /// 预处理互斥切换：在执行后端命令前立即更新 UI
-    /// 当开启一个模式时，立即关闭另一个模式的显示
+    /// 预处理切换（保留接口，不再处理互斥）
+    /// 系统代理和增强模式现在可以同时开启
+    #[allow(unused_variables)]
     pub fn pre_toggle_exclusive(&self, item_id: &str, will_enable: bool) {
-        if !will_enable {
-            return; // 关闭操作不需要处理互斥
-        }
-        match item_id {
-            "system_proxy" => {
-                let _ = self.enhanced_mode_item.set_checked(false);
-            }
-            "enhanced_mode" => {
-                let _ = self.system_proxy_item.set_checked(false);
-            }
-            _ => {}
-        }
+        // 不再处理互斥，允许两个模式同时开启
     }
 
     pub fn sync_from_status(&self, status: &ProxyStatus) {

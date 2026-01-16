@@ -112,13 +112,13 @@ describe('proxyStore', () => {
     it('应该成功启动代理', async () => {
       const mockStatus = { ...initialStatus, running: true };
 
-      vi.mocked(ipc.startProxy).mockResolvedValue(undefined);
-      vi.mocked(ipc.getProxyStatus).mockResolvedValue(mockStatus);
+      // startProxy 现在直接返回状态
+      vi.mocked(ipc.startProxy).mockResolvedValue(mockStatus);
 
       await useProxyStore.getState().start();
 
       expect(ipc.startProxy).toHaveBeenCalled();
-      expect(ipc.getProxyStatus).toHaveBeenCalled();
+      expect(useProxyStore.getState().status.running).toBe(true);
       expect(useProxyStore.getState().loading).toBe(false);
     });
 

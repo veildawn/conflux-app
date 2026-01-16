@@ -36,8 +36,9 @@ export const ipc = {
 
   /**
    * 启动代理
+   * @returns 启动成功后的代理状态
    */
-  async startProxy(): Promise<void> {
+  async startProxy(): Promise<ProxyStatus> {
     return invoke('start_proxy');
   },
 

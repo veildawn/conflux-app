@@ -10,38 +10,9 @@ use tauri::{AppHandle, Emitter, Manager};
 /// 设置系统代理
 #[tauri::command]
 pub async fn set_system_proxy(app: AppHandle) -> Result<(), String> {
-    use crate::commands::reload::safe_restart_proxy;
-
     let state = get_app_state_or_err()?;
 
     crate::commands::require_active_subscription_with_proxies()?;
-
-    // 如果 TUN 模式已启用，先关闭（系统代理与 TUN 互斥）
-    let enhanced_mode = *state.enhanced_mode.lock().await;
-    if enhanced_mode {
-        log::info!("TUN mode is enabled, disabling before setting system proxy...");
-
-        // 更新配置文件
-        state
-            .config_manager
-            .update_tun_mode(false)
-            .map_err(|e| format!("禁用 TUN 模式失败: {}", e))?;
-
-        // 重启代理核心使 TUN 关闭生效
-        safe_restart_proxy(&app).await.map_err(|e| {
-            // 尝试回滚配置
-            let _ = state.config_manager.update_tun_mode(true);
-            format!("重启代理核心失败: {}", e)
-        })?;
-
-        // 更新内存状态
-        {
-            let mut enhanced_mode = state.enhanced_mode.lock().await;
-            *enhanced_mode = false;
-        }
-
-        log::info!("TUN mode disabled successfully");
-    }
 
     // 获取代理端口
     let config = state

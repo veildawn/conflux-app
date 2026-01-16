@@ -132,8 +132,12 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
   start: async () => {
     set({ loading: true, error: null });
     try {
-      await ipc.startProxy();
-      await get().fetchStatus();
+      // startProxy 现在直接返回状态，不需要再次查询
+      const status = await ipc.startProxy();
+      set((state) => ({
+        status: { ...state.status, ...status },
+        error: null,
+      }));
     } catch (error) {
       const errorMsg = String(error);
       logger.error('Failed to start proxy:', error);

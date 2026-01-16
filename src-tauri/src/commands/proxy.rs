@@ -40,7 +40,7 @@ pub async fn check_tun_consistency() -> Result<serde_json::Value, String> {
 
 /// 启动代理
 #[tauri::command]
-pub async fn start_proxy(app: AppHandle) -> Result<(), String> {
+pub async fn start_proxy(app: AppHandle) -> Result<ProxyStatus, String> {
     let state = get_app_state_or_err()?;
 
     state
@@ -51,13 +51,14 @@ pub async fn start_proxy(app: AppHandle) -> Result<(), String> {
 
     log::info!("Proxy started successfully");
 
-    // 同步状态到托盘菜单和前端
-    if let Ok(status) = get_proxy_status().await {
-        app.state::<TrayMenuState>().sync_from_status(&status);
-        let _ = app.emit("proxy-status-changed", status);
-    }
+    // 启动成功后，获取完整状态并返回
+    let status = get_proxy_status().await?;
 
-    Ok(())
+    // 同步状态到托盘菜单和前端
+    app.state::<TrayMenuState>().sync_from_status(&status);
+    let _ = app.emit("proxy-status-changed", &status);
+
+    Ok(status)
 }
 
 /// 以普通模式启动代理（强制禁用 TUN 模式）
@@ -611,22 +612,14 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
                 .map_err(|e| format!("增强模式需要额外系统权限/组件：{}", e))?;
         }
 
-        // 2. 互斥：启用 TUN 时必须关闭系统代理
-        let was_system_proxy_enabled = *state.system_proxy_enabled.lock().await;
-        if was_system_proxy_enabled {
-            log::info!("System proxy is enabled, clearing before enabling TUN mode...");
-            crate::system::SystemProxy::clear_proxy().map_err(|e| e.to_string())?;
-            *state.system_proxy_enabled.lock().await = false;
-        }
-
-        // 3. 停止当前核心
+        // 2. 停止当前核心
         state
             .mihomo_manager
             .stop()
             .await
             .map_err(|e| e.to_string())?;
 
-        // 4. 更新配置文件
+        // 3. 更新配置文件
         if let Err(e) = state.config_manager.update_tun_mode(true) {
             log::error!("Failed to update TUN config: {}", e);
             // 尝试恢复核心（普通模式）
@@ -634,7 +627,7 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
             return Err(format!("更新配置失败: {}", e));
         }
 
-        // 5. 以 TUN 模式启动核心
+        // 4. 以 TUN 模式启动核心
         match state.mihomo_manager.start().await {
             Ok(_) => {
                 // 启动成功，更新状态和 settings.json
