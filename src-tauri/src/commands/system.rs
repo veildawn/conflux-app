@@ -165,95 +165,22 @@ pub struct LocalIpInfo {
     pub ipv6: Vec<String>,
 }
 
-fn parse_public_ip_from_json(source: &str, v: &serde_json::Value) -> Option<(String, String)> {
-    match source {
-        // 国内直连友好的服务（优先）
-        "https://qifu-api.baidubce.com/ip/local/geo/v1/district" => {
-            // 百度 API: {"code":"Success","data":{"country":"中国","prov":"xx","city":"xx","ip":"x.x.x.x",...}}
-            let data = v.get("data")?;
-            let ip = data.get("ip")?.as_str()?.to_string();
-            // 百度返回中文国家名，默认 CN
-            Some((ip, "CN".to_string()))
-        }
-        "https://api.vore.top/api/IPdata" => {
-            // vore.top: {"code":200,"ipinfo":{"text":"x.x.x.x","type":"ipv4"},"ipdata":{"info1":"中国",...}}
-            let ipinfo = v.get("ipinfo")?;
-            let ip = ipinfo.get("text")?.as_str()?.to_string();
-            // 返回中文国家名，默认 CN
-            Some((ip, "CN".to_string()))
-        }
-        "https://api.ipify.org?format=json" => {
-            // ipify: {"ip":"x.x.x.x"} - 只有 IP，无国家信息
-            let ip = v.get("ip")?.as_str()?.to_string();
-            // 没有代理时使用此服务大概率是国内直连，默认 CN
-            Some((ip, "CN".to_string()))
-        }
-        // 国际服务
-        "https://ipwho.is" => {
-            let ip = v.get("ip")?.as_str()?.to_string();
-            let cc = v.get("country_code")?.as_str()?.to_string();
-            Some((ip, cc))
-        }
-        "https://api.myip.com" => {
-            let ip = v.get("ip")?.as_str()?.to_string();
-            // myip.com: cc 为两位国家代码
-            let cc = v.get("cc")?.as_str()?.to_string();
-            Some((ip, cc))
-        }
-        "https://ipapi.co/json" => {
-            let ip = v.get("ip")?.as_str()?.to_string();
-            let cc = v.get("country_code")?.as_str()?.to_string();
-            Some((ip, cc))
-        }
-        "https://ident.me/json" => {
-            let ip = v.get("ip")?.as_str()?.to_string();
-            let cc = v.get("cc")?.as_str()?.to_string();
-            Some((ip, cc))
-        }
-        "http://ip-api.com/json" => {
-            let ip = v.get("query")?.as_str()?.to_string();
-            let cc = v.get("countryCode")?.as_str()?.to_string();
-            Some((ip, cc))
-        }
-        "https://api.ip.sb/geoip" => {
-            let ip = v.get("ip")?.as_str()?.to_string();
-            let cc = v.get("country_code")?.as_str()?.to_string();
-            Some((ip, cc))
-        }
-        "https://ipinfo.io/json" => {
-            let ip = v.get("ip")?.as_str()?.to_string();
-            // ipinfo.io: country 为两位国家代码
-            let cc = v.get("country")?.as_str()?.to_string();
-            Some((ip, cc))
-        }
-        _ => None,
-    }
+/// 解析 ip-api.com 返回的 JSON
+/// 响应格式: {"query":"x.x.x.x","status":"success","countryCode":"US",...}
+fn parse_ip_api_response(v: &serde_json::Value) -> Option<(String, String)> {
+    let ip = v.get("query")?.as_str()?.to_string();
+    let cc = v.get("countryCode")?.as_str()?.to_string();
+    Some((ip, cc))
 }
 
-/// 获取公网 IP 信息（并发请求多个源，返回最快成功结果）
+/// 获取公网 IP 信息
 ///
+/// 使用 ip-api.com 查询，它返回完整的 IP 和国家代码信息。
 /// 当代理运行时，通过代理发起请求以获取代理后的出口 IP；
 /// 否则直接请求获取本机公网 IP。
 #[tauri::command]
 pub async fn get_public_ip_info() -> Result<Option<PublicIpInfo>, String> {
-    use reqwest::header;
-
-    // 国内直连友好的服务放前面，国际服务放后面
-    // 并发请求所有源，返回最快成功的结果
-    let sources: [&str; 10] = [
-        // 国内直连友好
-        "https://qifu-api.baidubce.com/ip/local/geo/v1/district", // 百度
-        "https://api.vore.top/api/IPdata",                        // vore.top
-        "https://api.ipify.org?format=json",                      // ipify（通常可直连）
-        // 国际服务
-        "https://ipwho.is",
-        "https://api.myip.com",
-        "https://ipapi.co/json",
-        "https://ident.me/json",
-        "http://ip-api.com/json",
-        "https://api.ip.sb/geoip",
-        "https://ipinfo.io/json",
-    ];
+    const API_URL: &str = "http://ip-api.com/json";
 
     // 检查代理是否运行，如果运行则通过代理获取出口 IP
     let proxy_url = if let Ok(state) = super::get_app_state_or_err() {
@@ -269,19 +196,7 @@ pub async fn get_public_ip_info() -> Result<Option<PublicIpInfo>, String> {
         None
     };
 
-    let mut client_builder = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .default_headers({
-            let mut headers = header::HeaderMap::new();
-            // 伪装成普通浏览器 UA，减少部分接口拒绝概率
-            headers.insert(
-                header::USER_AGENT,
-                header::HeaderValue::from_static(
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                ),
-            );
-            headers
-        });
+    let mut client_builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(10));
 
     // 如果代理运行，通过代理请求
     if let Some(ref proxy_addr) = proxy_url {
@@ -292,40 +207,29 @@ pub async fn get_public_ip_info() -> Result<Option<PublicIpInfo>, String> {
 
     let client = client_builder.build().map_err(|e| e.to_string())?;
 
-    // 用 JoinSet 并发执行；一旦拿到第一个成功结果，立刻 abort 其他请求
-    let mut set = tokio::task::JoinSet::new();
-    for &source in &sources {
-        let client = client.clone();
-        set.spawn(async move {
-            let resp = client.get(source).send().await.ok()?;
-            if !resp.status().is_success() {
-                return None;
-            }
-            let json: serde_json::Value = resp.json().await.ok()?;
-            let (ip, cc) = parse_public_ip_from_json(source, &json)?;
-            if ip.is_empty() || cc.is_empty() {
-                return None;
-            }
-            Some(PublicIpInfo {
-                ip,
-                region_code: cc,
-                source: source.to_string(),
-            })
-        });
+    let resp = client
+        .get(API_URL)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Ok(None);
     }
 
-    while let Some(join_res) = set.join_next().await {
-        match join_res {
-            Ok(Some(info)) => {
-                set.abort_all();
-                return Ok(Some(info));
-            }
-            Ok(None) => {}
-            Err(_) => {}
-        }
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let Some((ip, cc)) = parse_ip_api_response(&json) else {
+        return Ok(None);
+    };
+
+    if ip.is_empty() || cc.is_empty() {
+        return Ok(None);
     }
 
-    Ok(None)
+    Ok(Some(PublicIpInfo {
+        ip,
+        region_code: cc,
+        source: API_URL.to_string(),
+    }))
 }
 
 fn is_private_ipv4(ip: std::net::Ipv4Addr) -> bool {
