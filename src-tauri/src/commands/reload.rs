@@ -563,9 +563,26 @@ pub fn apply_settings_to_config(
     settings: &crate::models::MihomoSettings,
     config: &mut MihomoConfig,
 ) {
-    config.port = settings.port;
-    config.socks_port = settings.socks_port;
-    config.mixed_port = settings.mixed_port;
+    // 默认禁用端口，由 apply_settings_to_config_with_proxy_state 处理端口逻辑
+    apply_settings_to_config_with_proxy_state(settings, config, false);
+}
+
+/// 应用设置到配置，支持根据系统代理状态决定端口
+pub fn apply_settings_to_config_with_proxy_state(
+    settings: &crate::models::MihomoSettings,
+    config: &mut MihomoConfig,
+    system_proxy_enabled: bool,
+) {
+    // 如果系统代理已开启，使用 settings 中的端口；否则禁用端口
+    if system_proxy_enabled {
+        config.port = settings.port;
+        config.socks_port = settings.socks_port;
+        config.mixed_port = settings.mixed_port;
+    } else {
+        config.port = Some(0);
+        config.socks_port = Some(0);
+        config.mixed_port = Some(0);
+    }
     config.allow_lan = settings.allow_lan;
     config.ipv6 = settings.ipv6;
     config.tcp_concurrent = settings.tcp_concurrent;
@@ -587,121 +604,22 @@ pub fn build_base_config_from_settings(settings: &crate::models::MihomoSettings)
     config
 }
 
+/// 从 MihomoSettings 构建基础配置，支持根据系统代理状态决定端口
+pub fn build_base_config_from_settings_with_proxy_state(
+    settings: &crate::models::MihomoSettings,
+    system_proxy_enabled: bool,
+) -> MihomoConfig {
+    let mut config = MihomoConfig::default();
+    apply_settings_to_config_with_proxy_state(settings, &mut config, system_proxy_enabled);
+    config
+}
+
 /// 同步代理状态到前端和托盘菜单
 pub async fn sync_proxy_status(app: &AppHandle) {
     if let Ok(status) = get_proxy_status().await {
         app.state::<TrayMenuState>().sync_from_status(&status);
         let _ = app.emit("proxy-status-changed", status);
     }
-}
-
-/// 安全重启代理（保持系统代理和增强模式状态）
-///
-/// 这个函数会：
-/// 1. 记录当前的系统代理和增强模式状态
-/// 2. 重启 mihomo 进程
-/// 3. 等待健康检查通过
-/// 4. 如果之前开启了这些功能，尝试恢复
-pub async fn safe_restart_proxy(app: &AppHandle) -> Result<(), String> {
-    let state = get_app_state_or_err()?;
-
-    // 记录当前状态
-    let was_system_proxy_enabled = *state.system_proxy_enabled.lock().await;
-    let was_enhanced_mode = *state.enhanced_mode.lock().await;
-
-    log::info!(
-        "Safe restart: system_proxy={}, enhanced_mode={}",
-        was_system_proxy_enabled,
-        was_enhanced_mode
-    );
-
-    // 如果系统代理已启用，先清除
-    if was_system_proxy_enabled {
-        if let Err(e) = crate::system::SystemProxy::clear_proxy() {
-            log::warn!("Failed to clear system proxy before restart: {}", e);
-        }
-    }
-
-    // 重启 mihomo
-    // restart() 内部已经包含了完整的健康检查（通过 API 验证），
-    // 如果 restart() 成功返回，说明 mihomo 已经正常运行
-    state
-        .mihomo_manager
-        .restart()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // 优化：减少等待时间，从 300ms 降至 100ms
-    // TUN 模式初始化已经在 restart() 的健康检查中处理
-    sleep(Duration::from_millis(100)).await;
-
-    // 使用 API 健康检查而不是进程检测，因为 API 检查更可靠
-    // 使用指数退避策略进行重试
-    let mut healthy = false;
-    let mut retry_interval = Duration::from_millis(100);
-    let max_retry_interval = Duration::from_millis(500);
-    let max_total_wait = Duration::from_secs(3);
-    let mut total_waited = Duration::ZERO;
-
-    while total_waited < max_total_wait {
-        match state.mihomo_api.get_version().await {
-            Ok(_) => {
-                healthy = true;
-                break;
-            }
-            Err(e) => {
-                log::debug!(
-                    "API health check failed after restart ({:?}): {}",
-                    total_waited,
-                    e
-                );
-                sleep(retry_interval).await;
-                total_waited += retry_interval;
-                retry_interval = std::cmp::min(retry_interval * 2, max_retry_interval);
-            }
-        }
-    }
-
-    if !healthy {
-        return Err("代理核心重启后 API 未能正常响应".to_string());
-    }
-
-    // 恢复系统代理
-    if was_system_proxy_enabled {
-        let config = state
-            .config_manager
-            .load_mihomo_config()
-            .map_err(|e| e.to_string())?;
-
-        if let Err(e) =
-            crate::system::SystemProxy::set_http_proxy("127.0.0.1", config.port.unwrap_or(7890))
-        {
-            log::warn!("Failed to restore HTTP proxy: {}", e);
-        }
-        if let Err(e) = crate::system::SystemProxy::set_socks_proxy(
-            "127.0.0.1",
-            config.socks_port.unwrap_or(7891),
-        ) {
-            log::warn!("Failed to restore SOCKS proxy: {}", e);
-        }
-
-        *state.system_proxy_enabled.lock().await = true;
-    }
-
-    // 更新增强模式状态（TUN 配置应该已经在配置文件中了）
-    let config = state
-        .config_manager
-        .load_mihomo_config()
-        .map_err(|e| e.to_string())?;
-
-    let current_tun_enabled = config.tun.as_ref().map(|t| t.enable).unwrap_or(false);
-    *state.enhanced_mode.lock().await = current_tun_enabled;
-
-    // 同步状态
-    sync_proxy_status(app).await;
-
-    log::info!("Safe restart completed successfully");
-    Ok(())
 }
 
 /// 检查 mihomo 是否健康

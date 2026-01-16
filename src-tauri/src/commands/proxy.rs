@@ -195,17 +195,89 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
     // 检测运行模式
     let run_mode = detect_run_mode(running, enhanced_mode).await;
 
+    // 当 mihomo 运行时，从 API 获取实际运行时配置；否则使用本地配置文件
+    let (port, socks_port, mixed_port, mode, allow_lan, ipv6, tcp_concurrent) = if running {
+        match state.mihomo_api.get_configs().await {
+            Ok(runtime_config) => {
+                let port = runtime_config
+                    .get("port")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u16)
+                    .unwrap_or_else(|| config.port.unwrap_or(7890));
+                let socks_port = runtime_config
+                    .get("socks-port")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u16)
+                    .unwrap_or_else(|| config.socks_port.unwrap_or(7891));
+                let mixed_port = runtime_config
+                    .get("mixed-port")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u16)
+                    .unwrap_or_else(|| config.mixed_port.unwrap_or(0));
+                let mode = runtime_config
+                    .get("mode")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| config.mode.clone());
+                let allow_lan = runtime_config
+                    .get("allow-lan")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(config.allow_lan);
+                let ipv6 = runtime_config
+                    .get("ipv6")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(config.ipv6);
+                let tcp_concurrent = runtime_config
+                    .get("tcp-concurrent")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(config.tcp_concurrent);
+                (
+                    port,
+                    socks_port,
+                    mixed_port,
+                    mode,
+                    allow_lan,
+                    ipv6,
+                    tcp_concurrent,
+                )
+            }
+            Err(_) => {
+                // API 调用失败，回退到本地配置
+                (
+                    config.port.unwrap_or(7890),
+                    config.socks_port.unwrap_or(7891),
+                    config.mixed_port.unwrap_or(0),
+                    config.mode.clone(),
+                    config.allow_lan,
+                    config.ipv6,
+                    config.tcp_concurrent,
+                )
+            }
+        }
+    } else {
+        // mihomo 未运行，使用本地配置
+        (
+            config.port.unwrap_or(7890),
+            config.socks_port.unwrap_or(7891),
+            config.mixed_port.unwrap_or(0),
+            config.mode.clone(),
+            config.allow_lan,
+            config.ipv6,
+            config.tcp_concurrent,
+        )
+    };
+
     Ok(ProxyStatus {
         running,
-        mode: config.mode,
-        port: config.port.unwrap_or(7890),
-        socks_port: config.socks_port.unwrap_or(7891),
-        mixed_port: config.mixed_port.unwrap_or(7892),
+        mode,
+        port,
+        socks_port,
+        mixed_port,
         system_proxy,
         enhanced_mode,
-        allow_lan: config.allow_lan,
-        ipv6: config.ipv6,
-        tcp_concurrent: config.tcp_concurrent,
+        allow_lan,
+        ipv6,
+        tcp_concurrent,
         run_mode,
     })
 }
@@ -1008,10 +1080,41 @@ pub async fn update_rule_provider(name: String) -> Result<(), String> {
 pub async fn set_mixed_port(app: AppHandle, port: Option<u16>) -> Result<(), String> {
     use crate::commands::reload::{apply_mihomo_settings_change, ReloadOptions};
 
-    let port_value = port.unwrap_or(7893);
+    let state = get_app_state_or_err()?;
+
+    // 加载当前设置以检查端口冲突
+    let app_settings = state
+        .config_manager
+        .load_app_settings()
+        .map_err(|e| e.to_string())?;
+
+    let port_value = port.unwrap_or(0); // 0 表示禁用混合端口
+
+    // 验证端口不与 HTTP/SOCKS 端口冲突
+    if port_value != 0 {
+        let http_port = app_settings.mihomo.port.unwrap_or(7890);
+        let socks_port = app_settings.mihomo.socks_port.unwrap_or(7891);
+
+        if port_value == http_port {
+            return Err(format!(
+                "混合端口 {} 与 HTTP 端口冲突，请使用不同的端口",
+                port_value
+            ));
+        }
+        if port_value == socks_port {
+            return Err(format!(
+                "混合端口 {} 与 SOCKS 端口冲突，请使用不同的端口",
+                port_value
+            ));
+        }
+    }
 
     apply_mihomo_settings_change(Some(&app), &ReloadOptions::default(), |settings| {
-        settings.mixed_port = Some(port_value);
+        settings.mixed_port = if port_value == 0 {
+            None
+        } else {
+            Some(port_value)
+        };
         Ok(())
     })
     .await

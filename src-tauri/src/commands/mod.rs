@@ -125,20 +125,37 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     // 跟踪 settings 是否需要保存（合并多次保存为单次）
     let mut settings_changed = false;
 
-    if active_profile_id.is_none() {
-        log::info!("No active profile detected, resetting config to default");
+    // 使用 reload 模块中的辅助函数构建基础配置
+    use crate::commands::reload::build_base_config_from_settings;
+    let mut base_config = build_base_config_from_settings(&app_settings.mihomo);
 
-        // 使用 reload 模块中的辅助函数构建基础配置（仅包含 settings 中的配置，无代理/规则）
-        use crate::commands::reload::build_base_config_from_settings;
-        let mut base_config = build_base_config_from_settings(&app_settings.mihomo);
+    // 确保密钥和控制器地址与设置一致
+    if !app_settings.mihomo.secret.is_empty() {
+        base_config.secret = app_settings.mihomo.secret.clone();
+    }
+    base_config.external_controller = app_settings.mihomo.external_controller.clone();
 
-        // 确保密钥和控制器地址与设置一致 (避免后续不必要的同步)
-        if !app_settings.mihomo.secret.is_empty() {
-            base_config.secret = app_settings.mihomo.secret.clone();
+    if let Some(ref profile_id) = active_profile_id {
+        // 有活跃 profile，重新激活配置
+        log::info!(
+            "Active profile detected: {}, regenerating config",
+            profile_id
+        );
+
+        match workspace.activate_profile(profile_id, &base_config, Some(app_settings.use_jsdelivr))
+        {
+            Ok(mut runtime_config) => {
+                runtime_config.secret = base_config.secret.clone();
+                runtime_config.external_controller = base_config.external_controller.clone();
+                config = runtime_config;
+                config_changed = true;
+            }
+            Err(e) => {
+                log::warn!("Failed to activate profile on startup: {}", e);
+            }
         }
-        base_config.external_controller = app_settings.mihomo.external_controller.clone();
-
-        // 替换当前加载的配置
+    } else {
+        log::info!("No active profile detected, resetting config to default");
         config = base_config;
         config_changed = true;
     }
@@ -187,7 +204,7 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     let mihomo_api = Arc::new(MihomoApi::new(api_url.clone(), api_secret.clone()));
     let log_streamer = Arc::new(LogStreamer::new(api_url, api_secret.clone()));
 
-    // 检测系统当前的代理状态（恢复上次的状态）- 同步操作，很快
+    // 检测系统当前的代理状态（恢复上次的状态）
     let current_system_proxy = crate::system::SystemProxy::get_proxy_status().unwrap_or(false);
     log::info!("Detected system proxy status: {}", current_system_proxy);
 

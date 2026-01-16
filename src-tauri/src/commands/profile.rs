@@ -97,12 +97,15 @@ pub async fn activate_profile(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     use crate::commands::reload::{
-        build_base_config_from_settings, detect_config_change_type, reload_config,
+        build_base_config_from_settings_with_proxy_state, detect_config_change_type, reload_config,
         sync_proxy_status, ConfigChangeType, ReloadOptions,
     };
 
     // 如果 MiHomo 未运行，只保存配置
     let is_running = state.mihomo_manager.is_running().await;
+
+    // 获取系统代理状态，决定是否启用端口
+    let system_proxy_enabled = *state.system_proxy_enabled.lock().await;
 
     // 加载当前配置（用于变更类型检测）
     let old_config = state
@@ -115,7 +118,10 @@ pub async fn activate_profile(
         .config_manager
         .load_app_settings()
         .map_err(|e| e.to_string())?;
-    let mut base_config = build_base_config_from_settings(&app_settings.mihomo);
+    let mut base_config = build_base_config_from_settings_with_proxy_state(
+        &app_settings.mihomo,
+        system_proxy_enabled,
+    );
 
     // 使用 AppState 中的 api_secret，确保与 MihomoApi 客户端一致
     // 这避免了 settings.json 中 secret 被意外清空导致的认证失败
@@ -262,7 +268,7 @@ pub async fn refresh_profile(
     state: State<'_, AppState>,
 ) -> Result<ProfileMetadata, String> {
     use crate::commands::reload::{
-        build_base_config_from_settings, detect_config_change_type, reload_config,
+        build_base_config_from_settings_with_proxy_state, detect_config_change_type, reload_config,
         ConfigChangeType, ReloadOptions,
     };
 
@@ -282,6 +288,9 @@ pub async fn refresh_profile(
 
     // 如果是活跃 Profile，重新应用配置
     if is_active && state.mihomo_manager.is_running().await {
+        // 获取系统代理状态，决定是否启用端口
+        let system_proxy_enabled = *state.system_proxy_enabled.lock().await;
+
         let old_config = state
             .config_manager
             .load_mihomo_config()
@@ -291,7 +300,10 @@ pub async fn refresh_profile(
             .config_manager
             .load_app_settings()
             .map_err(|e| e.to_string())?;
-        let mut base_config = build_base_config_from_settings(&app_settings.mihomo);
+        let mut base_config = build_base_config_from_settings_with_proxy_state(
+            &app_settings.mihomo,
+            system_proxy_enabled,
+        );
 
         // 使用 AppState 中的 api_secret，确保与 MihomoApi 客户端一致
         base_config.secret = state.api_secret.clone();
@@ -1061,7 +1073,8 @@ async fn on_profile_changed(
 /// 重载活跃 Profile 的内部实现
 async fn reload_active_profile_internal(state: &State<'_, AppState>) -> Result<(), String> {
     use crate::commands::reload::{
-        build_base_config_from_settings, reload_config, ConfigBackup, ReloadOptions,
+        build_base_config_from_settings_with_proxy_state, reload_config, ConfigBackup,
+        ReloadOptions,
     };
 
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
@@ -1073,6 +1086,9 @@ async fn reload_active_profile_internal(state: &State<'_, AppState>) -> Result<(
         None => return Ok(()),
     };
 
+    // 获取系统代理状态，决定是否启用端口
+    let system_proxy_enabled = *state.system_proxy_enabled.lock().await;
+
     // 创建配置备份
     let backup = ConfigBackup::create(state).map_err(|e| e.to_string())?;
 
@@ -1081,7 +1097,10 @@ async fn reload_active_profile_internal(state: &State<'_, AppState>) -> Result<(
         .config_manager
         .load_app_settings()
         .map_err(|e| e.to_string())?;
-    let mut base_config = build_base_config_from_settings(&app_settings.mihomo);
+    let mut base_config = build_base_config_from_settings_with_proxy_state(
+        &app_settings.mihomo,
+        system_proxy_enabled,
+    );
 
     // 使用 AppState 中的 api_secret，确保与 MihomoApi 客户端一致
     base_config.secret = state.api_secret.clone();

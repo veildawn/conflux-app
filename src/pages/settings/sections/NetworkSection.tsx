@@ -79,12 +79,14 @@ export function NetworkSection({
   }, [tunConfigKey]);
 
   const handleMixedPortChange = async (value: string) => {
-    const port = Number.parseInt(value, 10);
+    // 空值或 0 表示禁用混合端口
+    const trimmed = value.trim();
+    const port = trimmed === '' ? 0 : Number.parseInt(trimmed, 10);
     if (isNaN(port)) return;
     try {
-      await ipc.setMixedPort(port);
+      await ipc.setMixedPort(port === 0 ? null : port);
       setConfig((prev) => (prev ? { ...prev, 'mixed-port': port } : prev));
-      toast({ title: '混合端口已更新' });
+      toast({ title: port === 0 ? '混合端口已禁用' : '混合端口已更新' });
     } catch (error) {
       toast({ title: '更新失败', description: String(error), variant: 'destructive' });
     }
@@ -244,8 +246,9 @@ export function NetworkSection({
               <span className="text-sm text-gray-600 dark:text-gray-300">Mixed Port</span>
               <Input
                 type="text"
-                value={config?.['mixed-port'] ?? ''}
+                value={status.mixed_port || ''}
                 onChange={(e) => handleMixedPortChange(e.target.value)}
+                placeholder="未启用"
                 className={cn('w-20 text-center font-mono', CONTROL_BASE_CLASS)}
               />
             </div>

@@ -721,7 +721,7 @@ export default function Home() {
               <div className="flex gap-5 mt-2">
                 <div>
                   <div className="text-[9px] uppercase text-gray-400 dark:text-gray-500 font-bold mb-0.5">
-                    端口
+                    HTTP 代理
                   </div>
                   <div className="text-base font-mono font-medium text-gray-700 dark:text-gray-300">
                     {status.port}
@@ -729,7 +729,7 @@ export default function Home() {
                 </div>
                 <div>
                   <div className="text-[9px] uppercase text-gray-400 dark:text-gray-500 font-bold mb-0.5">
-                    SOCKS5
+                    SOCKS5 代理
                   </div>
                   <div className="text-base font-mono font-medium text-gray-700 dark:text-gray-300">
                     {status.socks_port}

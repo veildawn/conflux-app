@@ -188,6 +188,23 @@ impl MihomoApi {
         }
     }
 
+    /// 设置代理端口（设为 0 可禁用对应端口）
+    pub async fn set_ports(&self, port: u16, socks_port: u16) -> Result<()> {
+        let url = format!("{}/configs", self.base_url);
+        let request = self.client.patch(&url).json(&json!({
+            "port": port,
+            "socks-port": socks_port
+        }));
+        let response = self.auth_header(request).send().await?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            let error_text = response.text().await.unwrap_or_default();
+            Err(anyhow::anyhow!("Failed to set ports: {}", error_text))
+        }
+    }
+
     /// 重载配置
     pub async fn reload_configs(&self, path: &str, force: bool) -> Result<()> {
         let url = format!("{}/configs", self.base_url);

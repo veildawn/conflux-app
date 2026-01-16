@@ -14,19 +14,27 @@ pub async fn set_system_proxy(app: AppHandle) -> Result<(), String> {
 
     crate::commands::require_active_subscription_with_proxies()?;
 
-    // 获取代理端口
-    let config = state
+    // 从 settings.json 获取端口配置（运行时 config.yaml 中端口为 0）
+    let settings = state
         .config_manager
-        .load_mihomo_config()
+        .load_app_settings()
         .map_err(|e| e.to_string())?;
+
+    let port = settings.mihomo.port.unwrap_or(7890);
+    let socks_port = settings.mihomo.socks_port.unwrap_or(7891);
+
+    // 先通过 mihomo API 恢复端口监听
+    state
+        .mihomo_api
+        .set_ports(port, socks_port)
+        .await
+        .map_err(|e| format!("Failed to enable mihomo ports: {}", e))?;
 
     // 设置 HTTP 代理
-    SystemProxy::set_http_proxy("127.0.0.1", config.port.unwrap_or(7890))
-        .map_err(|e| e.to_string())?;
+    SystemProxy::set_http_proxy("127.0.0.1", port).map_err(|e| e.to_string())?;
 
     // 设置 SOCKS 代理
-    SystemProxy::set_socks_proxy("127.0.0.1", config.socks_port.unwrap_or(7891))
-        .map_err(|e| e.to_string())?;
+    SystemProxy::set_socks_proxy("127.0.0.1", socks_port).map_err(|e| e.to_string())?;
 
     // 更新状态（注意：必须在调用 get_proxy_status 之前释放锁，否则会死锁）
     {
@@ -40,7 +48,7 @@ pub async fn set_system_proxy(app: AppHandle) -> Result<(), String> {
         let _ = app.emit("proxy-status-changed", status);
     }
 
-    log::info!("System proxy enabled");
+    log::info!("System proxy enabled with ports {}:{}", port, socks_port);
     Ok(())
 }
 
@@ -49,7 +57,14 @@ pub async fn set_system_proxy(app: AppHandle) -> Result<(), String> {
 pub async fn clear_system_proxy(app: AppHandle) -> Result<(), String> {
     let state = get_app_state_or_err()?;
 
+    // 清除系统代理设置
     SystemProxy::clear_proxy().map_err(|e| e.to_string())?;
+
+    // 通过 mihomo API 禁用端口监听（设为 0）
+    if let Err(e) = state.mihomo_api.set_ports(0, 0).await {
+        log::warn!("Failed to disable mihomo ports: {}", e);
+        // 不阻断流程，继续更新状态
+    }
 
     // 更新状态（注意：必须在调用 get_proxy_status 之前释放锁，否则会死锁）
     {
@@ -63,7 +78,7 @@ pub async fn clear_system_proxy(app: AppHandle) -> Result<(), String> {
         let _ = app.emit("proxy-status-changed", status);
     }
 
-    log::info!("System proxy cleared");
+    log::info!("System proxy cleared and mihomo ports disabled");
     Ok(())
 }
 
@@ -194,6 +209,9 @@ fn parse_public_ip_from_json(source: &str, v: &serde_json::Value) -> Option<(Str
 }
 
 /// 获取公网 IP 信息（并发请求多个源，返回最快成功结果）
+///
+/// 当代理运行时，通过代理发起请求以获取代理后的出口 IP；
+/// 否则直接请求获取本机公网 IP。
 #[tauri::command]
 pub async fn get_public_ip_info() -> Result<Option<PublicIpInfo>, String> {
     use reqwest::header;
@@ -208,7 +226,21 @@ pub async fn get_public_ip_info() -> Result<Option<PublicIpInfo>, String> {
         "https://ipinfo.io/json",
     ];
 
-    let client = reqwest::Client::builder()
+    // 检查代理是否运行，如果运行则通过代理获取出口 IP
+    let proxy_url = if let Ok(state) = super::get_app_state_or_err() {
+        if state.mihomo_manager.is_running().await {
+            // 使用 HTTP 代理端口
+            let config = state.config_manager.load_mihomo_config().ok();
+            let port = config.and_then(|c| c.port).unwrap_or(7890);
+            Some(format!("http://127.0.0.1:{}", port))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let mut client_builder = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .default_headers({
             let mut headers = header::HeaderMap::new();
@@ -220,9 +252,16 @@ pub async fn get_public_ip_info() -> Result<Option<PublicIpInfo>, String> {
                 ),
             );
             headers
-        })
-        .build()
-        .map_err(|e| e.to_string())?;
+        });
+
+    // 如果代理运行，通过代理请求
+    if let Some(ref proxy_addr) = proxy_url {
+        if let Ok(proxy) = reqwest::Proxy::all(proxy_addr) {
+            client_builder = client_builder.proxy(proxy);
+        }
+    }
+
+    let client = client_builder.build().map_err(|e| e.to_string())?;
 
     // 用 JoinSet 并发执行；一旦拿到第一个成功结果，立刻 abort 其他请求
     let mut set = tokio::task::JoinSet::new();
