@@ -96,9 +96,10 @@ pub async fn activate_profile(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    use crate::commands::proxy::detect_run_mode;
     use crate::commands::reload::{
-        build_base_config_from_settings_with_proxy_state, detect_config_change_type, reload_config,
-        sync_proxy_status, ConfigChangeType, ReloadOptions,
+        build_base_config_from_settings_with_proxy_state, detect_config_change_type_with_mode,
+        reload_config, sync_proxy_status, ConfigChangeType, ReloadOptions,
     };
 
     // 如果 MiHomo 未运行，只保存配置
@@ -157,20 +158,26 @@ pub async fn activate_profile(
         return Ok(());
     }
 
-    // 检测变更类型
-    let change_result = detect_config_change_type(&old_config, &runtime_config);
+    // 获取当前运行模式
+    let run_mode = detect_run_mode(true).await;
+
+    // 检测变更类型（结合运行模式）
+    let change_result =
+        detect_config_change_type_with_mode(&old_config, &runtime_config, &run_mode);
     let change_type = change_result.change_type;
     let restart_reason = change_result.reason.clone();
 
     log::warn!(
-        "[Profile] 切换配置 '{}': {:?}, 原因: {:?}",
+        "[Profile] 切换配置 '{}': {:?}, 运行模式: {:?}, 原因: {:?}",
         id,
         change_type,
+        run_mode,
         restart_reason
     );
 
     // 克隆需要在异步任务中使用的数据
     let mihomo_manager = state.mihomo_manager.clone();
+    let mihomo_api = state.mihomo_api.clone();
     let profile_id = id.clone();
 
     // 记录本次请求的 Profile ID
@@ -206,11 +213,22 @@ pub async fn activate_profile(
 
         let result = match change_type {
             ConfigChangeType::HotReload => {
-                log::warn!("[Profile] 执行热重载");
+                log::warn!("[Profile] 执行热重载 (PUT /configs)");
                 reload_config(Some(&app), &ReloadOptions::quick()).await
             }
-            ConfigChangeType::RequiresRestart => {
-                log::warn!("[Profile] 执行核心重启");
+            ConfigChangeType::ApiRestart => {
+                log::warn!("[Profile] 执行 API restart (POST /restart)");
+                match mihomo_api.restart().await {
+                    Ok(_) => {
+                        // 等待 API 重新就绪
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        Ok(())
+                    }
+                    Err(e) => Err(e.to_string()),
+                }
+            }
+            ConfigChangeType::ProcessRestart => {
+                log::warn!("[Profile] 执行进程级重启 (stop + start)");
                 mihomo_manager.restart().await.map_err(|e| e.to_string())
             }
         };
@@ -219,6 +237,7 @@ pub async fn activate_profile(
         sync_proxy_status(&app).await;
 
         // 发送事件通知前端
+        let restarted = change_type.requires_restart();
         match &result {
             Ok(_) => {
                 log::warn!("[Profile] 配置应用成功");
@@ -227,7 +246,8 @@ pub async fn activate_profile(
                     serde_json::json!({
                         "profile_id": profile_id,
                         "success": true,
-                        "restarted": matches!(change_type, ConfigChangeType::RequiresRestart),
+                        "restarted": restarted,
+                        "restart_type": format!("{:?}", change_type),
                         "restart_reason": restart_reason,
                     }),
                 );
@@ -250,7 +270,8 @@ pub async fn activate_profile(
                         "profile_id": profile_id,
                         "success": false,
                         "error": e,
-                        "restarted": matches!(change_type, ConfigChangeType::RequiresRestart),
+                        "restarted": restarted,
+                        "restart_type": format!("{:?}", change_type),
                         "restart_reason": restart_reason,
                     }),
                 );
@@ -267,9 +288,10 @@ pub async fn refresh_profile(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<ProfileMetadata, String> {
+    use crate::commands::proxy::detect_run_mode;
     use crate::commands::reload::{
-        build_base_config_from_settings_with_proxy_state, detect_config_change_type, reload_config,
-        ConfigChangeType, ReloadOptions,
+        build_base_config_from_settings_with_proxy_state, detect_config_change_type_with_mode,
+        reload_config, ConfigChangeType, ReloadOptions,
     };
 
     let workspace = Workspace::new().map_err(|e| e.to_string())?;
@@ -320,13 +342,24 @@ pub async fn refresh_profile(
             .save_mihomo_config(&runtime_config)
             .map_err(|e| e.to_string())?;
 
+        // 获取当前运行模式
+        let run_mode = detect_run_mode(true).await;
+
         // 检测变更类型并应用
-        let change_result = detect_config_change_type(&old_config, &runtime_config);
-        log::debug!("Profile refresh change type: {:?}", change_result);
+        let change_result =
+            detect_config_change_type_with_mode(&old_config, &runtime_config, &run_mode);
+        log::debug!(
+            "Profile refresh change type: {:?}, run_mode: {:?}",
+            change_result,
+            run_mode
+        );
 
         let _ = match change_result.change_type {
             ConfigChangeType::HotReload => reload_config(None, &ReloadOptions::safe()).await,
-            ConfigChangeType::RequiresRestart => state
+            ConfigChangeType::ApiRestart => {
+                state.mihomo_api.restart().await.map_err(|e| e.to_string())
+            }
+            ConfigChangeType::ProcessRestart => state
                 .mihomo_manager
                 .restart()
                 .await

@@ -536,16 +536,22 @@ impl MihomoManager {
             const CREATE_NO_WINDOW: u32 = 0x08000000;
 
             let tun_enabled = is_tun_enabled();
+            let is_admin = Self::is_running_as_admin();
 
             log::info!(
-                "Start check: tun_enabled={}, use_service_mode={}",
+                "Windows start check: tun_enabled={}, use_service_mode={}, is_admin={}",
                 tun_enabled,
-                use_service_mode
+                use_service_mode,
+                is_admin
             );
 
-            // 优先级 1：如果服务正在运行，通过服务启动
+            // 优先级 1：如果服务正在运行，通过服务启动（无论 TUN 是否启用）
+            // 保持 Service 模式运行，后续开启 TUN 只需 API restart
             if use_service_mode {
-                log::info!("Service is running, starting mihomo via service...");
+                log::info!(
+                    "Service is running, starting mihomo via service (tun={})...",
+                    tun_enabled
+                );
                 log::debug!("  mihomo_path: {:?}", mihomo_path);
                 log::debug!("  config_dir: {}", config_dir_str);
                 log::debug!("  config_path: {}", config_path_str);
@@ -559,56 +565,41 @@ impl MihomoManager {
 
                 // 服务模式下 IPC 超时，返回错误
                 log::error!("Service IPC not ready after 10 seconds");
-                if tun_enabled {
-                    return Err(anyhow::anyhow!(
-                        "服务模式下无法启动增强模式：服务 IPC 未就绪。\n\
-                        请检查 Conflux 服务是否正常运行，或尝试在设置中重启服务。"
-                    ));
-                } else {
-                    // TUN 未启用，可以普通模式启动
-                    log::info!("TUN not enabled, starting in normal mode...");
-                    Command::new(&mihomo_path)
-                        .current_dir(config_dir)
-                        .env("SAFE_PATHS", &config_dir_str)
-                        .args(["-d", &config_dir_str, "-f", &config_path_str])
-                        .creation_flags(CREATE_NO_WINDOW)
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .spawn()
-                        .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?
-                }
+                return Err(anyhow::anyhow!(
+                    "服务模式下无法启动：服务 IPC 未就绪。\n\
+                    请检查 Conflux 服务是否正常运行，或尝试在设置中重启服务。"
+                ));
             }
-            // 优先级 2：TUN 启用但服务未运行，检查是否以管理员模式运行
+
+            // 优先级 2：如果以管理员身份运行，直接启动（无论 TUN 是否启用）
+            // 保持 AdminWin 模式运行，后续开启 TUN 只需 API restart
+            if is_admin {
+                log::info!(
+                    "Running as admin, starting mihomo directly (tun={})...",
+                    tun_enabled
+                );
+                Command::new(&mihomo_path)
+                    .current_dir(config_dir)
+                    .env("SAFE_PATHS", &config_dir_str)
+                    .args(["-d", &config_dir_str, "-f", &config_path_str])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?
+            }
+            // 优先级 3：TUN 启用但没有权限，返回错误
             else if tun_enabled {
-                if Self::is_running_as_admin() {
-                    log::info!("TUN mode enabled, running as admin, starting mihomo directly...");
-                    Command::new(&mihomo_path)
-                        .current_dir(config_dir)
-                        .env("SAFE_PATHS", &config_dir_str)
-                        .args(["-d", &config_dir_str, "-f", &config_path_str])
-                        .creation_flags(CREATE_NO_WINDOW)
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .spawn()
-                        .map_err(|e| anyhow::anyhow!("Failed to spawn mihomo: {}", e))?
-                } else {
-                    // 不是管理员模式，返回带标识的错误，前端可据此提示用户重启
-                    log::error!(
-                        "TUN mode enabled but not running as admin and service not running"
-                    );
-                    return Err(anyhow::anyhow!(
-                        "NEED_ADMIN:增强模式需要管理员权限。请选择以下方式之一：\n\
-                        1. 在设置中安装并启动 Conflux 服务（推荐）\n\
-                        2. 以管理员身份重新启动应用"
-                    ));
-                }
+                log::error!("TUN mode enabled but not running as admin and service not running");
+                return Err(anyhow::anyhow!(
+                    "NEED_ADMIN:增强模式需要管理员权限。请选择以下方式之一：\n\
+                    1. 在设置中安装并启动 Conflux 服务（推荐）\n\
+                    2. 以管理员身份重新启动应用"
+                ));
             }
-            // 优先级 3：普通模式，直接启动
+            // 优先级 4：普通模式，直接启动
             else {
-                log::info!("Starting mihomo in normal mode...");
-                log::info!("  mihomo_path: {:?}", mihomo_path);
-                log::info!("  config_dir: {}", config_dir_str);
-                log::info!("  config_path: {}", config_path_str);
+                log::info!("Starting mihomo in normal mode (no admin, no service)...");
 
                 let child = Command::new(&mihomo_path)
                     .current_dir(config_dir)
@@ -628,20 +619,33 @@ impl MihomoManager {
             }
         };
 
-        // macOS: 根据 TUN 模式决定启动方式
+        // macOS: 优先使用有权限的模式启动
+        // 如果 helper 已配置好权限，即使 TUN 当前关闭，也通过 helper 启动
+        // 这样后续开启 TUN 只需 API restart，无需进程级重启
         #[cfg(target_os = "macos")]
         let (child, started_via_helper) = {
+            use crate::system::TunPermission;
             use crate::utils::{ensure_helper_in_data_dir, HELPER_PID_FILE};
 
             let tun_enabled = is_tun_enabled();
-            log::info!("macOS start check: tun_enabled={}", tun_enabled);
+            let has_helper_permission = TunPermission::check_permission().unwrap_or(false);
+
+            log::info!(
+                "macOS start check: tun_enabled={}, has_helper_permission={}",
+                tun_enabled,
+                has_helper_permission
+            );
 
             // 清理可能残留的 helper PID 文件
             let _ = fs::remove_file(HELPER_PID_FILE);
 
-            if tun_enabled {
-                // TUN 模式：通过 helper 启动
-                log::info!("Starting mihomo via helper for TUN mode...");
+            // 优先使用 helper 启动（如果有权限）
+            // 即使 TUN 关闭，也用 helper 启动，保持 HelperMac 模式
+            if has_helper_permission {
+                log::info!(
+                    "Starting mihomo via helper (has permission, tun={})...",
+                    tun_enabled
+                );
 
                 let helper_path = ensure_helper_in_data_dir()
                     .map_err(|e| anyhow::anyhow!("Helper not found: {}", e))?;
@@ -676,8 +680,8 @@ impl MihomoManager {
                 // 返回 None 表示没有 Child 句柄（进程由 helper 管理）
                 (None, true)
             } else {
-                // 普通模式：直接启动
-                log::info!("Starting mihomo in normal mode...");
+                // 没有 helper 权限：普通模式启动
+                log::info!("Starting mihomo in normal mode (no helper permission)...");
                 let child = Command::new(&mihomo_path)
                     .current_dir(config_dir)
                     .env("SAFE_PATHS", &config_dir_str)

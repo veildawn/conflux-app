@@ -340,4 +340,47 @@ impl MihomoApi {
             ))
         }
     }
+
+    /// 重启内核（POST /restart）
+    ///
+    /// 让 mihomo 内核自己重启，用于有权限模式下应用配置变更。
+    /// 与进程级重启（stop + start）不同，这不会改变进程权限。
+    pub async fn restart(&self) -> Result<()> {
+        let url = format!("{}/restart", self.base_url);
+        let request = self.client.post(&url).json(&serde_json::json!({}));
+        let response = self.auth_header(request).send().await?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            let error_text = response.text().await.unwrap_or_default();
+            Err(anyhow::anyhow!("Failed to restart mihomo: {}", error_text))
+        }
+    }
+
+    /// 升级内核（POST /upgrade）
+    ///
+    /// 触发 mihomo 核心自我更新。更新可能需要较长时间，建议设置较长的超时时间。
+    /// 返回 true 表示有更新并已升级，false 表示已是最新版本无需更新。
+    pub async fn upgrade(&self) -> Result<bool> {
+        let url = format!("{}/upgrade", self.base_url);
+        // 升级操作可能需要较长时间，使用单独的 client 并设置更长的超时
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(300)) // 5 分钟超时
+            .build()?;
+        let request = client.post(&url).json(&serde_json::json!({}));
+        let response = self.auth_header(request).send().await?;
+
+        if response.status().is_success() {
+            Ok(true)
+        } else {
+            let error_text = response.text().await.unwrap_or_default();
+            // 检查是否是"已是最新版本"的情况
+            if error_text.contains("already using latest version") {
+                Ok(false)
+            } else {
+                Err(anyhow::anyhow!("Failed to upgrade mihomo: {}", error_text))
+            }
+        }
+    }
 }

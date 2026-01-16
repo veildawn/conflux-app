@@ -199,7 +199,7 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
     }
 
     // 检测运行模式
-    let run_mode = detect_run_mode(running, enhanced_mode).await;
+    let run_mode = detect_run_mode(running).await;
 
     Ok(ProxyStatus {
         running,
@@ -217,7 +217,11 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
 }
 
 /// 检测当前运行模式
-async fn detect_run_mode(running: bool, enhanced_mode: bool) -> crate::models::RunMode {
+///
+/// 运行模式反映的是 mihomo 进程的权限状态，而不是 TUN 配置状态。
+/// - Windows：检查服务是否运行、应用是否以管理员权限运行
+/// - macOS：检查 helper PID 文件是否存在（表示通过 helper 以 root 启动）
+pub async fn detect_run_mode(running: bool) -> crate::models::RunMode {
     use crate::models::RunMode;
 
     if !running {
@@ -240,7 +244,7 @@ async fn detect_run_mode(running: bool, enhanced_mode: bool) -> crate::models::R
             }
         }
 
-        // 检查是否以管理员权限运行（始终显示，不依赖增强模式）
+        // 检查是否以管理员权限运行
         if crate::system::is_running_as_admin() {
             log::debug!("detect_run_mode: AdminWin (running as admin)");
             return RunMode::AdminWin;
@@ -251,13 +255,13 @@ async fn detect_run_mode(running: bool, enhanced_mode: bool) -> crate::models::R
 
     #[cfg(target_os = "macos")]
     {
-        // macOS: 当启用增强模式且 TUN 权限已设置时，视为提权模式
-        if enhanced_mode {
-            let has_permission = crate::system::TunPermission::check_permission().unwrap_or(false);
-            if has_permission {
-                log::debug!("detect_run_mode: HelperMac (TUN permission set)");
-                return RunMode::HelperMac;
-            }
+        use crate::utils::has_helper_pid_file;
+
+        // 检查是否通过 helper 启动（HELPER_PID_FILE 存在）
+        // 这表示 mihomo 以 root 权限运行，无论 TUN 是否启用
+        if has_helper_pid_file() {
+            log::debug!("detect_run_mode: HelperMac (helper PID file exists)");
+            return RunMode::HelperMac;
         }
         RunMode::Normal
     }
@@ -571,18 +575,13 @@ pub async fn close_all_connections() -> Result<(), String> {
 
 /// 设置 TUN 模式（增强模式）
 ///
-/// 优化后的流程：
-/// 1. 检查代理是否运行
-/// 2. 如果启用 TUN，检查是否有激活的订阅
-/// 3. 如果启用 TUN，检查并设置权限
-/// 4. 备份当前配置
-/// 5. 更新配置文件
-/// 6. 重新加载或重启代理
-/// 7. 验证健康状态
-/// 8. 如果失败，回滚配置和状态
+/// 重构后的智能流程：
+/// - 有权限模式（Service/AdminWin/HelperMac）：使用 API restart，无需重启进程
+/// - 普通模式启用 TUN：进行权限前置检查 + 进程级重启
+/// - 关闭 TUN：任意模式都使用 API restart
 #[tauri::command]
 pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
-    use crate::commands::reload::sync_proxy_status;
+    use crate::commands::reload::{should_process_restart_for_tun_change, sync_proxy_status};
 
     let state = get_app_state_or_err()?;
 
@@ -605,27 +604,59 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
         previous_enabled
     );
 
-    // ========== 启用 TUN 模式 ==========
-    if enabled {
-        // 1. 前置检查
+    // 获取当前运行模式
+    let run_mode = detect_run_mode(true).await;
+    log::info!("Current run mode: {:?}", run_mode);
+
+    // 判断是否需要进程级重启
+    let need_process_restart =
+        should_process_restart_for_tun_change(previous_enabled, enabled, &run_mode);
+
+    if need_process_restart {
+        // ========== 进程级重启路径：普通模式启用 TUN ==========
+        log::info!("Using process restart path for TUN mode change");
+
+        // 前置检查：确保有激活的订阅
         crate::commands::require_active_subscription_with_proxies()?;
 
-        let has_permission =
-            crate::system::TunPermission::check_permission().map_err(|e| e.to_string())?;
-        if !has_permission {
-            log::info!("TUN permission not set, requesting setup...");
-            crate::system::TunPermission::setup_permission()
-                .map_err(|e| format!("增强模式需要额外系统权限/组件：{}", e))?;
+        // 平台特定的权限前置检查
+        #[cfg(target_os = "windows")]
+        {
+            use crate::system::WinServiceManager;
+
+            // Windows 普通模式：检查是否有获取权限的途径
+            let service_running = WinServiceManager::is_running().unwrap_or(false);
+            let is_admin = crate::system::is_running_as_admin();
+
+            if !service_running && !is_admin {
+                log::error!("TUN mode enabled but not running as admin and service not running");
+                return Err("NEED_ADMIN:增强模式需要管理员权限。请选择以下方式之一：\n\
+                    1. 在设置中安装并启动 Conflux 服务（推荐）\n\
+                    2. 以管理员身份重新启动应用"
+                    .to_string());
+            }
         }
 
-        // 2. 停止当前核心
+        #[cfg(target_os = "macos")]
+        {
+            // macOS 普通模式：检查并设置 helper 权限
+            let has_permission =
+                crate::system::TunPermission::check_permission().map_err(|e| e.to_string())?;
+            if !has_permission {
+                log::info!("TUN permission not set, requesting setup...");
+                crate::system::TunPermission::setup_permission()
+                    .map_err(|e| format!("增强模式需要额外系统权限/组件：{}", e))?;
+            }
+        }
+
+        // 停止当前核心
         state
             .mihomo_manager
             .stop()
             .await
             .map_err(|e| e.to_string())?;
 
-        // 3. 更新配置文件
+        // 更新配置文件
         if let Err(e) = state.config_manager.update_tun_mode(true) {
             log::error!("Failed to update TUN config: {}", e);
             // 尝试恢复核心（普通模式）
@@ -633,27 +664,12 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
             return Err(format!("更新配置失败: {}", e));
         }
 
-        // 4. 以 TUN 模式启动核心
+        // 以新权限启动核心
         match state.mihomo_manager.start().await {
             Ok(_) => {
-                // 启动成功，更新状态和 settings.json
-                {
-                    let mut enhanced_mode = state.enhanced_mode.lock().await;
-                    *enhanced_mode = true;
-                }
-
-                if let Ok(mut app_settings) = state.config_manager.load_app_settings() {
-                    app_settings.mihomo.tun.enable = true;
-                    if app_settings.mihomo.tun.stack.is_none() {
-                        app_settings.mihomo.tun.stack = Some("system".to_string());
-                    }
-                    if let Err(e) = state.config_manager.save_app_settings(&app_settings) {
-                        log::warn!("Failed to sync TUN setting to settings.json: {}", e);
-                    }
-                }
-
+                update_tun_state(&state, &app, true).await;
                 sync_proxy_status(&app).await;
-                log::info!("TUN mode enabled successfully");
+                log::info!("TUN mode enabled successfully via process restart");
                 return Ok(());
             }
             Err(e) => {
@@ -667,41 +683,58 @@ pub async fn set_tun_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
         }
     }
 
-    // ========== 禁用 TUN 模式 ==========
-    state
-        .mihomo_manager
-        .stop()
-        .await
-        .map_err(|e| e.to_string())?;
+    // ========== API restart 路径：有权限模式，或关闭 TUN ==========
+    log::info!("Using API restart path for TUN mode change");
 
     // 更新配置文件
-    if let Err(e) = state.config_manager.update_tun_mode(false) {
+    if let Err(e) = state.config_manager.update_tun_mode(enabled) {
         log::error!("Failed to update TUN config: {}", e);
         return Err(format!("更新配置失败: {}", e));
     }
 
-    // 以普通模式启动核心
-    if let Err(e) = state.mihomo_manager.start().await {
-        log::error!("Failed to start mihomo in normal mode: {}", e);
-        return Err(format!("启动代理核心失败: {}", e));
-    }
+    // 调用 API restart
+    match state.mihomo_api.restart().await {
+        Ok(_) => {
+            log::info!("MiHomo API restart requested");
 
-    // 更新状态和 settings.json
+            // 等待内核重启完成
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+            update_tun_state(&state, &app, enabled).await;
+            sync_proxy_status(&app).await;
+            log::info!(
+                "TUN mode {} successfully via API restart",
+                if enabled { "enabled" } else { "disabled" }
+            );
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("MiHomo API restart failed: {}", e);
+            // 回滚配置
+            let _ = state.config_manager.update_tun_mode(previous_enabled);
+            Err(format!("内核重启失败: {}", e))
+        }
+    }
+}
+
+/// 更新 TUN 状态到内存和 settings.json
+async fn update_tun_state(state: &crate::commands::AppState, _app: &AppHandle, enabled: bool) {
+    // 更新内存状态
     {
         let mut enhanced_mode = state.enhanced_mode.lock().await;
-        *enhanced_mode = false;
+        *enhanced_mode = enabled;
     }
 
+    // 同步到 settings.json
     if let Ok(mut app_settings) = state.config_manager.load_app_settings() {
-        app_settings.mihomo.tun.enable = false;
+        app_settings.mihomo.tun.enable = enabled;
+        if enabled && app_settings.mihomo.tun.stack.is_none() {
+            app_settings.mihomo.tun.stack = Some("system".to_string());
+        }
         if let Err(e) = state.config_manager.save_app_settings(&app_settings) {
             log::warn!("Failed to sync TUN setting to settings.json: {}", e);
         }
     }
-
-    sync_proxy_status(&app).await;
-    log::info!("TUN mode disabled successfully");
-    Ok(())
 }
 
 /// 检查 TUN 权限状态
@@ -799,19 +832,83 @@ pub async fn get_core_version() -> Result<VersionInfo, String> {
     Ok(version)
 }
 
+/// 升级核心（调用 mihomo /upgrade API）
+///
+/// 触发 mihomo 核心自我更新，更新完成后返回新的版本信息
+#[tauri::command]
+pub async fn upgrade_core() -> Result<VersionInfo, String> {
+    let state = get_app_state_or_err()?;
+
+    if !state.mihomo_manager.is_running().await {
+        return Err("代理服务未运行".to_string());
+    }
+
+    // 获取当前版本
+    let current_version = state
+        .mihomo_api
+        .get_version()
+        .await
+        .map_err(|e| format!("获取版本失败: {}", e))?;
+
+    log::info!(
+        "Checking for core upgrade, current version: {}",
+        current_version.version
+    );
+
+    // 调用升级 API，返回 true 表示有更新，false 表示已是最新版本
+    let has_update = state
+        .mihomo_api
+        .upgrade()
+        .await
+        .map_err(|e| format!("升级失败: {}", e))?;
+
+    if !has_update {
+        // 已是最新版本，直接返回当前版本
+        log::info!(
+            "Core is already at latest version: {}",
+            current_version.version
+        );
+        return Ok(current_version);
+    }
+
+    log::info!("Core upgrade completed, waiting for restart...");
+
+    // 等待核心重启完成，带重试逻辑
+    let mut version: Option<VersionInfo> = None;
+    for i in 0..15 {
+        // 最多等待 15 秒
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        match state.mihomo_api.get_version().await {
+            Ok(v) => {
+                version = Some(v);
+                log::info!("Core is ready after {} seconds", i + 1);
+                break;
+            }
+            Err(e) => {
+                log::debug!("Waiting for core to restart... attempt {}: {}", i + 1, e);
+            }
+        }
+    }
+
+    match version {
+        Some(v) => {
+            log::info!("Core upgraded to version: {}", v.version);
+            Ok(v)
+        }
+        None => Err("升级后核心未能及时响应，请稍后手动检查版本".to_string()),
+    }
+}
+
 /// 获取当前运行模式
 ///
 /// 返回核心的运行模式（普通/服务/管理员/助手）
 /// 该命令与运行状态检测解耦，可独立调用
 #[tauri::command]
 pub async fn get_run_mode() -> Result<crate::models::RunMode, String> {
-    let state = get_app_state_or_err()?;
-
-    // 读取增强模式状态
-    let enhanced_mode = *state.enhanced_mode.lock().await;
+    let _state = get_app_state_or_err()?;
 
     // 检测运行模式（假设核心正在运行，由前端通过 version API 判断）
-    let run_mode = detect_run_mode(true, enhanced_mode).await;
+    let run_mode = detect_run_mode(true).await;
 
     Ok(run_mode)
 }

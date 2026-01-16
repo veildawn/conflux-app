@@ -1,4 +1,9 @@
-import { useSettingsData, usePortSettings, useUpdateChecker } from './settings/hooks';
+import {
+  useSettingsData,
+  usePortSettings,
+  useUpdateChecker,
+  useCoreUpdateChecker,
+} from './settings/hooks';
 import {
   GeneralSection,
   NetworkSection,
@@ -31,6 +36,7 @@ export default function Settings() {
     usePortSettings({ status, setPorts });
 
   const { updateStatus, latestVersion, updateUrl, checkForUpdates } = useUpdateChecker(appVersion);
+  const { coreUpdateStatus, newCoreVersion, upgradeCore } = useCoreUpdateChecker(coreVersion);
 
   if (loading) {
     return (
@@ -61,6 +67,9 @@ export default function Settings() {
           latestVersion={latestVersion}
           updateUrl={updateUrl}
           onCheckUpdate={checkForUpdates}
+          coreUpdateStatus={coreUpdateStatus}
+          newCoreVersion={newCoreVersion}
+          onUpgradeCore={upgradeCore}
         />
 
         <NetworkSection

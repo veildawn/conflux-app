@@ -16,16 +16,30 @@ use tokio::time::sleep;
 
 use crate::commands::proxy::get_proxy_status;
 use crate::commands::{get_app_state_or_err, try_get_app_state, AppState};
-use crate::models::MihomoConfig;
+use crate::models::{MihomoConfig, RunMode};
 use crate::tray_menu::TrayMenuState;
 
 /// 配置变更类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigChangeType {
-    /// 可以热重载的配置变更（无需重启进程）
+    /// 可以热重载的配置变更（PUT /configs 或 PATCH /configs）
     HotReload,
-    /// 需要重启进程的配置变更
-    RequiresRestart,
+    /// 需要 API restart 的配置变更（POST /restart）
+    /// 用于 TUN 相关变更且当前处于有权限模式
+    ApiRestart,
+    /// 需要进程级重启的配置变更（stop + start）
+    /// 用于普通模式启用 TUN（需要获取权限）或 external-controller 变更
+    ProcessRestart,
+}
+
+impl ConfigChangeType {
+    /// 是否需要重启（API restart 或进程级重启）
+    pub fn requires_restart(&self) -> bool {
+        matches!(
+            self,
+            ConfigChangeType::ApiRestart | ConfigChangeType::ProcessRestart
+        )
+    }
 }
 
 /// 检测配置变更结果
@@ -36,26 +50,78 @@ pub struct ConfigChangeResult {
     pub reason: Option<String>,
 }
 
-/// 检测两个配置之间的变更类型
+/// 判断 TUN 变更是否需要进程级重启（stop + start）
 ///
-/// 返回 `HotReload` 如果变更可以通过 API 热重载
-/// 返回 `RequiresRestart` 如果变更需要重启进程
-pub fn detect_config_change_type(old: &MihomoConfig, new: &MihomoConfig) -> ConfigChangeResult {
-    // 端口变更需要重启
+/// 返回 `true` 表示需要进程级重启（用于切换权限模式）
+/// 返回 `false` 表示只需 API restart（进程本身已有权限）
+///
+/// 核心原则：
+/// - 有权限模式（Service/AdminWin/HelperMac）下，TUN 相关变更只需 API restart
+/// - 只有普通模式启用 TUN 时，才需要进程级重启以获取权限
+pub fn should_process_restart_for_tun_change(
+    old_tun_enabled: bool,
+    new_tun_enabled: bool,
+    run_mode: &RunMode,
+) -> bool {
+    // TUN 没变化，不需要任何重启
+    if old_tun_enabled == new_tun_enabled {
+        return false;
+    }
+
+    // TUN 关闭：不需要权限，API restart 即可
+    if !new_tun_enabled {
+        log::info!("[TUN] 关闭 TUN，当前模式 {:?}，使用 API restart", run_mode);
+        return false;
+    }
+
+    // TUN 开启：检查当前是否已有权限
+    match run_mode {
+        RunMode::Service => {
+            log::info!("[TUN] 服务模式下启用 TUN，使用 API restart");
+            false
+        }
+        RunMode::AdminWin => {
+            log::info!("[TUN] 管理员模式下启用 TUN，使用 API restart");
+            false
+        }
+        RunMode::HelperMac => {
+            log::info!("[TUN] Helper 模式下启用 TUN，使用 API restart");
+            false
+        }
+        RunMode::Normal => {
+            log::info!("[TUN] 普通模式下启用 TUN，需要进程级重启获取权限");
+            true
+        }
+    }
+}
+
+/// 检测两个配置之间的变更类型（结合运行模式）
+///
+/// 这是推荐的变更类型检测函数，会根据当前运行模式智能判断：
+/// - 端口变更：HotReload（PATCH /configs）
+/// - TUN 模式变更：根据 RunMode 决定 ApiRestart 或 ProcessRestart
+/// - TUN 栈变更：ApiRestart
+/// - external-controller 变更：ProcessRestart
+pub fn detect_config_change_type_with_mode(
+    old: &MihomoConfig,
+    new: &MihomoConfig,
+    run_mode: &RunMode,
+) -> ConfigChangeResult {
+    // 端口变更可以通过 PATCH /configs 热更新，不需要重启
     if old.port != new.port || old.socks_port != new.socks_port || old.mixed_port != new.mixed_port
     {
         let reason = format!(
             "端口变更 (HTTP: {:?}->{:?}, SOCKS: {:?}->{:?}, Mixed: {:?}->{:?})",
             old.port, new.port, old.socks_port, new.socks_port, old.mixed_port, new.mixed_port
         );
-        log::warn!("[ConfigChange] {}", reason);
+        log::info!("[ConfigChange] {} - 可热重载", reason);
         return ConfigChangeResult {
-            change_type: ConfigChangeType::RequiresRestart,
+            change_type: ConfigChangeType::HotReload,
             reason: Some(reason),
         };
     }
 
-    // TUN 模式变更需要重启
+    // TUN 模式变更：根据运行模式决定操作类型
     let old_tun_enabled = old.tun.as_ref().map(|t| t.enable).unwrap_or(false);
     let new_tun_enabled = new.tun.as_ref().map(|t| t.enable).unwrap_or(false);
     if old_tun_enabled != new_tun_enabled {
@@ -64,14 +130,27 @@ pub fn detect_config_change_type(old: &MihomoConfig, new: &MihomoConfig) -> Conf
             if old_tun_enabled { "开启" } else { "关闭" },
             if new_tun_enabled { "开启" } else { "关闭" }
         );
-        log::warn!("[ConfigChange] {}", reason);
-        return ConfigChangeResult {
-            change_type: ConfigChangeType::RequiresRestart,
-            reason: Some(reason),
-        };
+
+        // 使用 should_process_restart_for_tun_change 判断
+        let need_process_restart =
+            should_process_restart_for_tun_change(old_tun_enabled, new_tun_enabled, run_mode);
+
+        if need_process_restart {
+            log::info!("[ConfigChange] {} - 需要进程级重启获取权限", reason);
+            return ConfigChangeResult {
+                change_type: ConfigChangeType::ProcessRestart,
+                reason: Some(reason),
+            };
+        } else {
+            log::info!("[ConfigChange] {} - 可通过 API restart", reason);
+            return ConfigChangeResult {
+                change_type: ConfigChangeType::ApiRestart,
+                reason: Some(reason),
+            };
+        }
     }
 
-    // TUN 栈变更需要重启
+    // TUN 栈变更：可以通过 API restart 热重载
     let old_tun_stack = old.tun.as_ref().and_then(|t| t.stack.as_ref());
     let new_tun_stack = new.tun.as_ref().and_then(|t| t.stack.as_ref());
     if old_tun_enabled && old_tun_stack != new_tun_stack {
@@ -80,32 +159,46 @@ pub fn detect_config_change_type(old: &MihomoConfig, new: &MihomoConfig) -> Conf
             old_tun_stack.unwrap_or(&"无".to_string()),
             new_tun_stack.unwrap_or(&"无".to_string())
         );
-        log::warn!("[ConfigChange] {}", reason);
+        log::info!("[ConfigChange] {} - 可通过 API restart", reason);
         return ConfigChangeResult {
-            change_type: ConfigChangeType::RequiresRestart,
+            change_type: ConfigChangeType::ApiRestart,
             reason: Some(reason),
         };
     }
 
-    // external-controller 变更需要重启
+    // external-controller 变更需要进程级重启（API 端点变了，无法通过 API 操作）
     if old.external_controller != new.external_controller {
         let reason = format!(
             "External Controller 变更 ({} -> {})",
             old.external_controller, new.external_controller
         );
-        log::warn!("[ConfigChange] {}", reason);
+        log::warn!("[ConfigChange] {} - 需要进程级重启", reason);
         return ConfigChangeResult {
-            change_type: ConfigChangeType::RequiresRestart,
+            change_type: ConfigChangeType::ProcessRestart,
             reason: Some(reason),
         };
     }
 
     // 其他变更可以热重载
-    log::warn!("[ConfigChange] 配置变更可以热重载，无需重启核心");
+    log::info!("[ConfigChange] 配置变更可以热重载，无需重启核心");
     ConfigChangeResult {
         change_type: ConfigChangeType::HotReload,
         reason: None,
     }
+}
+
+/// 检测两个配置之间的变更类型（兼容旧接口）
+///
+/// 注意：此函数不考虑运行模式，TUN 相关变更会返回 ProcessRestart。
+/// 推荐使用 `detect_config_change_type_with_mode` 以获得更精确的判断。
+#[allow(dead_code)]
+#[deprecated(
+    since = "0.4.0",
+    note = "请使用 detect_config_change_type_with_mode 以获得更精确的判断"
+)]
+pub fn detect_config_change_type(old: &MihomoConfig, new: &MihomoConfig) -> ConfigChangeResult {
+    // 使用 Normal 模式作为保守估计
+    detect_config_change_type_with_mode(old, new, &RunMode::Normal)
 }
 
 /// 配置重载选项

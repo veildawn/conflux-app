@@ -351,6 +351,14 @@ export const ipc = {
   },
 
   /**
+   * 升级核心（调用 mihomo /upgrade API）
+   * 触发 mihomo 核心自我更新，更新完成后返回新的版本信息
+   */
+  async upgradeCore(): Promise<VersionInfo> {
+    return invoke('upgrade_core');
+  },
+
+  /**
    * 获取配置文件中的代理服务器列表
    */
   async getConfigProxies(): Promise<ProxyServerInfo[]> {

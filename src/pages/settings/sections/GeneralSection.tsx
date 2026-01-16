@@ -1,4 +1,4 @@
-import { Globe, Info, Power, ExternalLink, RefreshCw, Zap } from 'lucide-react';
+import { Globe, Info, Power, ExternalLink, RefreshCw, Zap, Cpu } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +22,10 @@ interface GeneralSectionProps {
   latestVersion: string;
   updateUrl: string;
   onCheckUpdate: () => void;
+  // 核心升级相关
+  coreUpdateStatus: 'idle' | 'upgrading' | 'success' | 'error';
+  newCoreVersion: string;
+  onUpgradeCore: () => void;
 }
 
 export function GeneralSection({
@@ -35,6 +39,9 @@ export function GeneralSection({
   latestVersion,
   updateUrl,
   onCheckUpdate,
+  coreUpdateStatus,
+  newCoreVersion,
+  onUpgradeCore,
 }: GeneralSectionProps) {
   return (
     <div>
@@ -63,8 +70,8 @@ export function GeneralSection({
             icon={Info}
             iconBgColor="bg-blue-50 dark:bg-blue-500/10"
             iconColor="text-blue-500"
-            title="当前版本"
-            description={`App: ${appVersion || '...'}${latestVersion ? ` (最新: ${latestVersion})` : ''} | Core: ${coreVersion || '...'}`}
+            title="应用版本"
+            description={`${appVersion || '...'}${latestVersion ? ` (最新: ${latestVersion})` : ''}`}
             action={
               <div className="flex items-center gap-2">
                 {updateStatus === 'available' && updateUrl && (
@@ -90,6 +97,28 @@ export function GeneralSection({
                   {updateStatus === 'checking' ? '检查中' : '检查更新'}
                 </Button>
               </div>
+            }
+          />
+          <Divider />
+          <SettingItem
+            icon={Cpu}
+            iconBgColor="bg-purple-50 dark:bg-purple-500/10"
+            iconColor="text-purple-500"
+            title="核心版本"
+            description={`Mihomo ${coreVersion || '...'}${newCoreVersion && newCoreVersion !== coreVersion ? ` → ${newCoreVersion}` : ''}`}
+            action={
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onUpgradeCore}
+                disabled={coreUpdateStatus === 'upgrading' || coreVersion === '未运行'}
+                className="h-7 text-xs rounded-full px-3"
+              >
+                {coreUpdateStatus === 'upgrading' ? (
+                  <RefreshCw className="w-3 h-3 animate-spin mr-1" />
+                ) : null}
+                {coreUpdateStatus === 'upgrading' ? '升级中' : '检查更新'}
+              </Button>
             }
           />
           <Divider />

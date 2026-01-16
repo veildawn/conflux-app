@@ -148,7 +148,40 @@ pub fn ensure_mihomo_in_data_dir() -> Result<PathBuf> {
 
     if user_binary_path.exists() {
         if let Some(ref source_path) = source_path {
-            if should_refresh_binary(source_path, &user_binary_path)? {
+            // 比较版本号，只有打包版本更高时才覆盖
+            let source_version = get_mihomo_version(source_path);
+            let dest_version = get_mihomo_version(&user_binary_path);
+
+            let should_update = match (&source_version, &dest_version) {
+                (Some(src), Some(dst)) => {
+                    let cmp = compare_versions(src, dst);
+                    if cmp > 0 {
+                        log::info!(
+                            "Bundled MiHomo {} is newer than installed {}, will update",
+                            src,
+                            dst
+                        );
+                        true
+                    } else if cmp < 0 {
+                        log::info!(
+                            "Installed MiHomo {} is newer than bundled {}, skipping update",
+                            dst,
+                            src
+                        );
+                        false
+                    } else {
+                        log::debug!("MiHomo versions are the same ({}), skipping update", src);
+                        false
+                    }
+                }
+                // 无法获取版本时，回退到文件比较
+                _ => {
+                    log::debug!("Could not compare versions, falling back to file comparison");
+                    should_refresh_binary(source_path, &user_binary_path)?
+                }
+            };
+
+            if should_update {
                 // 兼容旧版本：如果文件被设为 root-owned，普通用户进程将无法覆盖（EPERM）
                 if let Err(e) = std::fs::copy(source_path, &user_binary_path) {
                     if e.kind() == std::io::ErrorKind::PermissionDenied {
@@ -164,7 +197,7 @@ pub fn ensure_mihomo_in_data_dir() -> Result<PathBuf> {
                 }
             }
         }
-        // 确保现有文件权限合理（不仅仅是“可执行”）
+        // 确保现有文件权限合理（不仅仅是"可执行"）
         #[cfg(unix)]
         {
             normalize_mihomo_permissions(&user_binary_path)?;
@@ -184,6 +217,57 @@ pub fn ensure_mihomo_in_data_dir() -> Result<PathBuf> {
     Err(anyhow::anyhow!(
         "MiHomo binary not found for initialization"
     ))
+}
+
+/// 获取 MiHomo 二进制文件的版本号
+fn get_mihomo_version(path: &PathBuf) -> Option<String> {
+    use std::process::Command;
+
+    let output = Command::new(path).arg("-v").output().ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // 输出格式: "Mihomo Meta v1.19.19 ..." 或 "v1.19.19"
+    // 提取版本号
+    for word in stdout.split_whitespace() {
+        if word.starts_with('v')
+            && word
+                .chars()
+                .skip(1)
+                .next()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
+        {
+            return Some(word.to_string());
+        }
+    }
+    None
+}
+
+/// 比较版本号，返回: >0 表示 a 更新, <0 表示 b 更新, =0 表示相同
+fn compare_versions(a: &str, b: &str) -> i32 {
+    let parse_version = |v: &str| -> Vec<u32> {
+        v.trim_start_matches('v')
+            .split(|c: char| c == '.' || c == '-')
+            .filter_map(|s| s.parse::<u32>().ok())
+            .collect()
+    };
+
+    let va = parse_version(a);
+    let vb = parse_version(b);
+    let max_len = va.len().max(vb.len());
+
+    for i in 0..max_len {
+        let na = va.get(i).copied().unwrap_or(0);
+        let nb = vb.get(i).copied().unwrap_or(0);
+        if na != nb {
+            return if na > nb { 1 } else { -1 };
+        }
+    }
+    0
 }
 
 #[cfg(unix)]

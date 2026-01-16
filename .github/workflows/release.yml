@@ -162,6 +162,20 @@ jobs:
           chmod +x scripts/fetch-substore.sh
           ./scripts/fetch-substore.sh
 
+      - name: Cache GeoData
+        id: cache-geodata
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/geodata
+          key: geodata-v1
+
+      - name: Fetch GeoData
+        if: steps.cache-geodata.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          chmod +x scripts/fetch-geodata.sh
+          ./scripts/fetch-geodata.sh
+
       - name: Verify all resources
         run: |
           echo "=== Verifying all required resources ==="
@@ -177,10 +191,15 @@ jobs:
             echo "ERROR: Sub-Store frontend index.html not found!"; exit 1
           fi
           echo "✅ Sub-Store frontend present"
+          if [ ! -f "src-tauri/resources/geodata/GeoIP.dat" ]; then
+            echo "ERROR: GeoIP.dat not found!"; exit 1
+          fi
+          echo "✅ GeoData present"
           echo ""
           echo "=== All resources verified ==="
           ls -lh src-tauri/binaries/
           ls -lh src-tauri/resources/sub-store/
+          ls -lh src-tauri/resources/geodata/
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -354,6 +373,20 @@ jobs:
           chmod +x scripts/fetch-substore.sh
           ./scripts/fetch-substore.sh
 
+      - name: Cache GeoData
+        id: cache-geodata
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/geodata
+          key: geodata-v1
+
+      - name: Fetch GeoData
+        if: steps.cache-geodata.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          chmod +x scripts/fetch-geodata.sh
+          ./scripts/fetch-geodata.sh
+
       - name: Verify all resources
         run: |
           echo "=== Verifying all required resources ==="
@@ -369,10 +402,15 @@ jobs:
             echo "ERROR: Sub-Store frontend index.html not found!"; exit 1
           fi
           echo "✅ Sub-Store frontend present"
+          if [ ! -f "src-tauri/resources/geodata/GeoIP.dat" ]; then
+            echo "ERROR: GeoIP.dat not found!"; exit 1
+          fi
+          echo "✅ GeoData present"
           echo ""
           echo "=== All resources verified ==="
           ls -lh src-tauri/binaries/
           ls -lh src-tauri/resources/sub-store/
+          ls -lh src-tauri/resources/geodata/
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -558,6 +596,20 @@ jobs:
           chmod +x scripts/fetch-substore.sh
           ./scripts/fetch-substore.sh
 
+      - name: Cache GeoData
+        id: cache-geodata
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/geodata
+          key: geodata-v1
+
+      - name: Fetch GeoData
+        if: steps.cache-geodata.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          chmod +x scripts/fetch-geodata.sh
+          ./scripts/fetch-geodata.sh
+
       - name: Verify all resources
         shell: bash
         run: |
@@ -574,10 +626,15 @@ jobs:
             echo "ERROR: Sub-Store frontend index.html not found!"; exit 1
           fi
           echo "✅ Sub-Store frontend present"
+          if [ ! -f "src-tauri/resources/geodata/GeoIP.dat" ]; then
+            echo "ERROR: GeoIP.dat not found!"; exit 1
+          fi
+          echo "✅ GeoData present"
           echo ""
           echo "=== All resources verified ==="
           ls -lh src-tauri/binaries/
           ls -lh src-tauri/resources/sub-store/
+          ls -lh src-tauri/resources/geodata/
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile

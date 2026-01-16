@@ -585,6 +585,7 @@ fn main() {
             commands::proxy::get_rules_from_api,
             // 版本信息
             commands::proxy::get_core_version,
+            commands::proxy::upgrade_core,
             // 局域网共享
             commands::proxy::set_allow_lan,
             // 端口与网络选项
