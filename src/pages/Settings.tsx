@@ -4,6 +4,7 @@ import {
   NetworkSection,
   DnsSection,
   WindowsServiceSection,
+  DangerSection,
 } from './settings/sections';
 
 export default function Settings() {
@@ -103,6 +104,8 @@ export default function Settings() {
         />
 
         <WindowsServiceSection toast={toast} />
+
+        <DangerSection toast={toast} />
       </div>
     </div>
   );

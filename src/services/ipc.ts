@@ -973,6 +973,14 @@ export const ipc = {
     return invoke('restart_as_admin');
   },
 
+  /**
+   * 重置所有用户数据
+   * 删除所有配置和数据，然后重启应用
+   */
+  async resetAllData(): Promise<void> {
+    return invoke('reset_all_data');
+  },
+
   // ============= WebDAV 同步命令 =============
 
   /**
