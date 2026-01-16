@@ -578,8 +578,33 @@ pub async fn reset_all_data(app: AppHandle) -> Result<(), String> {
 
     log::info!("Reset completed, restarting app...");
 
-    // 4. 重启应用（此方法不会返回）
-    app.restart()
+    // 4. 获取当前可执行文件路径并启动新实例
+    let exe_path = std::env::current_exe().map_err(|e| format!("获取程序路径失败: {}", e))?;
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        const DETACHED_PROCESS: u32 = 0x00000008;
+
+        std::process::Command::new(&exe_path)
+            .creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS)
+            .spawn()
+            .map_err(|e| format!("启动新实例失败: {}", e))?;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::process::Command::new(&exe_path)
+            .spawn()
+            .map_err(|e| format!("启动新实例失败: {}", e))?;
+    }
+
+    // 5. 退出当前应用
+    log::info!("New instance started, exiting current instance...");
+    app.exit(0);
+
+    Ok(())
 }
 
 /// 让 Rust Analyzer / IDE 能追踪到通过 `tauri::generate_handler!` 注册的命令引用，
