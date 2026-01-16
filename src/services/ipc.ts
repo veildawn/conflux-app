@@ -79,6 +79,14 @@ export const ipc = {
   },
 
   /**
+   * 获取当前运行模式
+   * 返回核心的运行模式（普通/服务/管理员/助手）
+   */
+  async getRunMode(): Promise<'normal' | 'service' | 'admin_win' | 'helper_mac'> {
+    return invoke('get_run_mode');
+  },
+
+  /**
    * 获取代理组列表
    * @param mode 可选的模式过滤：'global' 只返回 GLOBAL，'rule' 返回除 GLOBAL 外的策略组，'direct' 返回空数组
    */

@@ -604,6 +604,79 @@ pub fn has_helper_pid_file() -> bool {
 }
 
 // ============================================================================
+// GeoData 内置资源
+// ============================================================================
+
+/// 内置的 GeoData 文件列表
+const BUNDLED_GEODATA_FILES: &[&str] = &["GeoIP.dat", "geosite.dat", "GeoLite2-ASN.mmdb"];
+
+/// 确保内置的 GeoData 资源已复制到数据目录
+///
+/// 在应用启动时调用，将内置的 GeoIP.dat、geosite.dat、GeoLite2-ASN.mmdb
+/// 复制到用户数据目录（如果目标文件不存在）
+pub fn ensure_bundled_geodata(app_handle: &tauri::AppHandle) -> Result<()> {
+    use tauri::Manager;
+
+    let data_dir = get_app_data_dir()?;
+
+    for file_name in BUNDLED_GEODATA_FILES {
+        let dest_path = data_dir.join(file_name);
+
+        // 如果目标文件已存在，跳过
+        if dest_path.exists() {
+            log::debug!("GeoData file already exists, skipping: {:?}", dest_path);
+            continue;
+        }
+
+        // 获取内置资源路径
+        let source_path = if cfg!(debug_assertions) {
+            // 开发模式：从项目目录加载
+            let exe_path = std::env::current_exe()
+                .map_err(|e| anyhow::anyhow!("Failed to get exe path: {}", e))?;
+            let project_dir = exe_path
+                .parent()
+                .and_then(|p| p.parent())
+                .and_then(|p| p.parent())
+                .and_then(|p| p.parent())
+                .ok_or_else(|| anyhow::anyhow!("Failed to determine project root"))?;
+            project_dir
+                .join("src-tauri")
+                .join("resources")
+                .join("geodata")
+                .join(file_name)
+        } else {
+            // 生产模式：使用 Tauri 的 resource_dir()
+            app_handle
+                .path()
+                .resource_dir()
+                .map_err(|e| anyhow::anyhow!("Failed to get resource dir: {}", e))?
+                .join("resources")
+                .join("geodata")
+                .join(file_name)
+        };
+
+        log::debug!("Looking for bundled GeoData at: {:?}", source_path);
+
+        if source_path.exists() {
+            // 复制文件
+            std::fs::copy(&source_path, &dest_path)?;
+            log::info!(
+                "Copied bundled GeoData: {:?} -> {:?}",
+                source_path,
+                dest_path
+            );
+        } else {
+            log::warn!(
+                "Bundled GeoData not found: {:?}, will download later",
+                source_path
+            );
+        }
+    }
+
+    Ok(())
+}
+
+// ============================================================================
 // 工具函数
 // ============================================================================
 

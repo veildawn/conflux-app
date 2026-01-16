@@ -321,10 +321,8 @@ fn main() {
             // 让 IDE/RA 能追踪到通过 generate_handler 注册的命令引用（避免 dead_code 误报）
             commands::system::link_tauri_commands_for_ide();
 
-            if let Err(err) = crate::utils::ensure_mihomo_in_data_dir() {
-                // 兼容旧版本：文件可能是 root-owned，普通用户进程无法覆盖
-                log::debug!("MiHomo binary init skipped/failed: {}", err);
-            }
+            // 注意：ensure_mihomo_in_data_dir 已移至 init_app_state 中与 ensure_bundled_geodata 并行执行
+            // 这样可以减少启动时的阻塞时间
 
             // 创建系统托盘
             let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
@@ -530,6 +528,7 @@ fn main() {
             commands::proxy::restart_proxy,
             commands::proxy::get_proxy_status,
             commands::proxy::switch_mode,
+            commands::proxy::get_run_mode,
             // 节点命令
             commands::proxy::get_proxies,
             commands::proxy::select_proxy,

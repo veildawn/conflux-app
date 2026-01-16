@@ -24,7 +24,8 @@
     "fetch:mihomo": "bash scripts/fetch-mihomo.sh",
     "fetch:node": "bash scripts/fetch-node.sh",
     "fetch:substore": "bash scripts/fetch-substore.sh",
-    "fetch:all": "pnpm run fetch:mihomo && pnpm run fetch:node && pnpm run fetch:substore",
+    "fetch:geodata": "bash scripts/fetch-geodata.sh",
+    "fetch:all": "pnpm run fetch:mihomo && pnpm run fetch:node && pnpm run fetch:substore && pnpm run fetch:geodata",
     "build:service": "powershell -ExecutionPolicy Bypass -File scripts/build-service.ps1",
     "build:service:release": "powershell -ExecutionPolicy Bypass -File scripts/build-service.ps1 -Release",
     "generate:icons": "node scripts/gen-icons.mjs"

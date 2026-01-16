@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { Outlet } from 'react-router-dom';
 import { listen } from '@tauri-apps/api/event';
@@ -14,21 +14,36 @@ import logger from '@/utils/logger';
 import type { ProxyStatus } from '@/types/proxy';
 
 export default function AppLayout() {
-  const { applyStatus, fetchStatus, fetchTraffic, fetchConnections, tickNow, start, status } =
-    useProxyStore(
-      useShallow((state) => ({
-        applyStatus: state.applyStatus,
-        fetchStatus: state.fetchStatus,
-        fetchTraffic: state.fetchTraffic,
-        fetchConnections: state.fetchConnections,
-        tickNow: state.tickNow,
-        start: state.start,
-        status: state.status,
-      }))
-    );
+  const {
+    applyStatus,
+    fetchStatus,
+    fetchTraffic,
+    fetchConnections,
+    tickNow,
+    start,
+    status,
+    probeStatus,
+    fetchRunMode,
+  } = useProxyStore(
+    useShallow((state) => ({
+      applyStatus: state.applyStatus,
+      fetchStatus: state.fetchStatus,
+      fetchTraffic: state.fetchTraffic,
+      fetchConnections: state.fetchConnections,
+      tickNow: state.tickNow,
+      start: state.start,
+      status: state.status,
+      probeStatus: state.probeStatus,
+      fetchRunMode: state.fetchRunMode,
+    }))
+  );
   const { fetchSettings, checkRuleDatabaseUpdates } = useAppStore();
   const { toast } = useToast();
   const initStarted = useRef(false);
+  /** 记录上次的运行状态，用于检测状态变化 */
+  const prevRunningRef = useRef<boolean | null>(null);
+  /** 标记后端是否已初始化完成 */
+  const [backendReady, setBackendReady] = useState(false);
 
   useEffect(() => {
     // 监听 Profile 重载完成事件（处理全局通知）
@@ -121,6 +136,7 @@ export default function AppLayout() {
       try {
         await fetchStatus();
         logger.log('AppLayout: Backend already ready, starting init...');
+        setBackendReady(true);
         init();
         return;
       } catch {
@@ -130,6 +146,7 @@ export default function AppLayout() {
 
       backendReadyUnlisten = await listen('backend-ready', () => {
         logger.log('AppLayout: Received backend-ready event');
+        setBackendReady(true);
         init();
       });
 
@@ -204,6 +221,63 @@ export default function AppLayout() {
       document.removeEventListener('cut', blockCopy);
     };
   }, []);
+
+  // 核心状态统一探测：动态调整轮询频率
+  // - 只在后端初始化完成后才开始轮询（避免"应用正在初始化中"错误）
+  // - 状态稳定后降低频率（1秒 -> 3秒），减少不必要的 API 调用
+  // - 状态变化时恢复高频率
+  useEffect(() => {
+    // 后端未就绪时不启动轮询
+    if (!backendReady) {
+      return;
+    }
+
+    // 稳定计数器：记录连续多少次状态未变化
+    let stableCount = 0;
+    const STABLE_THRESHOLD = 5; // 连续 5 次稳定后降低频率
+    const FAST_INTERVAL = 1000; // 1 秒
+    const SLOW_INTERVAL = 3000; // 3 秒
+    let currentInterval = FAST_INTERVAL;
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    const doProbe = async () => {
+      const running = await probeStatus();
+      const prevRunning = prevRunningRef.current;
+
+      // 状态变化时获取运行模式
+      if (prevRunning !== null && prevRunning !== running) {
+        logger.log(`AppLayout: Core status changed: ${prevRunning} -> ${running}`);
+        if (running) {
+          // 从停止变为运行，获取运行模式
+          fetchRunMode();
+        }
+        // 状态变化，重置稳定计数器并恢复高频轮询
+        stableCount = 0;
+        currentInterval = FAST_INTERVAL;
+      } else {
+        // 状态未变化，增加稳定计数
+        stableCount++;
+        if (stableCount >= STABLE_THRESHOLD && currentInterval !== SLOW_INTERVAL) {
+          currentInterval = SLOW_INTERVAL;
+          logger.debug('AppLayout: Status stable, switching to slow polling');
+        }
+      }
+
+      prevRunningRef.current = running;
+
+      // 调度下一次探测
+      timeoutId = setTimeout(doProbe, currentInterval);
+    };
+
+    // 立即执行第一次探测
+    doProbe();
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [backendReady, probeStatus, fetchRunMode]);
 
   // 定时刷新流量数据和连接数据
   useEffect(() => {

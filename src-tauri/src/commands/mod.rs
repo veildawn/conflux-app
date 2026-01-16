@@ -80,6 +80,33 @@ pub fn require_active_subscription_with_proxies() -> Result<(), String> {
 
 /// 初始化应用状态
 pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
+    // 并行执行资源复制操作（MiHomo 二进制 + GeoData）
+    // 这两个 IO 操作完全独立，并行可以减少启动时间
+    let app_clone = app.clone();
+    let (mihomo_result, geodata_result) = tokio::join!(
+        // ensure_mihomo_in_data_dir 是同步函数，使用 spawn_blocking 避免阻塞异步运行时
+        tokio::task::spawn_blocking(crate::utils::ensure_mihomo_in_data_dir),
+        // ensure_bundled_geodata 也是同步函数，包装为异步
+        async {
+            tokio::task::spawn_blocking(move || crate::utils::ensure_bundled_geodata(&app_clone))
+                .await
+        }
+    );
+
+    // 处理 MiHomo 二进制复制结果
+    match mihomo_result {
+        Ok(Ok(_)) => log::debug!("MiHomo binary ensured in data dir"),
+        Ok(Err(e)) => log::debug!("MiHomo binary init skipped/failed: {}", e),
+        Err(e) => log::warn!("MiHomo binary task panicked: {}", e),
+    }
+
+    // 处理 GeoData 复制结果
+    match geodata_result {
+        Ok(Ok(_)) => log::debug!("GeoData ensured in data dir"),
+        Ok(Err(e)) => log::warn!("Failed to copy bundled GeoData: {}", e),
+        Err(e) => log::warn!("GeoData task panicked: {}", e),
+    }
+
     let config_manager = Arc::new(ConfigManager::new()?);
 
     // 从 settings 获取 API 配置
@@ -95,6 +122,8 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     let active_profile_id = workspace.get_active_profile_id()?;
 
     let mut config_changed = false;
+    // 跟踪 settings 是否需要保存（合并多次保存为单次）
+    let mut settings_changed = false;
 
     if active_profile_id.is_none() {
         log::info!("No active profile detected, resetting config to default");
@@ -123,16 +152,16 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
         app_settings.mihomo.secret.clone()
     } else if !config.secret.is_empty() {
         // config.yaml 中有 secret，说明 mihomo 可能正在使用它
-        // 将它同步回 settings.json
+        // 将它同步回 settings.json（延迟保存）
         log::info!("Recovering secret from config.yaml");
         app_settings.mihomo.secret = config.secret.clone();
-        config_manager.save_app_settings(&app_settings)?;
+        settings_changed = true;
         config.secret.clone()
     } else {
-        // 两者都没有，生成新的
+        // 两者都没有，生成新的（延迟保存）
         let new_secret = generate_api_secret();
         app_settings.mihomo.secret = new_secret.clone();
-        config_manager.save_app_settings(&app_settings)?;
+        settings_changed = true;
         log::info!("Generated new API secret");
         new_secret
     };
@@ -162,12 +191,15 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
     let current_system_proxy = crate::system::SystemProxy::get_proxy_status().unwrap_or(false);
     log::info!("Detected system proxy status: {}", current_system_proxy);
 
-    // 检查 mihomo 是否运行
-    let is_running = mihomo_manager.is_running().await;
+    // 检查 mihomo 是否运行（缓存结果，避免重复检查）
+    // 注意：Windows 上 is_running 可能被修改，所以需要 mut
+    #[allow(unused_mut)]
+    let mut is_running = mihomo_manager.is_running().await;
+    log::debug!("Initial mihomo running check: {}", is_running);
 
-    // Windows: 检查服务状态
+    // Windows: 检查服务状态并尝试通过服务启动 mihomo
     #[cfg(target_os = "windows")]
-    let is_running = {
+    {
         use crate::system::WinServiceManager;
 
         // 优化：只检查服务是否运行，不查询 mihomo 状态（节省一次 HTTP 请求）
@@ -180,38 +212,30 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
             match mihomo_manager.start().await {
                 Ok(_) => {
                     log::info!("Mihomo started via service successfully");
-                    true
+                    is_running = true; // 更新缓存的状态
                 }
                 Err(e) => {
                     log::error!("Failed to start mihomo via service: {}", e);
-                    is_running
+                    // is_running 保持不变
                 }
             }
-        } else {
-            if service_running {
-                log::info!("Service and mihomo are both running");
-            }
-            is_running
+        } else if service_running {
+            log::info!("Service and mihomo are both running");
         }
-    };
+    }
 
     // 如果配置发生变更（如密钥更新）且 Mihomo 正在运行，需要重启以应用新配置
     // 否则 API 调用会因认证失败而报错
-    // 注意：这需要在服务启动检查之后，因为可能刚启动了 mihomo
-    let is_running_now = if is_running {
-        true
-    } else {
-        mihomo_manager.is_running().await
-    };
-    if config_changed && is_running_now {
+    // 注意：复用上面的 is_running 检查结果，避免重复调用
+    if config_changed && is_running {
         log::info!("API configuration changed, restarting Mihomo...");
         if let Err(e) = mihomo_manager.restart().await {
             log::warn!("Failed to restart Mihomo after config change: {}", e);
         }
     }
 
-    // 获取 enhanced_mode 状态
-    let enhanced_mode = if is_running_now {
+    // 获取 enhanced_mode 状态（复用 is_running 检查结果）
+    let enhanced_mode = if is_running {
         // 快速尝试获取配置，超时 500ms
         match tokio::time::timeout(
             std::time::Duration::from_millis(500),
@@ -237,7 +261,7 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
         false
     };
 
-    // 同步 settings.json 中的 TUN 设置与实际运行状态
+    // 同步 settings.json 中的 TUN 设置与实际运行状态（延迟保存）
     if app_settings.mihomo.tun.enable != enhanced_mode {
         log::info!(
             "Syncing TUN setting: settings.json={} -> actual={}",
@@ -245,36 +269,24 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
             enhanced_mode
         );
         app_settings.mihomo.tun.enable = enhanced_mode;
+        settings_changed = true;
+    }
+
+    // 统一保存 settings.json（合并多次变更为单次 IO）
+    if settings_changed {
         if let Err(e) = config_manager.save_app_settings(&app_settings) {
-            log::warn!("Failed to sync TUN setting to settings.json: {}", e);
+            log::warn!("Failed to save app settings: {}", e);
+        } else {
+            log::debug!("App settings saved (merged changes)");
         }
     }
 
-    // 初始化 Sub-Store 管理器
+    // 初始化 Sub-Store 管理器（懒加载：不在启动时自动启动服务）
+    // Sub-Store 会在用户首次访问相关页面时自动启动
     let substore_manager = Arc::new(Mutex::new(
         SubStoreManager::new(Some(39001))
             .map_err(|e| anyhow::anyhow!("Failed to create SubStore manager: {}", e))?,
     ));
-
-    // 自动启动 Sub-Store 服务
-    log::info!("Starting Sub-Store service...");
-    let app_handle_clone = app.clone();
-    let substore_manager_clone = substore_manager.clone();
-    tokio::spawn(async move {
-        match substore_manager_clone
-            .lock()
-            .await
-            .start(app_handle_clone)
-            .await
-        {
-            Ok(_) => {
-                log::info!("Sub-Store service started successfully");
-            }
-            Err(e) => {
-                log::error!("Failed to start Sub-Store service: {}", e);
-            }
-        }
-    });
 
     let state = AppState {
         mihomo_manager,

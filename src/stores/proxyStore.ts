@@ -1,7 +1,14 @@
 import { create } from 'zustand';
 import { ipc } from '@/services/ipc';
 import logger from '@/utils/logger';
-import type { ProxyStatus, ProxyGroup, TrafficData, ProxyMode, Connection } from '@/types/proxy';
+import type {
+  ProxyStatus,
+  ProxyGroup,
+  TrafficData,
+  ProxyMode,
+  Connection,
+  RunMode,
+} from '@/types/proxy';
 
 // 流量历史数据点
 export interface TrafficHistoryPoint {
@@ -66,6 +73,14 @@ interface ProxyState {
   setNeedAdminRestart: (value: boolean) => void;
   /** 以普通模式启动代理（强制禁用 TUN 模式） */
   startNormalMode: () => Promise<void>;
+  /**
+   * 探测核心状态（通过 version API）
+   * 返回版本号表示运行中，失败表示已停止
+   * @returns 是否运行中
+   */
+  probeStatus: () => Promise<boolean>;
+  /** 获取当前运行模式 */
+  fetchRunMode: () => Promise<void>;
 }
 
 const initialStatus: ProxyStatus = {
@@ -496,6 +511,56 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
       throw error;
     } finally {
       set({ loading: false });
+    }
+  },
+
+  /**
+   * 探测核心状态（通过 version API）
+   * 返回版本号表示运行中，失败表示已停止
+   */
+  probeStatus: async () => {
+    try {
+      const version = await ipc.getCoreVersion();
+      // 成功获取版本号，核心运行中
+      if (version?.version) {
+        set((state) => {
+          // 只在状态变化时更新，避免无效渲染
+          if (!state.status.running) {
+            return { status: { ...state.status, running: true } };
+          }
+          return state;
+        });
+        return true;
+      }
+      // 返回空版本，视为未运行
+      set((state) => {
+        if (state.status.running) {
+          return { status: { ...state.status, running: false } };
+        }
+        return state;
+      });
+      return false;
+    } catch {
+      // 请求失败，核心已停止
+      set((state) => {
+        if (state.status.running) {
+          return { status: { ...state.status, running: false } };
+        }
+        return state;
+      });
+      return false;
+    }
+  },
+
+  /** 获取当前运行模式 */
+  fetchRunMode: async () => {
+    try {
+      const runMode = await ipc.getRunMode();
+      set((state) => ({
+        status: { ...state.status, run_mode: runMode as RunMode },
+      }));
+    } catch (error) {
+      logger.debug('Failed to fetch run mode:', error);
     }
   },
 }));

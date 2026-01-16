@@ -38,7 +38,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["resources/sub-store"],
+    "resources": ["resources/sub-store", "resources/geodata"],
     "externalBin": ["binaries/node", "binaries/mihomo"],
     "category": "Utility",
     "shortDescription": "汇流 - 现代化代理管理桌面应用",

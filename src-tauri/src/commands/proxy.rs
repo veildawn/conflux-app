@@ -793,6 +793,23 @@ pub async fn get_core_version() -> Result<VersionInfo, String> {
     Ok(version)
 }
 
+/// 获取当前运行模式
+///
+/// 返回核心的运行模式（普通/服务/管理员/助手）
+/// 该命令与运行状态检测解耦，可独立调用
+#[tauri::command]
+pub async fn get_run_mode() -> Result<crate::models::RunMode, String> {
+    let state = get_app_state_or_err()?;
+
+    // 读取增强模式状态
+    let enhanced_mode = *state.enhanced_mode.lock().await;
+
+    // 检测运行模式（假设核心正在运行，由前端通过 version API 判断）
+    let run_mode = detect_run_mode(true, enhanced_mode).await;
+
+    Ok(run_mode)
+}
+
 // ============= Provider 命令 =============
 
 /// 代理 Provider 返回给前端的结构

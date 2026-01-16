@@ -17,6 +17,7 @@ src-tauri/binaries/mihomo-*
 src-tauri/binaries/conflux-service-*
 src-tauri/resources/mihomo-*
 src-tauri/resources/sub-store/
+src-tauri/resources/geodata/
 
 # IDE
 .vscode/*

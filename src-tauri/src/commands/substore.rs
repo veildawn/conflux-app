@@ -63,11 +63,15 @@ pub async fn get_substore_subs(
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<SubStoreSub>, String> {
-    let manager = state.substore_manager.lock().await;
+    let mut manager = state.substore_manager.lock().await;
 
-    // 检查 Sub-Store 是否运行
+    // 懒加载：如果 Sub-Store 未运行，自动启动
     if !manager.is_running().await {
-        return Err("Sub-Store 服务未运行".to_string());
+        log::info!("Sub-Store not running, starting on-demand...");
+        manager
+            .start(app_handle.clone())
+            .await
+            .map_err(|e| format!("启动 Sub-Store 失败: {}", e))?;
     }
 
     // 读取 Sub-Store 数据文件
@@ -109,13 +113,18 @@ pub async fn get_substore_subs(
 
 #[tauri::command]
 pub async fn get_substore_collections(
+    app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<SubStoreCollection>, String> {
-    let manager = state.substore_manager.lock().await;
+    let mut manager = state.substore_manager.lock().await;
 
-    // 检查 Sub-Store 是否运行
+    // 懒加载：如果 Sub-Store 未运行，自动启动
     if !manager.is_running().await {
-        return Err("Sub-Store 服务未运行".to_string());
+        log::info!("Sub-Store not running, starting on-demand...");
+        manager
+            .start(app_handle.clone())
+            .await
+            .map_err(|e| format!("启动 Sub-Store 失败: {}", e))?;
     }
 
     let api_url = manager.api_url();
