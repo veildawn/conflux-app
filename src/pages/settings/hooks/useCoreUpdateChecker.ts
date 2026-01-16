@@ -9,7 +9,10 @@ type CoreUpdateStatus = 'idle' | 'upgrading' | 'success' | 'error';
  * mihomo 核心更新 Hook
  * 调用 mihomo /upgrade API 进行核心升级
  */
-export function useCoreUpdateChecker(currentVersion: string) {
+export function useCoreUpdateChecker(
+  currentVersion: string,
+  onVersionUpdated?: () => Promise<void>
+) {
   const { toast } = useToast();
   const [coreUpdateStatus, setCoreUpdateStatus] = useState<CoreUpdateStatus>('idle');
   const [newCoreVersion, setNewCoreVersion] = useState<string>('');
@@ -46,6 +49,8 @@ export function useCoreUpdateChecker(currentVersion: string) {
           title: '核心升级成功',
           description: `已从 ${oldVer} 升级到 ${newVer}`,
         });
+        // 升级成功后刷新版本显示
+        await onVersionUpdated?.();
       } else {
         toast({
           title: '核心已是最新版本',
@@ -61,7 +66,7 @@ export function useCoreUpdateChecker(currentVersion: string) {
         variant: 'destructive',
       });
     }
-  }, [currentVersion, toast]);
+  }, [currentVersion, toast, onVersionUpdated]);
 
   return {
     coreUpdateStatus,

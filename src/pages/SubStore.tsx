@@ -1,132 +1,88 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Store, RefreshCw } from 'lucide-react';
 import { ipc } from '@/services/ipc';
 import { useToast } from '@/hooks/useToast';
 
 export default function SubStore() {
   const { toast } = useToast();
-  const [status, setStatus] = useState<{
-    running: boolean;
-    api_url: string;
-    api_port: number;
-  } | null>(null);
-  // 后端 API 是否真正可用（可以加载 iframe）
+  const [apiUrl, setApiUrl] = useState<string | null>(null);
   const [apiReady, setApiReady] = useState(false);
 
-  // 检测 API 是否就绪的回调函数
-  const checkApiReadyCallback = useCallback(
-    async (apiUrl: string, onReady: () => void, signal: { cancelled: boolean }) => {
-      try {
-        const response = await fetch(`${apiUrl}/api`, {
-          method: 'GET',
-          signal: AbortSignal.timeout(2000),
-        });
-        if (!signal.cancelled && response.ok) {
-          onReady();
-          return true;
-        }
-      } catch {
-        // API 未就绪，继续等待
-      }
-      return false;
-    },
-    []
-  );
-
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    let timeout: NodeJS.Timeout | null = null;
-    let apiCheckInterval: NodeJS.Timeout | null = null;
-    const signal = { cancelled: false };
+    let cancelled = false;
+    let statusInterval: ReturnType<typeof setInterval> | null = null;
+    let apiCheckInterval: ReturnType<typeof setInterval> | null = null;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
 
-    // 开始轮询检测 API 是否就绪
-    const startApiReadyCheck = (apiUrl: string) => {
-      const checkReady = () => checkApiReadyCallback(apiUrl, () => setApiReady(true), signal);
+    const cleanup = () => {
+      cancelled = true;
+      if (statusInterval) clearInterval(statusInterval);
+      if (apiCheckInterval) clearInterval(apiCheckInterval);
+      if (timeout) clearTimeout(timeout);
+    };
 
-      // 立即检查一次
-      checkReady();
-      // 然后每 500ms 检查
-      apiCheckInterval = setInterval(async () => {
-        const ready = await checkReady();
-        if (ready && apiCheckInterval) {
-          clearInterval(apiCheckInterval);
+    // 检测 API 是否就绪
+    const startApiReadyCheck = (url: string) => {
+      const check = async () => {
+        try {
+          const res = await fetch(`${url}/api`, { signal: AbortSignal.timeout(2000) });
+          if (!cancelled && res.ok) {
+            setApiReady(true);
+            if (apiCheckInterval) clearInterval(apiCheckInterval);
+          }
+        } catch {
+          // API 未就绪
         }
-      }, 500);
+      };
+      check();
+      apiCheckInterval = setInterval(check, 500);
     };
 
-    // 首次检查状态
-    const checkInitialStatus = async () => {
-      const result = await ipc.getSubStoreStatus().catch(() => null);
-      if (result?.running) {
-        setStatus(result);
-        startApiReadyCheck(result.api_url);
-        return true;
-      }
-      return false;
-    };
-
-    // 组件挂载时检查状态，如果服务未运行则主动启动
-    const initSubStore = async () => {
-      // 首次检查，如果已运行则直接返回
-      if (await checkInitialStatus()) {
+    const init = async () => {
+      // 检查服务是否已运行
+      const status = await ipc.getSubStoreStatus().catch(() => null);
+      if (status?.running) {
+        setApiUrl(status.api_url);
+        startApiReadyCheck(status.api_url);
         return;
       }
 
-      // 服务未运行，主动启动 Sub-Store
+      // 启动服务
       try {
         await ipc.startSubStore();
       } catch (error) {
-        console.error('Failed to start Sub-Store:', error);
-        toast({
-          title: 'Sub-Store 启动失败',
-          description: String(error),
-          variant: 'destructive',
-        });
+        toast({ title: 'Sub-Store 启动失败', description: String(error), variant: 'destructive' });
         return;
       }
 
-      // 轮询检查服务状态（等待启动完成）
-      interval = setInterval(async () => {
+      // 轮询等待服务启动
+      statusInterval = setInterval(async () => {
         const result = await ipc.getSubStoreStatus().catch(() => null);
         if (result?.running) {
-          setStatus(result);
+          setApiUrl(result.api_url);
           startApiReadyCheck(result.api_url);
-          if (interval) clearInterval(interval);
+          if (statusInterval) clearInterval(statusInterval);
           if (timeout) clearTimeout(timeout);
         }
       }, 1000);
 
-      // 最多等待 30 秒
+      // 30 秒超时
       timeout = setTimeout(() => {
-        if (interval) clearInterval(interval);
+        if (statusInterval) clearInterval(statusInterval);
         toast({
           title: 'Sub-Store 启动超时',
-          description: '服务启动时间过长,请检查日志或尝试重启应用',
+          description: '服务启动时间过长',
           variant: 'destructive',
         });
       }, 30000);
     };
 
-    initSubStore();
+    init();
+    return cleanup;
+  }, [toast]);
 
-    return () => {
-      signal.cancelled = true;
-      if (interval) clearInterval(interval);
-      if (timeout) clearTimeout(timeout);
-      if (apiCheckInterval) clearInterval(apiCheckInterval);
-    };
-  }, [toast, checkApiReadyCallback]);
-
-  if (!status) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-gray-500 dark:text-gray-400">加载中...</div>
-      </div>
-    );
-  }
-
-  // 服务未运行或 API 未就绪时显示加载界面
-  if (!status.running || !apiReady) {
+  // 统一的加载界面
+  if (!apiUrl || !apiReady) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 p-6">
         <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
@@ -147,15 +103,9 @@ export default function SubStore() {
   return (
     <div className="h-full bg-transparent">
       <iframe
-        src={`${status.api_url}?api=${status.api_url}/api`}
+        src={`${apiUrl}?api=${apiUrl}/api`}
         className="w-full h-full border-0"
-        style={{
-          background: 'transparent',
-          colorScheme: 'dark',
-          padding: 0,
-          margin: 0,
-          display: 'block',
-        }}
+        style={{ background: 'transparent', colorScheme: 'dark' }}
         title="Sub-Store"
         sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"
         allow="clipboard-read; clipboard-write"

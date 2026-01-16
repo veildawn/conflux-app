@@ -32,6 +32,8 @@ interface ProxyState {
   trafficHistory: TrafficHistoryPoint[];
   connections: Connection[];
   connectionStats: ConnectionStats;
+  /** 核心版本号（由 probeStatus 轮询更新） */
+  coreVersion: string | null;
   /** 全局时钟（用于页面展示连接/请求时长），避免页面内创建 interval 造成 HMR 叠加 */
   now: number;
   /**
@@ -114,6 +116,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
   trafficHistory: [],
   connections: [],
   connectionStats: initialConnectionStats,
+  coreVersion: null,
   now: 0,
   requestHistory: [],
   requestHistoryIdSet: {},
@@ -517,6 +520,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
   /**
    * 探测核心状态（通过 version API）
    * 返回版本号表示运行中，失败表示已停止
+   * 同时更新 coreVersion 状态
    */
   probeStatus: async () => {
     try {
@@ -524,29 +528,42 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
       // 成功获取版本号，核心运行中
       if (version?.version) {
         set((state) => {
+          const updates: Partial<ProxyState> = {};
           // 只在状态变化时更新，避免无效渲染
           if (!state.status.running) {
-            return { status: { ...state.status, running: true } };
+            updates.status = { ...state.status, running: true };
           }
-          return state;
+          // 版本变化时更新
+          if (state.coreVersion !== version.version) {
+            updates.coreVersion = version.version;
+          }
+          return Object.keys(updates).length > 0 ? updates : state;
         });
         return true;
       }
       // 返回空版本，视为未运行
       set((state) => {
+        const updates: Partial<ProxyState> = {};
         if (state.status.running) {
-          return { status: { ...state.status, running: false } };
+          updates.status = { ...state.status, running: false };
         }
-        return state;
+        if (state.coreVersion !== null) {
+          updates.coreVersion = null;
+        }
+        return Object.keys(updates).length > 0 ? updates : state;
       });
       return false;
     } catch {
       // 请求失败，核心已停止
       set((state) => {
+        const updates: Partial<ProxyState> = {};
         if (state.status.running) {
-          return { status: { ...state.status, running: false } };
+          updates.status = { ...state.status, running: false };
         }
-        return state;
+        if (state.coreVersion !== null) {
+          updates.coreVersion = null;
+        }
+        return Object.keys(updates).length > 0 ? updates : state;
       });
       return false;
     }

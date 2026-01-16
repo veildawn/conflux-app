@@ -29,6 +29,7 @@ export default function Settings() {
     handleDnsConfigChange,
     handleAutostartToggle,
     handleUseJsdelivrToggle,
+    refreshCoreVersion,
     toast,
   } = useSettingsData();
 
@@ -36,7 +37,10 @@ export default function Settings() {
     usePortSettings({ status, setPorts });
 
   const { updateStatus, latestVersion, updateUrl, checkForUpdates } = useUpdateChecker(appVersion);
-  const { coreUpdateStatus, newCoreVersion, upgradeCore } = useCoreUpdateChecker(coreVersion);
+  const { coreUpdateStatus, newCoreVersion, upgradeCore } = useCoreUpdateChecker(
+    coreVersion,
+    refreshCoreVersion
+  );
 
   if (loading) {
     return (

@@ -2,6 +2,9 @@ import { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 
+// 直接导入 SubStore（不懒加载，内部异步逻辑不影响 UI）
+import SubStore from './pages/SubStore';
+
 // 懒加载页面组件
 const Home = lazy(() => import('./pages/Home'));
 const Proxy = lazy(() => import('./pages/Proxy'));
@@ -10,7 +13,6 @@ const ProxyServers = lazy(() => import('./pages/proxy-servers'));
 const Rules = lazy(() => import('./pages/Rules'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Subscription = lazy(() => import('./pages/Subscription'));
-const SubStore = lazy(() => import('./pages/SubStore'));
 const RuleDatabase = lazy(() => import('./pages/RuleDatabase'));
 const Logs = lazy(() => import('./pages/Logs'));
 const Sync = lazy(() => import('./pages/Sync'));

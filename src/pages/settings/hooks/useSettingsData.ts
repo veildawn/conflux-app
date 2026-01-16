@@ -137,6 +137,17 @@ export function useSettingsData() {
     [toast]
   );
 
+  /**
+   * 刷新核心版本（升级后调用）
+   */
+  const refreshCoreVersion = useCallback(async () => {
+    try {
+      setCoreVersion((await ipc.getCoreVersion()).version || '未运行');
+    } catch {
+      setCoreVersion('未运行');
+    }
+  }, []);
+
   return {
     config,
     setConfig,
@@ -154,6 +165,7 @@ export function useSettingsData() {
     handleDnsConfigChange,
     handleAutostartToggle,
     handleUseJsdelivrToggle,
+    refreshCoreVersion,
     toast,
   };
 }
