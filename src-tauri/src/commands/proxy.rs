@@ -183,6 +183,12 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
         .load_mihomo_config()
         .map_err(|e| e.to_string())?;
 
+    // 从 settings.json 读取端口配置（config.yaml 中端口可能为 0）
+    let settings = state
+        .config_manager
+        .load_app_settings()
+        .map_err(|e| e.to_string())?;
+
     let mut enhanced_mode = *state.enhanced_mode.lock().await;
     if running {
         if let Some(tun) = config.tun.as_ref() {
@@ -198,9 +204,9 @@ pub async fn get_proxy_status() -> Result<ProxyStatus, String> {
     Ok(ProxyStatus {
         running,
         mode: config.mode,
-        port: config.port.unwrap_or(7890),
-        socks_port: config.socks_port.unwrap_or(7891),
-        mixed_port: config.mixed_port.unwrap_or(7892),
+        port: settings.mihomo.port.unwrap_or(7890),
+        socks_port: settings.mihomo.socks_port.unwrap_or(7891),
+        mixed_port: settings.mihomo.mixed_port.unwrap_or(0),
         system_proxy,
         enhanced_mode,
         allow_lan: config.allow_lan,

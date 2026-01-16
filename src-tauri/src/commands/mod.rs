@@ -251,6 +251,21 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
         }
     }
 
+    // 如果系统代理已开启且 mihomo 正在运行，恢复端口监听
+    // （启动时配置中端口默认为 0，需要通过 API 恢复）
+    if current_system_proxy && is_running {
+        let port = app_settings.mihomo.port.unwrap_or(7890);
+        let socks_port = app_settings.mihomo.socks_port.unwrap_or(7891);
+        log::info!(
+            "System proxy is enabled, restoring ports: {}:{}",
+            port,
+            socks_port
+        );
+        if let Err(e) = mihomo_api.set_ports(port, socks_port).await {
+            log::warn!("Failed to restore mihomo ports on startup: {}", e);
+        }
+    }
+
     // 获取 enhanced_mode 状态（复用 is_running 检查结果）
     let enhanced_mode = if is_running {
         // 快速尝试获取配置，超时 500ms
