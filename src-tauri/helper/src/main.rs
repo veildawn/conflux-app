@@ -8,8 +8,10 @@
 //!   conflux-helper start <mihomo_path> -d <config_dir> -f <config_path>
 //!   conflux-helper stop
 //!   conflux-helper kill <pid>
+//!   conflux-helper reset <data_dir> [config_dir]
 
 use std::fs;
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -23,12 +25,14 @@ fn main() {
         Some("start") => handle_start(&args),
         Some("stop") => handle_stop(),
         Some("kill") => handle_kill(&args),
+        Some("reset") => handle_reset(&args),
         _ => {
             eprintln!("Conflux TUN Helper");
             eprintln!("Usage:");
             eprintln!("  conflux-helper start <mihomo_path> -d <config_dir> -f <config_path>");
             eprintln!("  conflux-helper stop");
             eprintln!("  conflux-helper kill <pid>");
+            eprintln!("  conflux-helper reset <data_dir> [config_dir]");
             std::process::exit(1);
         }
     }
@@ -195,4 +199,39 @@ fn handle_kill(args: &[String]) {
         );
         std::process::exit(1);
     }
+}
+
+/// Handle the reset command
+/// Removes all user data with elevated privileges
+fn handle_reset(args: &[String]) {
+    if args.len() < 3 {
+        eprintln!("Usage: conflux-helper reset <data_dir> [config_dir]");
+        std::process::exit(1);
+    }
+
+    let data_dir = Path::new(&args[2]);
+    let config_dir = args.get(3).map(|s| Path::new(s.as_str()));
+
+    // Remove data directory
+    if data_dir.exists() {
+        eprintln!("Removing data directory: {:?}", data_dir);
+        if let Err(e) = fs::remove_dir_all(data_dir) {
+            eprintln!("Warning: Failed to remove data directory: {}", e);
+        }
+    }
+
+    // Remove config directory if different from data directory
+    if let Some(config) = config_dir {
+        if config != data_dir && config.exists() {
+            eprintln!("Removing config directory: {:?}", config);
+            if let Err(e) = fs::remove_dir_all(config) {
+                eprintln!("Warning: Failed to remove config directory: {}", e);
+            }
+        }
+    }
+
+    // Also clean up the PID file
+    let _ = fs::remove_file(PID_FILE);
+
+    eprintln!("Reset completed");
 }

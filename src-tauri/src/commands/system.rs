@@ -498,6 +498,25 @@ pub async fn restart_as_admin(app: AppHandle) -> Result<(), String> {
     }
 }
 
+/// 直接删除数据目录和配置目录
+#[cfg(not(target_os = "macos"))]
+fn remove_directories_directly(data_dir: &std::path::Path, config_dir: &std::path::Path) {
+    log::info!("Removing data directory: {:?}", data_dir);
+    if data_dir.exists() {
+        if let Err(e) = std::fs::remove_dir_all(data_dir) {
+            log::warn!("Failed to remove data directory: {}", e);
+        }
+    }
+
+    // 删除配置目录（如果与数据目录不同，Linux 上可能不同）
+    if config_dir != data_dir && config_dir.exists() {
+        log::info!("Removing config directory: {:?}", config_dir);
+        if let Err(e) = std::fs::remove_dir_all(config_dir) {
+            log::warn!("Failed to remove config directory: {}", e);
+        }
+    }
+}
+
 /// 重置所有用户数据并重启应用
 ///
 /// 此操作将：
@@ -532,76 +551,136 @@ pub async fn reset_all_data(app: AppHandle) -> Result<(), String> {
         state.mihomo_manager.stop_sync();
     }
 
-    // 2. 删除数据目录
+    // 2. 删除数据目录（mihomo 等二进制文件会在下次启动时自动复制）
     let data_dir = utils::get_app_data_dir().map_err(|e| format!("获取数据目录失败: {}", e))?;
-    log::info!("Removing data directory: {:?}", data_dir);
-    if data_dir.exists() {
-        // 保留 mihomo 二进制文件，只删除配置和数据
-        let files_to_keep = ["mihomo", "mihomo.exe", "mihomo-"];
+    let config_dir = utils::get_app_config_dir().map_err(|e| format!("获取配置目录失败: {}", e))?;
 
-        for entry in std::fs::read_dir(&data_dir).map_err(|e| format!("读取数据目录失败: {}", e))?
-        {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    // macOS: 使用 helper 删除数据（需要 root 权限来删除 TUN 模式创建的文件）
+    #[cfg(target_os = "macos")]
+    {
+        let helper_path = utils::ensure_helper_in_data_dir()
+            .map_err(|e| format!("获取 helper 路径失败: {}", e))?;
 
-                // 跳过 mihomo 二进制文件
-                let should_keep = files_to_keep
-                    .iter()
-                    .any(|&prefix| file_name.starts_with(prefix));
-                if should_keep {
-                    log::debug!("Keeping: {:?}", path);
-                    continue;
-                }
+        // 检查 helper 是否有 setuid root 权限
+        let has_setuid = utils::is_setuid_root(&helper_path).unwrap_or(false);
 
-                if path.is_dir() {
-                    if let Err(e) = std::fs::remove_dir_all(&path) {
-                        log::warn!("Failed to remove directory {:?}: {}", path, e);
-                    }
-                } else {
-                    if let Err(e) = std::fs::remove_file(&path) {
-                        log::warn!("Failed to remove file {:?}: {}", path, e);
-                    }
+        if has_setuid {
+            // 直接运行 helper stop 和 reset
+            log::info!("Using helper with setuid to stop mihomo and remove data directories");
+
+            // 先停止 mihomo（以 root 权限）
+            let stop_output = std::process::Command::new(&helper_path)
+                .arg("stop")
+                .output();
+            if let Ok(out) = stop_output {
+                if !out.status.success() {
+                    log::warn!(
+                        "Helper stop returned error: {}",
+                        String::from_utf8_lossy(&out.stderr)
+                    );
                 }
             }
+
+            // 等待进程完全停止
+            std::thread::sleep(std::time::Duration::from_millis(500));
+
+            // 构建 reset 命令参数
+            let mut helper_args = vec!["reset".to_string(), data_dir.to_string_lossy().to_string()];
+            if config_dir != data_dir {
+                helper_args.push(config_dir.to_string_lossy().to_string());
+            }
+
+            let output = std::process::Command::new(&helper_path)
+                .args(&helper_args)
+                .output()
+                .map_err(|e| format!("运行 helper 失败: {}", e))?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                log::warn!("Helper reset returned error: {}", stderr);
+            }
+        } else {
+            // 通过 osascript 请求管理员权限运行 helper stop 和 reset
+            log::info!("Helper not setuid, requesting admin privileges via osascript");
+
+            // 构建 reset 命令参数
+            let mut reset_args = vec!["reset".to_string(), data_dir.to_string_lossy().to_string()];
+            if config_dir != data_dir {
+                reset_args.push(config_dir.to_string_lossy().to_string());
+            }
+
+            // 组合 stop 和 reset 命令，一次性请求管理员权限
+            let helper_cmd = format!(
+                "{helper} stop; sleep 0.5; {helper} {reset_args}",
+                helper = helper_path.to_string_lossy(),
+                reset_args = reset_args.join(" ")
+            );
+
+            let script = format!(
+                "do shell script \"{}\" with administrator privileges",
+                helper_cmd.replace("\"", "\\\"")
+            );
+
+            let output = std::process::Command::new("osascript")
+                .args(["-e", &script])
+                .output()
+                .map_err(|e| format!("请求管理员权限失败: {}", e))?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                if stderr.contains("User canceled") || stderr.contains("-128") {
+                    return Err("用户取消了管理员权限请求".to_string());
+                }
+                log::warn!("osascript reset returned error: {}", stderr);
+            }
         }
+        log::info!("Reset data directories completed");
     }
 
-    // 3. 删除配置目录
-    let config_dir = utils::get_app_config_dir().map_err(|e| format!("获取配置目录失败: {}", e))?;
-    log::info!("Removing config directory: {:?}", config_dir);
-    if config_dir.exists() {
-        if let Err(e) = std::fs::remove_dir_all(&config_dir) {
-            log::warn!("Failed to remove config directory: {}", e);
-        }
+    // 非 macOS: 直接删除
+    #[cfg(not(target_os = "macos"))]
+    {
+        remove_directories_directly(&data_dir, &config_dir);
     }
 
     log::info!("Reset completed, restarting app...");
 
-    // 4. 获取当前可执行文件路径并启动新实例
+    // 4. 检测是否在开发模式（通过检查是否在 target/debug 目录下运行）
     let exe_path = std::env::current_exe().map_err(|e| format!("获取程序路径失败: {}", e))?;
+    let is_dev_mode = exe_path.to_string_lossy().contains("target/debug");
 
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        const DETACHED_PROCESS: u32 = 0x00000008;
+    if is_dev_mode {
+        log::info!("Development mode detected, exiting without restart (please restart manually)");
+    } else {
+        // 生产模式：启动新实例
+        log::info!("Starting new instance: {:?}", exe_path);
 
-        std::process::Command::new(&exe_path)
-            .creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS)
-            .spawn()
-            .map_err(|e| format!("启动新实例失败: {}", e))?;
-    }
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            const DETACHED_PROCESS: u32 = 0x00000008;
 
-    #[cfg(not(target_os = "windows"))]
-    {
-        std::process::Command::new(&exe_path)
-            .spawn()
-            .map_err(|e| format!("启动新实例失败: {}", e))?;
+            if let Err(e) = std::process::Command::new(&exe_path)
+                .creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS)
+                .spawn()
+            {
+                log::error!("Failed to start new instance: {}", e);
+            }
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            if let Err(e) = std::process::Command::new(&exe_path).spawn() {
+                log::error!("Failed to start new instance: {}", e);
+            }
+        }
+
+        log::info!("New instance started");
     }
 
     // 5. 退出当前应用
-    log::info!("New instance started, exiting current instance...");
+    log::info!("Exiting current instance...");
     app.exit(0);
 
     Ok(())

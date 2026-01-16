@@ -29,9 +29,11 @@ export function DangerSection({ toast }: DangerSectionProps) {
   const handleReset = async () => {
     setIsResetting(true);
     try {
+      // 调用后端重置，应用会自动退出
+      // 在生产模式下会自动重启，开发模式下需要手动重启
       await ipc.resetAllData();
-      // 应用会自动重启，不需要在这里做什么
     } catch (error) {
+      // 如果收到错误，说明应用没有退出，显示错误
       toast({
         title: '重置失败',
         description: String(error),
@@ -40,6 +42,7 @@ export function DangerSection({ toast }: DangerSectionProps) {
       setIsResetting(false);
       setShowFinalConfirmDialog(false);
     }
+    // 注意：正常情况下应用会退出，不会执行到这里
   };
 
   return (
