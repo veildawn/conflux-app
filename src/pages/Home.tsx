@@ -120,12 +120,12 @@ interface DiagnosticSite {
 }
 
 const DIAGNOSTIC_SITES: DiagnosticSite[] = [
-  { name: 'Google', url: 'https://www.google.com', Icon: GoogleIcon },
-  { name: 'YouTube', url: 'https://www.youtube.com', Icon: YouTubeIcon },
-  { name: '百度', url: 'https://www.baidu.com', Icon: BaiduIcon },
-  { name: 'GitHub', url: 'https://github.com', Icon: GitHubIcon },
-  { name: 'Twitter', url: 'https://x.com', Icon: TwitterIcon },
-  { name: 'OpenAI', url: 'https://chat.openai.com', Icon: OpenAIIcon },
+  { name: 'Google', url: 'https://www.google.com/favicon.ico', Icon: GoogleIcon },
+  { name: 'YouTube', url: 'https://www.youtube.com/favicon.ico', Icon: YouTubeIcon },
+  { name: '百度', url: 'https://www.baidu.com/favicon.ico', Icon: BaiduIcon },
+  { name: 'GitHub', url: 'https://github.com/favicon.ico', Icon: GitHubIcon },
+  { name: 'Twitter', url: 'https://x.com/favicon.ico', Icon: TwitterIcon },
+  { name: 'OpenAI', url: 'https://chatgpt.com/favicon.ico', Icon: OpenAIIcon },
 ];
 
 interface SiteDelayResult {
@@ -277,7 +277,7 @@ function DiagnosticCard({ className }: { className?: string }) {
             <div
               key={site.url}
               className={cn(
-                'flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors',
+                'flex items-center justify-between px-2.5 h-7 rounded-lg transition-colors',
                 getDelayBgColor(delay, error)
               )}
             >
@@ -287,7 +287,7 @@ function DiagnosticCard({ className }: { className?: string }) {
                   {site.name}
                 </span>
               </div>
-              <div className="shrink-0 ml-1.5">
+              <div className="shrink-0 ml-1.5 w-10 flex items-center justify-end">
                 {isLoading ? (
                   <Loader2 className="w-3 h-3 text-gray-400 animate-spin" />
                 ) : delay !== null ? (
