@@ -815,21 +815,18 @@ pub async fn get_rules_from_api() -> Result<Vec<RuleItem>, String> {
 }
 
 /// 获取核心版本信息
+///
+/// 直接调用 API 获取版本，不依赖 is_running() 检查
+/// 只要 9191 端口能响应版本信息，就说明核心在运行
 #[tauri::command]
 pub async fn get_core_version() -> Result<VersionInfo, String> {
     let state = get_app_state_or_err()?;
 
-    if !state.mihomo_manager.is_running().await {
-        return Err("Proxy is not running".to_string());
-    }
-
-    let version = state
+    state
         .mihomo_api
         .get_version()
         .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(version)
+        .map_err(|e| e.to_string())
 }
 
 /// 升级核心（调用 mihomo /upgrade API）
@@ -893,6 +890,8 @@ pub async fn upgrade_core() -> Result<VersionInfo, String> {
     match version {
         Some(v) => {
             log::info!("Core upgraded to version: {}", v.version);
+            // 升级后刷新 PID 文件，确保退出时能正确清理新进程
+            state.mihomo_manager.refresh_pid_after_upgrade().await;
             Ok(v)
         }
         None => Err("升级后核心未能及时响应，请稍后手动检查版本".to_string()),

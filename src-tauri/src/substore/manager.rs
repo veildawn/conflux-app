@@ -297,12 +297,9 @@ impl SubStoreManager {
     }
 
     /// 获取并创建 Sub-Store 数据目录
-    fn ensure_data_directory(app_handle: &AppHandle) -> Result<PathBuf> {
-        let data_dir = app_handle
-            .path()
-            .app_data_dir()
-            .map_err(|e| anyhow!("Failed to get app data dir: {}", e))?;
-
+    /// 使用统一的 Conflux 数据目录，而不是 Tauri 的 app_data_dir（避免 Windows 上产生两个数据目录）
+    fn ensure_data_directory(_app_handle: &AppHandle) -> Result<PathBuf> {
+        let data_dir = get_app_data_dir()?;
         let substore_data_dir = data_dir.join("sub-store");
 
         if !substore_data_dir.exists() {

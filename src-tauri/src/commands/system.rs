@@ -167,6 +167,28 @@ pub struct LocalIpInfo {
 
 fn parse_public_ip_from_json(source: &str, v: &serde_json::Value) -> Option<(String, String)> {
     match source {
+        // 国内直连友好的服务（优先）
+        "https://qifu-api.baidubce.com/ip/local/geo/v1/district" => {
+            // 百度 API: {"code":"Success","data":{"country":"中国","prov":"xx","city":"xx","ip":"x.x.x.x",...}}
+            let data = v.get("data")?;
+            let ip = data.get("ip")?.as_str()?.to_string();
+            // 百度返回中文国家名，默认 CN
+            Some((ip, "CN".to_string()))
+        }
+        "https://api.vore.top/api/IPdata" => {
+            // vore.top: {"code":200,"ipinfo":{"text":"x.x.x.x","type":"ipv4"},"ipdata":{"info1":"中国",...}}
+            let ipinfo = v.get("ipinfo")?;
+            let ip = ipinfo.get("text")?.as_str()?.to_string();
+            // 返回中文国家名，默认 CN
+            Some((ip, "CN".to_string()))
+        }
+        "https://api.ipify.org?format=json" => {
+            // ipify: {"ip":"x.x.x.x"} - 只有 IP，无国家信息
+            let ip = v.get("ip")?.as_str()?.to_string();
+            // 没有代理时使用此服务大概率是国内直连，默认 CN
+            Some((ip, "CN".to_string()))
+        }
+        // 国际服务
         "https://ipwho.is" => {
             let ip = v.get("ip")?.as_str()?.to_string();
             let cc = v.get("country_code")?.as_str()?.to_string();
@@ -216,7 +238,14 @@ fn parse_public_ip_from_json(source: &str, v: &serde_json::Value) -> Option<(Str
 pub async fn get_public_ip_info() -> Result<Option<PublicIpInfo>, String> {
     use reqwest::header;
 
-    let sources: [&str; 7] = [
+    // 国内直连友好的服务放前面，国际服务放后面
+    // 并发请求所有源，返回最快成功的结果
+    let sources: [&str; 10] = [
+        // 国内直连友好
+        "https://qifu-api.baidubce.com/ip/local/geo/v1/district", // 百度
+        "https://api.vore.top/api/IPdata",                        // vore.top
+        "https://api.ipify.org?format=json",                      // ipify（通常可直连）
+        // 国际服务
         "https://ipwho.is",
         "https://api.myip.com",
         "https://ipapi.co/json",
@@ -560,6 +589,10 @@ pub async fn reset_all_data(app: AppHandle) -> Result<(), String> {
         log::info!("Stopping MiHomo...");
         state.mihomo_manager.stop_sync();
     }
+
+    // 额外等待，确保所有进程完全退出并释放文件句柄
+    log::info!("Waiting for all processes to fully exit...");
+    std::thread::sleep(std::time::Duration::from_millis(500));
 
     // 2. 删除数据目录（mihomo 等二进制文件会在下次启动时自动复制）
     let data_dir = utils::get_app_data_dir().map_err(|e| format!("获取数据目录失败: {}", e))?;

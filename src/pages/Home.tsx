@@ -14,10 +14,8 @@ import {
 import { useProxyStore } from '@/stores/proxyStore';
 import { formatSpeed, formatBytes } from '@/utils/format';
 import { cn } from '@/utils/cn';
-import logger from '@/utils/logger';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { ipc } from '@/services/ipc';
-import type { VersionInfo } from '@/types/proxy';
 import type { LocalIpInfo, PublicIpInfo } from '@/types/network';
 import { useToast } from '@/hooks/useToast';
 import {
@@ -607,32 +605,8 @@ function LanIpCard({ className }: { className?: string }) {
 // -----------------------------------------------------------------------------
 
 export default function Home() {
-  const { status, traffic, trafficHistory, connectionStats, restart, loading } = useProxyStore();
-
-  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
-  const [versionLoading, setVersionLoading] = useState(false);
-
-  // 获取核心版本信息
-  useEffect(() => {
-    const fetchVersion = async () => {
-      if (!status.running) {
-        setVersionInfo(null);
-        return;
-      }
-      setVersionLoading(true);
-      try {
-        const version = await ipc.getCoreVersion();
-        setVersionInfo(version);
-      } catch (error) {
-        logger.debug('Failed to fetch version:', error);
-        setVersionInfo(null);
-      } finally {
-        setVersionLoading(false);
-      }
-    };
-
-    fetchVersion();
-  }, [status.running]);
+  const { status, traffic, trafficHistory, connectionStats, restart, loading, coreVersion } =
+    useProxyStore();
 
   // 计算进程列表
   /* const processList = useMemo(() => {
@@ -713,7 +687,7 @@ export default function Home() {
                 </div>
                 <div className="flex items-baseline gap-2 mt-2">
                   <span className="text-xl font-bold text-gray-900 dark:text-white">
-                    {versionLoading ? '加载中...' : versionInfo?.version || '未知'}
+                    {coreVersion || '未知'}
                   </span>
                 </div>
               </div>

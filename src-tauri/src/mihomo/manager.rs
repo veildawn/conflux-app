@@ -117,7 +117,7 @@ impl MihomoManager {
         Ok(Self {
             process: Arc::new(Mutex::new(None)),
             config_path,
-            api_url: "http://127.0.0.1:9090".to_string(),
+            api_url: "http://127.0.0.1:9191".to_string(),
             api_secret: secret,
         })
     }
@@ -153,6 +153,76 @@ impl MihomoManager {
     fn remove_pid_file() {
         if let Ok(pid_file) = Self::get_pid_file_path() {
             let _ = fs::remove_file(&pid_file);
+        }
+    }
+
+    /// 通过端口查找监听进程的 PID（跨平台）
+    fn find_pid_by_port(port: u16) -> Option<u32> {
+        #[cfg(target_os = "windows")]
+        {
+            // Windows: netstat -ano | findstr LISTENING | findstr :9191
+            let output = Command::new("netstat").args(["-ano"]).output().ok()?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                if line.contains(&format!(":{}", port)) && line.contains("LISTENING") {
+                    if let Some(pid_str) = line.split_whitespace().last() {
+                        return pid_str.parse().ok();
+                    }
+                }
+            }
+            None
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            // macOS: lsof -nP -iTCP:9191 -sTCP:LISTEN -t
+            let output = Command::new("lsof")
+                .args(["-nP", &format!("-iTCP:{}", port), "-sTCP:LISTEN", "-t"])
+                .output()
+                .ok()?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            stdout.trim().lines().next()?.parse().ok()
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            // Linux: lsof -nP -iTCP:9191 -sTCP:LISTEN -t
+            let output = Command::new("lsof")
+                .args(["-nP", &format!("-iTCP:{}", port), "-sTCP:LISTEN", "-t"])
+                .output()
+                .ok()?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            stdout.trim().lines().next()?.parse().ok()
+        }
+    }
+
+    /// 刷新 PID（升级后调用）
+    ///
+    /// 先验证 API 能返回版本号，确认是 mihomo 服务后再记录 PID
+    pub async fn refresh_pid_after_upgrade(&self) {
+        // 1. 验证 API 响应（确认是 mihomo 服务）
+        if self.check_health().await.is_err() {
+            log::warn!("Cannot refresh PID: API health check failed");
+            return;
+        }
+
+        // 2. 从 api_url 解析端口（默认 9191）
+        let port = self
+            .api_url
+            .trim_start_matches("http://")
+            .split(':')
+            .last()
+            .and_then(|s| s.parse::<u16>().ok())
+            .unwrap_or(9191);
+
+        // 3. 查找并保存 PID
+        if let Some(pid) = Self::find_pid_by_port(port) {
+            log::info!("Verified mihomo on port {}, updating PID: {}", port, pid);
+            if let Err(e) = self.save_pid(pid) {
+                log::warn!("Failed to save PID: {}", e);
+            }
+        } else {
+            log::warn!("Could not find PID for port {}", port);
         }
     }
 
@@ -1115,25 +1185,48 @@ impl MihomoManager {
         }
 
         // 尝试获取锁并停止进程
-        if let Ok(mut guard) = self.process.try_lock() {
+        let pid_to_wait: Option<u32> = if let Ok(mut guard) = self.process.try_lock() {
             if let Some(mut child) = guard.take() {
                 let pid = child.id();
                 log::info!("Stopping MiHomo process (PID: {})", pid);
                 let _ = child.kill();
-                log::info!("MiHomo process killed (PID: {})", pid);
+                let _ = child.wait(); // 等待进程退出，释放资源
+                log::info!("MiHomo process killed and waited (PID: {})", pid);
+                Some(pid)
             } else if let Some(pid) = Self::load_pid() {
                 log::info!("Stopping MiHomo process by PID file (PID: {})", pid);
                 Self::kill_process_by_pid(pid);
+                Some(pid)
             } else {
                 log::warn!("No process handle or PID file found, MiHomo may not be running");
+                None
             }
         } else {
             // 如果拿不到锁，通过 PID 文件清理
             log::warn!("Could not acquire lock, cleaning up via PID file");
             if let Some(pid) = Self::load_pid() {
                 Self::kill_process_by_pid(pid);
+                Some(pid)
             } else {
                 log::warn!("No PID file found");
+                None
+            }
+        };
+
+        // 等待进程完全退出（确保文件句柄被释放）
+        if let Some(pid) = pid_to_wait {
+            log::info!("Waiting for MiHomo process (PID: {}) to fully exit...", pid);
+            for i in 0..30 {
+                // 最多等待 3 秒
+                if !Self::is_pid_running(pid) {
+                    log::info!(
+                        "MiHomo process (PID: {}) has fully exited after {}ms",
+                        pid,
+                        i * 100
+                    );
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
             }
         }
 

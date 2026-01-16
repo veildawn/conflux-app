@@ -73,8 +73,14 @@ pub async fn install_service(app: tauri::AppHandle) -> Result<(), String> {
         log::warn!("Failed to stop current mihomo: {}", e);
     }
 
-    // 4. 清理可能的残留进程
+    // 等待端口释放
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+    // 4. 清理可能的残留进程（确保旧进程完全停止）
     crate::mihomo::MihomoManager::cleanup_stale_processes();
+
+    // 再等待一下确保端口完全释放
+    tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
 
     // 5. 通过服务启动 mihomo
     log::info!("Starting mihomo via service...");
@@ -135,8 +141,9 @@ pub async fn uninstall_service(app: tauri::AppHandle) -> Result<(), String> {
         }
     }
 
-    // 2. 如果服务正在运行，先通过服务 API 停止 mihomo，再停止服务
+    // 2. 根据服务状态选择停止 mihomo 的方式
     if WinServiceManager::is_running().unwrap_or(false) {
+        // 服务模式：通过服务 API 停止 mihomo
         log::info!("Service is running, stopping mihomo via service API...");
         if let Err(e) = WinServiceManager::stop_mihomo().await {
             log::warn!("Failed to stop mihomo via service API: {}", e);
@@ -150,10 +157,19 @@ pub async fn uninstall_service(app: tauri::AppHandle) -> Result<(), String> {
         }
         // 等待服务停止
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-    }
 
-    // 3. 清理可能的残留进程
-    crate::mihomo::MihomoManager::cleanup_stale_processes();
+        // 服务模式下清理可能的残留进程
+        crate::mihomo::MihomoManager::cleanup_stale_processes();
+    } else {
+        // 普通模式：使用 mihomo_manager.stop() 正常停止
+        // 注意：不要调用 cleanup_stale_processes()，因为 stop() 会正确处理进程停止
+        log::info!("Service not running, stopping current mihomo...");
+        if let Err(e) = state.mihomo_manager.stop().await {
+            log::warn!("Failed to stop current mihomo: {}", e);
+        }
+        // 等待进程完全停止
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    }
 
     // 4. 使用提权方式卸载服务（会触发 UAC）
     log::info!("Uninstalling Windows service...");
@@ -283,11 +299,10 @@ pub async fn stop_service(app: tauri::AppHandle) -> Result<(), String> {
     log::info!("Stopping mihomo via service API...");
     if let Err(e) = WinServiceManager::stop_mihomo().await {
         log::warn!("Failed to stop mihomo via service API: {}", e);
-        // 继续执行，后面会通过 cleanup_stale_processes 清理
     }
 
-    // 3. 等待 mihomo 停止
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    // 3. 等待 mihomo 停止（增加等待时间确保进程完全退出）
+    tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
 
     // 4. 停止 Windows 服务
     log::info!("Stopping Windows service...");
@@ -296,8 +311,12 @@ pub async fn stop_service(app: tauri::AppHandle) -> Result<(), String> {
     // 5. 等待服务完全停止
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    // 6. 清理可能的残留进程
-    crate::mihomo::MihomoManager::cleanup_stale_processes();
+    // 6. 只在检测到进程仍在运行时才进行清理
+    if state.mihomo_manager.is_running().await {
+        log::warn!("Mihomo still running after service stop, cleaning up...");
+        crate::mihomo::MihomoManager::cleanup_stale_processes();
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    }
 
     // 7. 以普通模式启动 mihomo
     log::info!("Starting mihomo in normal mode...");

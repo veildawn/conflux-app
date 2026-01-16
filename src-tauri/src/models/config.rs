@@ -432,7 +432,7 @@ fn default_log_level() -> String {
     "info".to_string()
 }
 fn default_external_controller() -> String {
-    "127.0.0.1:9090".to_string()
+    "127.0.0.1:9191".to_string()
 }
 fn default_find_process_mode() -> String {
     "always".to_string()

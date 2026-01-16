@@ -366,6 +366,8 @@ fn main() {
                 true,
                 None::<&str>,
             )?;
+            let open_data_dir_item =
+                MenuItem::with_id(app, "open_data_dir", "打开用户目录", true, None::<&str>)?;
             let separator_bottom = PredefinedMenuItem::separator(app)?;
 
             let menu = Menu::with_items(
@@ -378,6 +380,7 @@ fn main() {
                     &system_proxy_item,
                     &enhanced_mode_item,
                     &copy_proxy_item,
+                    &open_data_dir_item,
                     &separator_bottom,
                     &quit_item,
                 ],
@@ -477,6 +480,26 @@ fn main() {
                                 }
                             }
                         });
+                    }
+                    "open_data_dir" => {
+                        if let Ok(data_dir) = crate::utils::get_app_data_dir() {
+                            #[cfg(target_os = "windows")]
+                            {
+                                let _ = std::process::Command::new("explorer")
+                                    .arg(&data_dir)
+                                    .spawn();
+                            }
+                            #[cfg(target_os = "macos")]
+                            {
+                                let _ = std::process::Command::new("open").arg(&data_dir).spawn();
+                            }
+                            #[cfg(target_os = "linux")]
+                            {
+                                let _ = std::process::Command::new("xdg-open")
+                                    .arg(&data_dir)
+                                    .spawn();
+                            }
+                        }
                     }
                     _ => {}
                 })
