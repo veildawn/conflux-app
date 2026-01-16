@@ -244,30 +244,11 @@ impl ConfigManager {
     }
 
     /// 验证 MiHomo 配置
-    pub fn validate_mihomo_config(&self, config: &MihomoConfig) -> Result<bool> {
-        // 检查端口是否有效
-        if config.port == Some(0) {
-            return Err(anyhow::anyhow!("Invalid HTTP port"));
-        }
-        if config.socks_port == Some(0) {
-            return Err(anyhow::anyhow!("Invalid SOCKS port"));
-        }
-
-        // 检查模式是否有效
-        let valid_modes = ["rule", "global", "direct"];
-        if !valid_modes.contains(&config.mode.as_str()) {
-            return Err(anyhow::anyhow!(
-                "Invalid mode: {}. Must be one of: rule, global, direct",
-                config.mode
-            ));
-        }
-
-        // 检查日志级别
-        let valid_levels = ["debug", "info", "warning", "error", "silent"];
-        if !valid_levels.contains(&config.log_level.as_str()) {
-            return Err(anyhow::anyhow!("Invalid log level: {}", config.log_level));
-        }
-
+    ///
+    /// 注意：大部分验证由 mihomo 核心处理，这里只做基础检查
+    pub fn validate_mihomo_config(&self, _config: &MihomoConfig) -> Result<bool> {
+        // 端口、模式、日志级别等都由 UI 下拉选择控制，无需额外验证
+        // 即使配置文件被手动修改，mihomo 核心也会处理无效值
         Ok(true)
     }
 
