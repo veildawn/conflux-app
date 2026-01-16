@@ -309,7 +309,7 @@ impl Default for DnsConfig {
             enable: true,
             listen: Some("0.0.0.0:1053".to_string()),
             enhanced_mode: Some("fake-ip".to_string()),
-            fake_ip_range: Some("198.10.0.1/1".to_string()),
+            fake_ip_range: Some("198.18.0.1/16".to_string()),
             fake_ip_filter_mode: Some("blacklist".to_string()),
             fake_ip_filter: vec![
                 "+.lan".to_string(),

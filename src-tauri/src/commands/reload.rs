@@ -166,6 +166,80 @@ pub fn detect_config_change_type_with_mode(
         };
     }
 
+    // DNS 相关变更需要 API restart
+    // 检查 enhanced-mode (fake-ip / redir-host / normal)
+    let old_enhanced_mode = old.dns.as_ref().and_then(|d| d.enhanced_mode.as_ref());
+    let new_enhanced_mode = new.dns.as_ref().and_then(|d| d.enhanced_mode.as_ref());
+    if old_enhanced_mode != new_enhanced_mode {
+        let reason = format!(
+            "DNS enhanced-mode 变更 ({:?} -> {:?})",
+            old_enhanced_mode.map(|s| s.as_str()).unwrap_or("无"),
+            new_enhanced_mode.map(|s| s.as_str()).unwrap_or("无")
+        );
+        log::info!("[ConfigChange] {} - 需要 API restart", reason);
+        return ConfigChangeResult {
+            change_type: ConfigChangeType::ApiRestart,
+            reason: Some(reason),
+        };
+    }
+
+    // 检查 fake-ip-range
+    let old_fake_ip_range = old.dns.as_ref().and_then(|d| d.fake_ip_range.as_ref());
+    let new_fake_ip_range = new.dns.as_ref().and_then(|d| d.fake_ip_range.as_ref());
+    if old_fake_ip_range != new_fake_ip_range {
+        let reason = format!(
+            "DNS fake-ip-range 变更 ({:?} -> {:?})",
+            old_fake_ip_range.map(|s| s.as_str()).unwrap_or("无"),
+            new_fake_ip_range.map(|s| s.as_str()).unwrap_or("无")
+        );
+        log::info!("[ConfigChange] {} - 需要 API restart", reason);
+        return ConfigChangeResult {
+            change_type: ConfigChangeType::ApiRestart,
+            reason: Some(reason),
+        };
+    }
+
+    // 检查 fake-ip-filter（列表内容变化）
+    let empty_vec: Vec<String> = Vec::new();
+    let old_fake_ip_filter = old
+        .dns
+        .as_ref()
+        .map(|d| &d.fake_ip_filter)
+        .unwrap_or(&empty_vec);
+    let new_fake_ip_filter = new
+        .dns
+        .as_ref()
+        .map(|d| &d.fake_ip_filter)
+        .unwrap_or(&empty_vec);
+    if old_fake_ip_filter != new_fake_ip_filter {
+        let reason = format!(
+            "DNS fake-ip-filter 变更 ({}项 -> {}项)",
+            old_fake_ip_filter.len(),
+            new_fake_ip_filter.len()
+        );
+        log::info!("[ConfigChange] {} - 需要 API restart", reason);
+        return ConfigChangeResult {
+            change_type: ConfigChangeType::ApiRestart,
+            reason: Some(reason),
+        };
+    }
+
+    // 检查 dns.listen
+    let old_dns_listen = old.dns.as_ref().and_then(|d| d.listen.as_ref());
+    let new_dns_listen = new.dns.as_ref().and_then(|d| d.listen.as_ref());
+    if old_dns_listen != new_dns_listen {
+        let reason = format!(
+            "DNS listen 变更 ({:?} -> {:?})",
+            old_dns_listen.map(|s| s.as_str()).unwrap_or("无"),
+            new_dns_listen.map(|s| s.as_str()).unwrap_or("无")
+        );
+        log::info!("[ConfigChange] {} - 需要 API restart", reason);
+        return ConfigChangeResult {
+            change_type: ConfigChangeType::ApiRestart,
+            reason: Some(reason),
+        };
+    }
+
     // external-controller 变更需要进程级重启（API 端点变了，无法通过 API 操作）
     if old.external_controller != new.external_controller {
         let reason = format!(
