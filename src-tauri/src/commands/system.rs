@@ -498,10 +498,95 @@ pub async fn restart_as_admin(app: AppHandle) -> Result<(), String> {
     }
 }
 
+/// 重置所有用户数据并重启应用
+///
+/// 此操作将：
+/// 1. 停止代理服务
+/// 2. 清除系统代理设置
+/// 3. 删除所有用户配置和数据
+/// 4. 重启应用
+#[tauri::command]
+pub async fn reset_all_data(app: AppHandle) -> Result<(), String> {
+    log::info!("Starting reset all data...");
+
+    // 1. 停止 mihomo
+    if let Ok(state) = get_app_state_or_err() {
+        // 清除系统代理
+        log::info!("Clearing system proxy...");
+        if let Ok(enabled) = state.system_proxy_enabled.try_lock() {
+            if *enabled {
+                let _ = SystemProxy::clear_proxy();
+            }
+        } else {
+            let _ = SystemProxy::clear_proxy();
+        }
+
+        // 停止 Sub-Store
+        log::info!("Stopping Sub-Store...");
+        if let Ok(manager) = state.substore_manager.try_lock() {
+            manager.stop_sync();
+        }
+
+        // 停止 MiHomo
+        log::info!("Stopping MiHomo...");
+        state.mihomo_manager.stop_sync();
+    }
+
+    // 2. 删除数据目录
+    let data_dir = utils::get_app_data_dir().map_err(|e| format!("获取数据目录失败: {}", e))?;
+    log::info!("Removing data directory: {:?}", data_dir);
+    if data_dir.exists() {
+        // 保留 mihomo 二进制文件，只删除配置和数据
+        let files_to_keep = ["mihomo", "mihomo.exe", "mihomo-"];
+
+        for entry in std::fs::read_dir(&data_dir).map_err(|e| format!("读取数据目录失败: {}", e))?
+        {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+                // 跳过 mihomo 二进制文件
+                let should_keep = files_to_keep
+                    .iter()
+                    .any(|&prefix| file_name.starts_with(prefix));
+                if should_keep {
+                    log::debug!("Keeping: {:?}", path);
+                    continue;
+                }
+
+                if path.is_dir() {
+                    if let Err(e) = std::fs::remove_dir_all(&path) {
+                        log::warn!("Failed to remove directory {:?}: {}", path, e);
+                    }
+                } else {
+                    if let Err(e) = std::fs::remove_file(&path) {
+                        log::warn!("Failed to remove file {:?}: {}", path, e);
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. 删除配置目录
+    let config_dir = utils::get_app_config_dir().map_err(|e| format!("获取配置目录失败: {}", e))?;
+    log::info!("Removing config directory: {:?}", config_dir);
+    if config_dir.exists() {
+        if let Err(e) = std::fs::remove_dir_all(&config_dir) {
+            log::warn!("Failed to remove config directory: {}", e);
+        }
+    }
+
+    log::info!("Reset completed, restarting app...");
+
+    // 4. 重启应用（此方法不会返回）
+    app.restart()
+}
+
 /// 让 Rust Analyzer / IDE 能追踪到通过 `tauri::generate_handler!` 注册的命令引用，
 /// 避免出现误报的 dead_code 警告（命令实际会在运行时被 Tauri 调用）。
 pub fn link_tauri_commands_for_ide() {
     let _ = get_process_icon;
     let _ = is_admin;
     let _ = restart_as_admin;
+    let _ = reset_all_data;
 }

@@ -569,6 +569,7 @@ impl MihomoManager {
                     log::info!("TUN not enabled, starting in normal mode...");
                     Command::new(&mihomo_path)
                         .current_dir(config_dir)
+                        .env("SAFE_PATHS", &config_dir_str)
                         .args(["-d", &config_dir_str, "-f", &config_path_str])
                         .creation_flags(CREATE_NO_WINDOW)
                         .stdout(Stdio::null())
@@ -583,6 +584,7 @@ impl MihomoManager {
                     log::info!("TUN mode enabled, running as admin, starting mihomo directly...");
                     Command::new(&mihomo_path)
                         .current_dir(config_dir)
+                        .env("SAFE_PATHS", &config_dir_str)
                         .args(["-d", &config_dir_str, "-f", &config_path_str])
                         .creation_flags(CREATE_NO_WINDOW)
                         .stdout(Stdio::null())
@@ -610,6 +612,7 @@ impl MihomoManager {
 
                 let child = Command::new(&mihomo_path)
                     .current_dir(config_dir)
+                    .env("SAFE_PATHS", &config_dir_str)
                     .args(["-d", &config_dir_str, "-f", &config_path_str])
                     .creation_flags(CREATE_NO_WINDOW)
                     .stdout(Stdio::null())
@@ -644,6 +647,7 @@ impl MihomoManager {
                     .map_err(|e| anyhow::anyhow!("Helper not found: {}", e))?;
 
                 let output = Command::new(&helper_path)
+                    .env("SAFE_PATHS", &config_dir_str)
                     .args([
                         "start",
                         &mihomo_path.to_string_lossy(),
@@ -676,6 +680,7 @@ impl MihomoManager {
                 log::info!("Starting mihomo in normal mode...");
                 let child = Command::new(&mihomo_path)
                     .current_dir(config_dir)
+                    .env("SAFE_PATHS", &config_dir_str)
                     .args(["-d", &config_dir_str, "-f", &config_path_str])
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
@@ -691,6 +696,7 @@ impl MihomoManager {
         let (child, started_via_helper) = {
             let child = Command::new(&mihomo_path)
                 .current_dir(config_dir)
+                .env("SAFE_PATHS", &config_dir_str)
                 .args(["-d", &config_dir_str, "-f", &config_path_str])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())

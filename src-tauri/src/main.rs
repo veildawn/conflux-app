@@ -561,6 +561,8 @@ fn main() {
             // 管理员权限相关
             commands::system::is_admin,
             commands::system::restart_as_admin,
+            // 重置数据
+            commands::system::reset_all_data,
             // 进程图标（连接/请求列表）
             commands::system::get_process_icon,
             // macOS Network Extension（占位，用于增强模式引导）

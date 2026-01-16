@@ -63,6 +63,14 @@ fn handle_start(args: &[String]) {
         cmd.current_dir(dir);
     }
 
+    // Pass SAFE_PATHS to mihomo for config reload security check
+    // Priority: inherited from parent process > config_dir
+    if let Ok(safe_paths) = std::env::var("SAFE_PATHS") {
+        cmd.env("SAFE_PATHS", safe_paths);
+    } else if let Some(dir) = config_dir {
+        cmd.env("SAFE_PATHS", dir);
+    }
+
     match cmd.spawn() {
         Ok(child) => {
             let pid = child.id();
