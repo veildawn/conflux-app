@@ -603,18 +603,30 @@ pub async fn reset_all_data(app: AppHandle) -> Result<(), String> {
             // 通过 osascript 请求管理员权限运行 helper stop 和 reset
             log::info!("Helper not setuid, requesting admin privileges via osascript");
 
-            // 构建 reset 命令参数
-            let mut reset_args = vec!["reset".to_string(), data_dir.to_string_lossy().to_string()];
-            if config_dir != data_dir {
-                reset_args.push(config_dir.to_string_lossy().to_string());
-            }
+            // 为路径添加单引号以处理空格（单引号在 shell 中最安全）
+            let quote_path = |p: &std::path::Path| -> String {
+                format!("'{}'", p.to_string_lossy().replace("'", "'\\''"))
+            };
+
+            let helper_quoted = quote_path(&helper_path);
+            let data_dir_quoted = quote_path(&data_dir);
 
             // 组合 stop 和 reset 命令，一次性请求管理员权限
-            let helper_cmd = format!(
-                "{helper} stop; sleep 0.5; {helper} {reset_args}",
-                helper = helper_path.to_string_lossy(),
-                reset_args = reset_args.join(" ")
-            );
+            let helper_cmd = if config_dir != data_dir {
+                let config_dir_quoted = quote_path(&config_dir);
+                format!(
+                    "{helper} stop; sleep 0.5; {helper} reset {data_dir} {config_dir}",
+                    helper = helper_quoted,
+                    data_dir = data_dir_quoted,
+                    config_dir = config_dir_quoted
+                )
+            } else {
+                format!(
+                    "{helper} stop; sleep 0.5; {helper} reset {data_dir}",
+                    helper = helper_quoted,
+                    data_dir = data_dir_quoted
+                )
+            };
 
             let script = format!(
                 "do shell script \"{}\" with administrator privileges",
