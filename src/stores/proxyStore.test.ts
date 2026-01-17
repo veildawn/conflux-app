@@ -166,7 +166,13 @@ describe('proxyStore', () => {
       await useProxyStore.getState().switchMode('global');
 
       expect(ipc.switchMode).toHaveBeenCalledWith('global');
+      expect(useProxyStore.getState().pendingMode).toBe('global');
+      expect(useProxyStore.getState().status.mode).toBe('rule');
+
+      const currentStatus = useProxyStore.getState().status;
+      useProxyStore.getState().applyStatus({ ...currentStatus, mode: 'global' });
       expect(useProxyStore.getState().status.mode).toBe('global');
+      expect(useProxyStore.getState().pendingMode).toBeNull();
     });
   });
 

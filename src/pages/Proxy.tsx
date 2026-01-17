@@ -57,10 +57,11 @@ const getGroupTypeLabel = (group: ProxyGroup) => {
 
 export default function Proxy() {
   const navigate = useNavigate();
-  const { status, groups, fetchGroups, selectProxy, testDelay, switchMode, loading } =
+  const { status, pendingMode, groups, fetchGroups, selectProxy, testDelay, switchMode, loading } =
     useProxyStore(
       useShallow((state) => ({
         status: state.status,
+        pendingMode: state.pendingMode,
         groups: state.groups,
         fetchGroups: state.fetchGroups,
         selectProxy: state.selectProxy,
@@ -171,6 +172,8 @@ export default function Proxy() {
   }, [groupCards]);
 
   const handleModeChange = async (value: string) => {
+    // 避免 Tabs 组件在 value 变化时重复触发
+    if (status.mode === value || pendingMode === value) return;
     try {
       await switchMode(value as ProxyMode);
       toast({

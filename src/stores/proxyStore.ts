@@ -27,6 +27,8 @@ export interface ConnectionStats {
 interface ProxyState {
   // 状态
   status: ProxyStatus;
+  /** 当前正在切换的模式（等待事件回执） */
+  pendingMode: ProxyMode | null;
   groups: ProxyGroup[];
   traffic: TrafficData;
   trafficHistory: TrafficHistoryPoint[];
@@ -111,6 +113,7 @@ const MAX_REQUEST_HISTORY = 500;
 
 export const useProxyStore = create<ProxyState>((set, get) => ({
   status: initialStatus,
+  pendingMode: null,
   groups: [],
   traffic: { up: 0, down: 0 },
   trafficHistory: [],
@@ -127,6 +130,7 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
   applyStatus: (status) => {
     set((state) => ({
       status: { ...state.status, ...status },
+      pendingMode: state.pendingMode === status.mode ? null : state.pendingMode,
       error: null,
     }));
   },
@@ -209,15 +213,16 @@ export const useProxyStore = create<ProxyState>((set, get) => ({
   },
 
   switchMode: async (mode: ProxyMode) => {
-    set({ loading: true, error: null });
+    const current = get();
+    if (current.pendingMode === mode || current.status.mode === mode) {
+      return;
+    }
+    set({ loading: true, error: null, pendingMode: mode });
     try {
       await ipc.switchMode(mode);
-      set((state) => ({
-        status: { ...state.status, mode },
-      }));
     } catch (error) {
       logger.error('Failed to switch mode:', error);
-      set({ error: String(error) });
+      set({ error: String(error), pendingMode: null });
       throw error;
     } finally {
       set({ loading: false });
