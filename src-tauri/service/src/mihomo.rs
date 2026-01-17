@@ -1,4 +1,4 @@
-//! Mihomo process management with auto-restart
+//! Mihomo process management
 
 use anyhow::{anyhow, Result};
 use std::process::{Child, Command, Stdio};
@@ -17,7 +17,6 @@ pub struct MihomoState {
     pub process: Option<Child>,
     pub pid: Option<u32>,
     pub config: Option<StartConfig>,
-    pub should_run: bool, // 是否应该运行（用户意图）
 }
 
 impl Default for MihomoState {
@@ -26,7 +25,6 @@ impl Default for MihomoState {
             process: None,
             pid: None,
             config: None,
-            should_run: false,
         }
     }
 }
@@ -36,7 +34,6 @@ static STATE: Mutex<MihomoState> = Mutex::new(MihomoState {
     process: None,
     pid: None,
     config: None,
-    should_run: false,
 });
 
 /// Start mihomo process
@@ -49,7 +46,6 @@ pub fn start_mihomo(mihomo_path: &str, config_dir: &str, config_path: &str) -> R
         config_dir: config_dir.to_string(),
         config_path: config_path.to_string(),
     });
-    state.should_run = true;
 
     // 如果已有进程在运行，先停止
     if let Some(mut child) = state.process.take() {
@@ -92,7 +88,6 @@ fn do_start(state: &mut MihomoState) -> Result<u32> {
 /// Stop mihomo process
 pub fn stop_mihomo() {
     let mut state = STATE.lock().unwrap();
-    state.should_run = false; // 用户主动停止，不要自动重启
 
     if let Some(mut child) = state.process.take() {
         let pid = child.id();
@@ -105,50 +100,9 @@ pub fn stop_mihomo() {
     log::info!("Mihomo stopped");
 }
 
-/// Check and restart if needed (called by monitor)
-pub fn check_and_restart() {
-    let mut state = STATE.lock().unwrap();
-
-    // 如果不应该运行，跳过
-    if !state.should_run {
-        return;
-    }
-
-    // 检查进程是否还在运行
-    let is_running = if let Some(ref mut child) = state.process {
-        match child.try_wait() {
-            Ok(None) => true, // 还在运行
-            Ok(Some(status)) => {
-                log::warn!("Mihomo exited with status: {:?}, will restart", status);
-                false
-            }
-            Err(e) => {
-                log::error!("Failed to check process: {}", e);
-                false
-            }
-        }
-    } else {
-        false
-    };
-
-    // 如果退出了，重启
-    if !is_running && state.config.is_some() {
-        state.process = None;
-        state.pid = None;
-
-        // 等待一下再重启
-        std::thread::sleep(std::time::Duration::from_millis(500));
-
-        match do_start(&mut state) {
-            Ok(pid) => log::info!("Mihomo restarted with PID: {}", pid),
-            Err(e) => log::error!("Failed to restart mihomo: {}", e),
-        }
-    }
-}
-
 /// Get current status
 pub fn get_status() -> (bool, Option<u32>) {
     let state = STATE.lock().unwrap();
-    let running = state.should_run && state.process.is_some();
+    let running = state.process.is_some();
     (running, state.pid)
 }

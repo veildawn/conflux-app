@@ -108,24 +108,10 @@ fn build_routes(
         .with(warp::log("conflux-service"))
 }
 
-/// 启动进程监控任务
-fn start_monitor() {
-    std::thread::spawn(|| {
-        log::info!("Mihomo monitor started");
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(3));
-            crate::mihomo::check_and_restart();
-        }
-    });
-}
-
 /// Start the IPC server (legacy version without ready signal)
 pub async fn start_ipc_server() -> anyhow::Result<()> {
     let state = Arc::new(Mutex::new(ServiceState::default()));
     let routes = build_routes(state);
-
-    // 启动监控
-    start_monitor();
 
     log::info!("Starting IPC server on port {}", IPC_PORT);
     warp::serve(routes).run(([127, 0, 0, 1], IPC_PORT)).await;
@@ -157,9 +143,6 @@ pub async fn start_ipc_server_with_ready_signal(ready_tx: ReadySignal) -> anyhow
     if ready_tx.send(()).is_err() {
         log::warn!("Failed to send ready signal (receiver dropped)");
     }
-
-    // 启动监控
-    start_monitor();
 
     log::info!("IPC server ready signal sent, starting server");
     warp::serve(routes).run(socket_addr).await;
