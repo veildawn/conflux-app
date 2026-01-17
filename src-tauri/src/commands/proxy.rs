@@ -2,9 +2,8 @@ use crate::commands::get_app_state_or_err;
 use crate::models::{
     ConnectionsResponse, ProxyGroup, ProxyStatus, RuleItem, TrafficData, VersionInfo,
 };
-use crate::tray_menu::TrayMenuState;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 /// 检查 TUN 配置是否一致
 #[tauri::command]
@@ -54,8 +53,7 @@ pub async fn start_proxy(app: AppHandle) -> Result<ProxyStatus, String> {
     // 启动成功后，获取完整状态并返回
     let status = get_proxy_status().await?;
 
-    // 同步状态到托盘菜单和前端
-    app.state::<TrayMenuState>().sync_from_status(&status);
+    // 发送状态变更事件，托盘菜单和前端通过事件监听器更新 UI
     let _ = app.emit("proxy-status-changed", &status);
 
     Ok(status)
@@ -139,9 +137,8 @@ pub async fn stop_proxy(app: AppHandle) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
 
-    // 同步状态到托盘菜单和前端
+    // 发送状态变更事件
     if let Ok(status) = get_proxy_status().await {
-        app.state::<TrayMenuState>().sync_from_status(&status);
         let _ = app.emit("proxy-status-changed", status);
     }
 
@@ -160,9 +157,8 @@ pub async fn restart_proxy(app: AppHandle) -> Result<(), String> {
         .await
         .map_err(|e| e.to_string())?;
 
-    // 同步状态到托盘菜单和前端
+    // 发送状态变更事件
     if let Ok(status) = get_proxy_status().await {
-        app.state::<TrayMenuState>().sync_from_status(&status);
         let _ = app.emit("proxy-status-changed", status);
     }
 
@@ -355,7 +351,7 @@ pub async fn switch_mode(app: AppHandle, mode: String) -> Result<(), String> {
         return Err(format!("Invalid mode: {}", mode));
     }
 
-    // 检查当前模式，如果相同则跳过（避免托盘菜单 set_checked 触发重复调用）
+    // 检查当前模式，如果相同则跳过
     let current_config = state
         .config_manager
         .load_mihomo_config()
@@ -373,14 +369,22 @@ pub async fn switch_mode(app: AppHandle, mode: String) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
 
-    // 保存到配置文件
+    // 保存到配置文件 (config.yaml)
     state
         .config_manager
         .update_mode(&mode)
         .map_err(|e| e.to_string())?;
 
+    // 同时保存到 settings.json，确保下次激活 profile 时使用用户选择的模式
+    if let Ok(mut app_settings) = state.config_manager.load_app_settings() {
+        app_settings.mihomo.mode = mode.clone();
+        if let Err(e) = state.config_manager.save_app_settings(&app_settings) {
+            log::warn!("Failed to save mode to settings.json: {}", e);
+        }
+    }
+
+    // 发送状态变更事件
     if let Ok(status) = get_proxy_status().await {
-        app.state::<TrayMenuState>().sync_from_status(&status);
         let _ = app.emit("proxy-status-changed", status);
     }
 

@@ -413,22 +413,17 @@ fn main() {
                             let _ = window.set_focus();
                         }
                     }
-                    "mode_rule" => {
+                    "mode_rule" | "mode_global" | "mode_direct" => {
+                        let target_mode = match event.id.as_ref() {
+                            "mode_rule" => "rule",
+                            "mode_global" => "global",
+                            "mode_direct" => "direct",
+                            _ => return,
+                        };
                         let app = app.clone();
                         tauri::async_runtime::spawn(async move {
-                            let _ = commands::proxy::switch_mode(app, "rule".to_string()).await;
-                        });
-                    }
-                    "mode_global" => {
-                        let app = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let _ = commands::proxy::switch_mode(app, "global".to_string()).await;
-                        });
-                    }
-                    "mode_direct" => {
-                        let app = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let _ = commands::proxy::switch_mode(app, "direct".to_string()).await;
+                            let _ =
+                                commands::proxy::switch_mode(app, target_mode.to_string()).await;
                         });
                     }
                     "system_proxy" => {
@@ -437,16 +432,10 @@ fn main() {
                             let current = commands::system::get_system_proxy_status()
                                 .await
                                 .unwrap_or(false);
-                            let next = !current;
-
-                            // 立即更新互斥状态
-                            app.state::<TrayMenuState>()
-                                .pre_toggle_exclusive("system_proxy", next);
-
-                            let _ = if next {
-                                commands::system::set_system_proxy(app).await
-                            } else {
+                            let _ = if current {
                                 commands::system::clear_system_proxy(app).await
+                            } else {
+                                commands::system::set_system_proxy(app).await
                             };
                         });
                     }
@@ -458,13 +447,7 @@ fn main() {
                                 .ok()
                                 .map(|status| status.enhanced_mode)
                                 .unwrap_or(false);
-                            let next = !current;
-
-                            // 立即更新互斥状态
-                            app.state::<TrayMenuState>()
-                                .pre_toggle_exclusive("enhanced_mode", next);
-
-                            let _ = commands::proxy::set_tun_mode(app, next).await;
+                            let _ = commands::proxy::set_tun_mode(app, !current).await;
                         });
                     }
                     "copy_terminal_proxy" => {
@@ -513,10 +496,11 @@ fn main() {
                         // 将状态注册到 Tauri
                         app_handle.manage(app_state);
 
-                        // 获取当前状态，同步到托盘菜单
-                        let initial_status = commands::proxy::get_proxy_status().await.ok();
-                        if let Some(ref status) = initial_status {
-                            app_handle.state::<TrayMenuState>().sync_from_status(status);
+                        // 启动时同步托盘菜单状态（只在启动时同步一次）
+                        if let Ok(status) = commands::proxy::get_proxy_status().await {
+                            app_handle
+                                .state::<TrayMenuState>()
+                                .sync_from_status(&status);
                         }
 
                         // 通知前端后端已准备就绪
@@ -524,9 +508,8 @@ fn main() {
                         let _ = app_handle.emit("backend-ready", ());
 
                         // 短暂延迟后发送状态事件，确保前端监听器已注册
-                        // 这解决了前端 useEffect 中事件监听器异步注册导致的竞态问题
                         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                        if let Some(status) = initial_status {
+                        if let Ok(status) = commands::proxy::get_proxy_status().await {
                             log::info!("Emitting initial proxy status: running={}", status.running);
                             let _ = app_handle.emit("proxy-status-changed", &status);
                         }
@@ -739,7 +722,6 @@ fn main() {
                                 {
                                     log::info!("Config reload successful after system resume");
                                     if let Ok(status) = commands::proxy::get_proxy_status().await {
-                                        app.state::<TrayMenuState>().sync_from_status(&status);
                                         let _ = app.emit("proxy-status-changed", &status);
                                     }
                                     let _ = app.emit("system-resumed", ());
@@ -753,7 +735,6 @@ fn main() {
                                 Ok(_) => {
                                     log::info!("MiHomo restarted successfully after system resume");
                                     if let Ok(status) = commands::proxy::get_proxy_status().await {
-                                        app.state::<TrayMenuState>().sync_from_status(&status);
                                         let _ = app.emit("proxy-status-changed", &status);
                                     }
                                     let _ = app.emit("system-resumed", ());

@@ -223,6 +223,19 @@ pub fn ensure_mihomo_in_data_dir() -> Result<PathBuf> {
 fn get_mihomo_version(path: &PathBuf) -> Option<String> {
     use std::process::Command;
 
+    #[cfg(target_os = "windows")]
+    let output = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        Command::new(path)
+            .arg("-v")
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .ok()?
+    };
+
+    #[cfg(not(target_os = "windows"))]
     let output = Command::new(path).arg("-v").output().ok()?;
 
     if !output.status.success() {

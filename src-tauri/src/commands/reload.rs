@@ -11,13 +11,12 @@ use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 use tokio::time::sleep;
 
 use crate::commands::proxy::get_proxy_status;
 use crate::commands::{get_app_state_or_err, try_get_app_state, AppState};
 use crate::models::{MihomoConfig, RunMode};
-use crate::tray_menu::TrayMenuState;
 
 /// 配置变更类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -751,6 +750,7 @@ pub fn apply_settings_to_config_with_proxy_state(
         config.mixed_port = Some(0);
     }
     config.allow_lan = settings.allow_lan;
+    config.mode = settings.mode.clone();
     config.ipv6 = settings.ipv6;
     config.tcp_concurrent = settings.tcp_concurrent;
     config.find_process_mode = settings.find_process_mode.clone();
@@ -781,10 +781,10 @@ pub fn build_base_config_from_settings_with_proxy_state(
     config
 }
 
-/// 同步代理状态到前端和托盘菜单
+/// 同步代理状态（发送状态变更事件）
+/// 托盘菜单和前端通过事件监听器更新 UI
 pub async fn sync_proxy_status(app: &AppHandle) {
     if let Ok(status) = get_proxy_status().await {
-        app.state::<TrayMenuState>().sync_from_status(&status);
         let _ = app.emit("proxy-status-changed", status);
     }
 }

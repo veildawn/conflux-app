@@ -11,6 +11,7 @@ import { useAppStore } from '@/stores/appStore';
 import { useToast } from '@/hooks/useToast';
 import { DRAG_IGNORE_SELECTOR } from '@/utils/dragUtils';
 import logger from '@/utils/logger';
+import { ipc } from '@/services/ipc';
 import type { ProxyStatus } from '@/types/proxy';
 
 export default function AppLayout() {
@@ -83,14 +84,14 @@ export default function AppLayout() {
   }, [toast]);
 
   useEffect(() => {
-    // 防止重复初始化
-    if (initStarted.current) {
-      logger.log('AppLayout: Init already started, skipping...');
-      return;
-    }
-    initStarted.current = true;
-
     const init = async () => {
+      // 防止 init 被多次调用（backend-ready 事件和 getProxyStatus 成功可能同时触发）
+      if (initStarted.current) {
+        logger.log('AppLayout: Init already started, skipping...');
+        return;
+      }
+      initStarted.current = true;
+
       logger.log('AppLayout: Starting initialization...');
       try {
         await fetchSettings();
@@ -132,18 +133,7 @@ export default function AppLayout() {
     let initFailedUnlisten: (() => void) | null = null;
 
     const setupListeners = async () => {
-      // 先尝试直接初始化（可能后端已经准备好了）
-      try {
-        await fetchStatus();
-        logger.log('AppLayout: Backend already ready, starting init...');
-        setBackendReady(true);
-        init();
-        return;
-      } catch {
-        // 后端未就绪，等待事件
-        logger.log('AppLayout: Waiting for backend-ready event...');
-      }
-
+      // 1. 先注册事件监听器（确保不会错过后续事件）
       backendReadyUnlisten = await listen('backend-ready', () => {
         logger.log('AppLayout: Received backend-ready event');
         setBackendReady(true);
@@ -153,6 +143,19 @@ export default function AppLayout() {
       initFailedUnlisten = await listen<string>('backend-init-failed', (event) => {
         logger.error('AppLayout: Backend init failed:', event.payload);
       });
+
+      // 2. 注册完成后，尝试检测后端是否已就绪
+      // 直接调用 IPC 而不是 store 的 fetchStatus，避免设置 error 状态
+      // 这能处理后端已启动完成的情况（如页面刷新、热重载）
+      try {
+        await ipc.getProxyStatus();
+        logger.log('AppLayout: Backend already ready, starting init...');
+        setBackendReady(true);
+        init();
+      } catch {
+        // 后端未就绪，静默等待 backend-ready 事件
+        logger.log('AppLayout: Waiting for backend-ready event...');
+      }
     };
 
     setupListeners();

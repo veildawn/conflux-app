@@ -160,8 +160,15 @@ impl MihomoManager {
     fn find_pid_by_port(port: u16) -> Option<u32> {
         #[cfg(target_os = "windows")]
         {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+
             // Windows: netstat -ano | findstr LISTENING | findstr :9191
-            let output = Command::new("netstat").args(["-ano"]).output().ok()?;
+            let output = Command::new("netstat")
+                .args(["-ano"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output()
+                .ok()?;
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines() {
                 if line.contains(&format!(":{}", port)) && line.contains("LISTENING") {

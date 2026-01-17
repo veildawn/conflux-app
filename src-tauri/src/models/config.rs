@@ -735,6 +735,10 @@ pub struct MihomoSettings {
     #[serde(default)]
     pub allow_lan: bool,
 
+    /// 代理模式 (rule/global/direct)
+    #[serde(default = "default_mode")]
+    pub mode: String,
+
     /// 启用 IPv6
     #[serde(default)]
     pub ipv6: bool,
@@ -771,6 +775,7 @@ impl Default for MihomoSettings {
             socks_port: default_socks_port(),
             mixed_port: default_mixed_port(),
             allow_lan: true,
+            mode: default_mode(),
             ipv6: false,
             tcp_concurrent: true,
             find_process_mode: default_find_process_mode(),

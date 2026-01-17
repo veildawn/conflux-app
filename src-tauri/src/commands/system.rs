@@ -2,10 +2,9 @@ use crate::commands::get_app_state_or_err;
 use crate::system::NetworkExtensionManager;
 use crate::system::NetworkExtensionStatus;
 use crate::system::SystemProxy;
-use crate::tray_menu::TrayMenuState;
 use crate::utils;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 /// 设置系统代理
 #[tauri::command]
@@ -42,9 +41,8 @@ pub async fn set_system_proxy(app: AppHandle) -> Result<(), String> {
         *system_proxy = true;
     }
 
-    // 同步状态到托盘菜单和前端
+    // 发送状态变更事件
     if let Ok(status) = crate::commands::proxy::get_proxy_status().await {
-        app.state::<TrayMenuState>().sync_from_status(&status);
         let _ = app.emit("proxy-status-changed", status);
     }
 
@@ -72,9 +70,8 @@ pub async fn clear_system_proxy(app: AppHandle) -> Result<(), String> {
         *system_proxy = false;
     }
 
-    // 同步状态到托盘菜单和前端
+    // 发送状态变更事件
     if let Ok(status) = crate::commands::proxy::get_proxy_status().await {
-        app.state::<TrayMenuState>().sync_from_status(&status);
         let _ = app.emit("proxy-status-changed", status);
     }
 
