@@ -313,8 +313,7 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
         }
     }
 
-    // 初始化 Sub-Store 管理器（懒加载：不在启动时自动启动服务）
-    // Sub-Store 会在用户首次访问相关页面时自动启动
+    // 初始化 Sub-Store 管理器
     let substore_manager = Arc::new(Mutex::new(
         SubStoreManager::new(Some(39001))
             .map_err(|e| anyhow::anyhow!("Failed to create SubStore manager: {}", e))?,
@@ -335,6 +334,18 @@ pub async fn init_app_state(app: &AppHandle) -> Result<AppState> {
 
     // 也保存到全局状态，用于非命令的地方访问
     let _ = APP_STATE.set(state.clone());
+
+    // 启动 Sub-Store（应用启动后异步初始化，不阻塞 UI）
+    tokio::spawn({
+        let state = state.clone();
+        let app_handle = app.clone();
+        async move {
+            let mut manager = state.substore_manager.lock().await;
+            if let Err(e) = manager.start(app_handle).await {
+                log::warn!("Sub-Store background start failed: {}", e);
+            }
+        }
+    });
 
     // 后台确保规则数据库资源存在（不阻塞核心启动/重启）：
     // - 若资源缺失且开启自动更新，则由应用下载到数据目录
